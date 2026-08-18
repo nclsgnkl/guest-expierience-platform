@@ -1,0 +1,19 @@
+<button
+  type="button"
+  class="action-card"
+  (click)="activate()"
+>
+  <div class="action-card__icon-block">
+    <div class="action-card__icon-tile">
+      <ng-icon [name]="card().icon" size="var(--size-icon-glyph)" />
+    </div>
+  </div>
+
+  <div class="action-card__text-block">
+    <span class="action-card__header">{{ card().header }}</span>
+    <div class="action-card__description-row">
+      <span class="action-card__description">{{ card().description }}</span>
+      <ng-icon class="action-card__arrow" name="phosphorArrowRight" size="var(--size-icon-glyph)" />
+    </div>
+  </div>
+</button>

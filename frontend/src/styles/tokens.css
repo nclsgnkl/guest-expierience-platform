@@ -1,0 +1,146 @@
+/* Design tokens — two layers, per docs/design/tokens.md -> Implementation.
+   Layer 1 (primitives): raw values, runtime-overridable per property
+   (branding axis). Layer 2 (semantic): roles components actually reference;
+   overridden per theme (data-theme axis). The two axes never collide.
+   Constitution principle 5: components reference semantic tokens only. */
+
+/* ---------------------------------------------------------------------- */
+/* Layer 1: primitives                                                    */
+/* ---------------------------------------------------------------------- */
+
+:root {
+  /* Brand — per-property branding overrides these at runtime (REQ-003) */
+  --brand-primary: #f45aa8;
+  --brand-primary-deep: #cc49af;
+  --brand-secondary: #8a5cf6;
+
+  /* Ink */
+  --ink-900: #2c1f4a;
+  --ink-600: #6e6486;
+  --ink-on-dark: #ffffff;
+
+  /* Mesh gradient background — 16 colour points, row by row from the top
+     left (docs/design/tokens.md -> "Background implementation"). Fixed
+     default palette; per-property tinting is prepared, not built: nothing
+     derives from --brand-primary yet. */
+  --mesh-1: #f5668c;
+  --mesh-2: #f4779c;
+  --mesh-3: #fe9b82;
+  --mesh-4: #fdcfad;
+  --mesh-5: #efa2b5;
+  --mesh-6: #e8b2bc;
+  --mesh-7: #f3b5aa;
+  --mesh-8: #fdd6be;
+  --mesh-9: #d5b3d0;
+  --mesh-10: #c693a7;
+  --mesh-11: #a27684;
+  --mesh-12: #f4b9bf;
+  --mesh-13: #b69ed1;
+  --mesh-14: #af99d2;
+  --mesh-15: #bea3d6;
+  --mesh-16: #e4bfdd;
+
+  /* Surfaces (raw, not yet promoted to Figma variables) */
+  --surface-glass-raw: rgb(255 246 240 / 0.6);
+  --surface-glass-border-raw: rgb(255 255 255 / 0.4);
+  --surface-menu-raw: rgb(255 246 240 / 0.4);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Layer 2: semantic roles — the only thing components reference          */
+/* ---------------------------------------------------------------------- */
+
+:root {
+  /* Color */
+  --color-text-primary: var(--ink-900);
+  --color-text-secondary: var(--ink-600);
+  --color-text-on-dark: var(--ink-on-dark);
+  --color-surface-glass: var(--surface-glass-raw);
+  --color-surface-glass-border: var(--surface-glass-border-raw);
+  --color-surface-menu: var(--surface-menu-raw);
+
+  /* Gradients */
+  --gradient-icon: linear-gradient(
+    223.139deg,
+    var(--brand-primary) 55.732%,
+    var(--brand-primary-deep) 88.083%
+  );
+  --gradient-menu-active: linear-gradient(
+    -74.707deg,
+    rgb(255 243 250 / 0.9) 7.717%,
+    rgb(255 243 250 / 0.5) 92.116%
+  );
+
+  /* Typography */
+  --font-family-base: 'Plus Jakarta Sans', sans-serif;
+
+  --text-display: 3rem;
+  --text-display-weight: 800;
+  --text-display-line-height: 1.1;
+
+  --text-title: 1.125rem;
+  --text-title-weight: 800;
+  --text-title-line-height: 1.3;
+
+  --text-body-lg: 1.125rem;
+  --text-body-lg-weight: 400;
+  --text-body-lg-line-height: 1.5;
+
+  --text-body: 0.875rem;
+  --text-body-weight: 400;
+  --text-body-line-height: 1.5;
+
+  --text-label-active: 0.75rem;
+  --text-label-active-weight: 800;
+  --text-label-line-height: 1.3;
+
+  --text-label: 0.75rem;
+  --text-label-weight: 700;
+
+  /* Spacing (4px scale) */
+  --space-1: 0.25rem;
+  --space-2: 0.375rem;
+  --space-3: 0.5rem;
+  --space-4: 0.75rem;
+  --space-5: 1rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+  --space-8: 2.5rem;
+  --space-9: 4rem;
+
+  /* Radii */
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 1.875rem;
+  --radius-2xl: 2rem;
+
+  /* Borders, shadows, blur */
+  --border-glass: 1px solid var(--color-surface-glass-border);
+  --shadow-panel: 0 10px 40px 0 rgb(44 31 74 / 0.1);
+  --blur-glass: blur(8px);
+
+  /* Sizing */
+  --size-icon-tile: 3.5rem;
+  --size-icon-glyph: 0.75rem;
+  --size-sidebar: 6.25rem;
+  --size-sidebar-item: 4.5rem;
+  --size-panel: 12.25rem;
+  /* Not in docs/design/tokens.md's own Sizing table, but named explicitly
+     and repeatedly (docs/design/screens/home.md -> Heading block; REQ-014's
+     acceptance criterion) as the heading block's fixed width. */
+  --size-heading: 48.75rem;
+}
+
+/* Theme axis (docs/design/tokens.md -> Implementation): a `data-theme`
+   attribute on <html> overrides semantic roles only, never primitives.
+   Absent = light (the :root values above). Explicit "light" is the same
+   values, named for completeness. "dark" is wired as a hook but carries no
+   values yet -- no dark palette exists in Figma (out of scope for this
+   feature; see docs/design/tokens.md -> "Still blocked on design"). */
+[data-theme='light'] {
+  /* Same as :root -- no override needed today. */
+}
+
+[data-theme='dark'] {
+  /* Intentionally empty: no dark palette designed yet. */
+}

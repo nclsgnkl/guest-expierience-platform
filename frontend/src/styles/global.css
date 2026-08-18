@@ -1,0 +1,72 @@
+/* Global styles: self-hosted font, resets, base html/body, theme hook.
+   Design tokens (primitive + semantic custom properties) live in tokens.css,
+   imported separately — see docs/design/tokens.md. */
+
+/* Plus Jakarta Sans — self-hosted, no external runtime request.
+   Files under assets/fonts/plus-jakarta-sans/ (constitution principle 4 /
+   REQ-002). Only the weights actually used by the design ship: Regular 400,
+   Bold 700, ExtraBold 800 (docs/design/tokens.md -> Typography). */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/assets/fonts/plus-jakarta-sans/plus-jakarta-sans-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/assets/fonts/plus-jakarta-sans/plus-jakarta-sans-700.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/assets/fonts/plus-jakarta-sans/plus-jakarta-sans-800.woff2') format('woff2');
+}
+
+/* Minimal reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+/* Root font size is the rem baseline every token in tokens.css is expressed
+   against (docs/design/tokens.md -> Units). Larger device classes scale the
+   whole UI by changing this one value. */
+html {
+  font-size: 16px;
+
+  /* Theme axis (docs/design/tokens.md -> Implementation): a `data-theme`
+     attribute on <html>, three states -- absent (follow system), "light",
+     "dark". Only light semantic-role values exist today (tokens.css); the
+     attribute is wired so the mechanism is real and testable, with no dark
+     palette to apply yet. */
+}
+
+body {
+  font-family: var(--font-family-base);
+  color: var(--color-text-primary);
+  font-weight: 400;
+}
+
+/* Viewport guard rail (REQ-016; docs/design/tokens.md -> Breakpoints): the
+   MVP targets large touchscreens only, at the fixed 1280x832 logical
+   layout, with no responsive breakpoints. Below the minimum supported
+   width the layout is allowed to overflow into horizontal scroll rather
+   than collapse -- "a guard rail for development, not a user-facing
+   state." */
+html,
+body {
+  min-width: 1280px;
+}

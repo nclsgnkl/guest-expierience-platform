@@ -1,0 +1,35 @@
+<nav class="sidebar" aria-label="Hauptnavigation">
+  <div class="sidebar__logo">
+    <img class="sidebar__logo-img" [src]="logoAsset()" alt="" />
+  </div>
+
+  <div class="sidebar__menu-items">
+    @for (item of menuItems(); track item.id) {
+      <button
+        type="button"
+        class="sidebar-item"
+        [class.sidebar-item--active]="isActive(item)"
+        (click)="navigateTo(item)"
+      >
+        <ng-icon class="sidebar-item__icon" [name]="item.icon" size="var(--size-icon-glyph)" />
+        <span class="sidebar-item__label">{{ item.label }}</span>
+      </button>
+    }
+  </div>
+
+  <div class="sidebar__settings">
+    <button
+      type="button"
+      class="sidebar-item"
+      [class.sidebar-item--active]="isActive(settings())"
+      (click)="navigateTo(settings())"
+    >
+      <ng-icon
+        class="sidebar-item__icon"
+        [name]="settings().icon"
+        size="var(--size-icon-glyph)"
+      />
+      <span class="sidebar-item__label">{{ settings().label }}</span>
+    </button>
+  </div>
+</nav>

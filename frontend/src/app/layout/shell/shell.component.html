@@ -1,0 +1,12 @@
+<div class="shell">
+  <app-sidebar
+    [menuItems]="property.menuItems"
+    [settings]="property.settings"
+    [logoAsset]="property.logoAsset"
+    [activeRoute]="activeRoute()"
+  />
+
+  <main class="shell__content">
+    <router-outlet />
+  </main>
+</div>

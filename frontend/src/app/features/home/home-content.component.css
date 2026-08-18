@@ -1,0 +1,26 @@
+.home-content {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: var(--space-7);
+  min-height: 100%;
+  width: 100%;
+}
+
+.home-content__screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-9) 0;
+}
+
+.home-content__cards {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-4);
+}
+
+.home-content__widgets {
+  flex: 1;
+}

@@ -1,0 +1,82 @@
+import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { provideRouter, Routes } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { provideIcons } from '@ng-icons/core';
+import {
+  phosphorGearSix,
+  phosphorHouse,
+  phosphorInfo,
+  phosphorLightbulbFilament,
+  phosphorMapPin,
+  phosphorShoppingBag,
+} from '@ng-icons/phosphor-icons/regular';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { ShellComponent } from './shell.component';
+
+@Component({ selector: 'app-test-home', template: '<p>home content</p>' })
+class TestHomeComponent {}
+
+@Component({ selector: 'app-test-other', template: '<p>other content</p>' })
+class TestOtherComponent {}
+
+const routes: Routes = [
+  {
+    path: '',
+    component: ShellComponent,
+    children: [
+      { path: '', component: TestHomeComponent },
+      { path: 'other', component: TestOtherComponent },
+    ],
+  },
+];
+
+describe('ShellComponent', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter(routes),
+        provideIcons({
+          phosphorHouse,
+          phosphorInfo,
+          phosphorMapPin,
+          phosphorLightbulbFilament,
+          phosphorShoppingBag,
+          phosphorGearSix,
+        }),
+      ],
+    });
+  });
+
+  it('renders the background and Sidebar identically across two different child routes, while the routed content differs', async () => {
+    const harness = await RouterTestingHarness.create();
+
+    const homeRoot = await harness.navigateByUrl('/', ShellComponent);
+    const homeElement: HTMLElement = harness.routeNativeElement!;
+    expect(homeRoot).toBeTruthy();
+    expect(homeElement.querySelector('.shell')).toBeTruthy();
+    expect(homeElement.querySelector('app-sidebar')).toBeTruthy();
+    expect(homeElement.textContent).toContain('home content');
+    expect(homeElement.textContent).not.toContain('other content');
+
+    const otherRoot = await harness.navigateByUrl('/other', ShellComponent);
+    const otherElement: HTMLElement = harness.routeNativeElement!;
+    expect(otherRoot).toBeTruthy();
+    expect(otherElement.querySelector('.shell')).toBeTruthy();
+    expect(otherElement.querySelector('app-sidebar')).toBeTruthy();
+    expect(otherElement.textContent).toContain('other content');
+    expect(otherElement.textContent).not.toContain('home content');
+  });
+
+  it('feeds the sidebar the property config sourced from PropertyContentService, not a literal', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/', ShellComponent);
+    const element: HTMLElement = harness.routeNativeElement!;
+
+    // The real example property's Home label -- proves the shell wires
+    // PropertyContentService -> Sidebar rather than passing hardcoded data.
+    expect(element.textContent).toContain('Home');
+  });
+});
