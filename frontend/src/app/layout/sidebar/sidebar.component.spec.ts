@@ -69,6 +69,28 @@ describe('SidebarComponent', () => {
     expect((active[0].textContent as string).trim()).toContain('Testlabel Info');
   });
 
+  it('flags only the active item\'s glyph for the gradient fill (REQ-023)', () => {
+    const gradientIcons = fixture.nativeElement.querySelectorAll(
+      'ng-icon.icon-gradient-active',
+    );
+    expect(gradientIcons.length).toBe(1);
+
+    const activeItem = fixture.nativeElement.querySelector('.sidebar-item--active');
+    expect(activeItem.querySelector('ng-icon.icon-gradient-active')).toBeTruthy();
+  });
+
+  it('moves the gradient flag with the active route (REQ-023)', () => {
+    fixture.componentRef.setInput('activeRoute', '/einstellungen');
+    fixture.detectChanges();
+
+    const flagged = fixture.nativeElement.querySelectorAll('ng-icon.icon-gradient-active');
+    expect(flagged.length).toBe(1);
+    const settingsItem = fixture.nativeElement.querySelector(
+      '.sidebar__settings .sidebar-item',
+    );
+    expect(settingsItem.querySelector('ng-icon.icon-gradient-active')).toBeTruthy();
+  });
+
   it('renders the logo image from the injected logoAsset input, not a hardcoded reference', () => {
     const img: HTMLImageElement = fixture.nativeElement.querySelector('.sidebar__logo-img');
     expect(img.getAttribute('src')).toBe('assets/branding/test-logo.svg');

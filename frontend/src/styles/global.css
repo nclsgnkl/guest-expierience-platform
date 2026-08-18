@@ -42,10 +42,24 @@ body {
 }
 
 /* Root font size is the rem baseline every token in tokens.css is expressed
-   against (docs/design/tokens.md -> Units). Larger device classes scale the
-   whole UI by changing this one value. */
+   against (docs/design/tokens.md -> Units). It is viewport-proportional, not
+   a constant: 1280 / 16 = 80 -> 1.25vw, 832 / 16 = 52 -> 1.9231vh, and the
+   smaller of the two binds, so the UI scales by min(width-ratio,
+   height-ratio) and fits both axes at any aspect ratio (REQ-025). It resolves
+   to exactly 16px at the 1280x832 design size and 12.8px at the 1024x768
+   floor. This is the whole scaling mechanism: no breakpoints, no second
+   layout, no per-component clamp() -- every size token is authored in `rem`
+   as though the root were 16px, and this one declaration does the scaling
+   (docs/constitution.md -> Constraints, v1.2.0).
+
+   Deliberately NOT capped at the top end, so a larger display renders a
+   proportionally larger UI rather than the same UI in more empty space
+   (docs/design/tokens.md -> "Target device"). Accepted trade, confirmed by
+   the user: a viewport-derived root overrides the browser's font-size
+   preference. This is a fixed-purpose kiosk device, and the previous
+   `font-size: 16px` was equally absolute. */
 html {
-  font-size: 16px;
+  font-size: min(1.25vw, 1.9231vh);
 
   /* Theme axis (docs/design/tokens.md -> Implementation): a `data-theme`
      attribute on <html>, three states -- absent (follow system), "light",
@@ -60,13 +74,31 @@ body {
   font-weight: 400;
 }
 
-/* Viewport guard rail (REQ-016; docs/design/tokens.md -> Breakpoints): the
-   MVP targets large touchscreens only, at the fixed 1280x832 logical
-   layout, with no responsive breakpoints. Below the minimum supported
-   width the layout is allowed to overflow into horizontal scroll rather
-   than collapse -- "a guard rail for development, not a user-facing
-   state." */
+/* Viewport guard rail (REQ-016/REQ-025; docs/design/tokens.md ->
+   Breakpoints). 1280px until 2026-08-18: that value was the guard rail AND
+   the cause of the horizontal scrollbar at every supported size below the
+   design size (defect D6), because the layout did not scale at all. It now
+   marks the supported floor -- 1024x768 landscape. Below it, and in
+   portrait, nothing is guaranteed: horizontal scroll there is the
+   documented, out-of-scope behaviour, "a guard rail for development, not a
+   user-facing state". Within the supported range nothing scrolls at all
+   (REQ-024), and that is achieved by the layout fitting, never by hiding
+   overflow. */
 html,
 body {
-  min-width: 1280px;
+  min-width: 1024px;
+}
+
+/* Active nav glyph fill (REQ-023). This rule is global on purpose and cannot
+   live in sidebar.component.css: @ng-icons does not render its <svg> from a
+   template — NgIcon builds it with Renderer2 and appends it — so that node
+   carries no _ngcontent-* attribute and no component-scoped selector can ever
+   match it. Keyed on a purpose-named class rather than the sidebar's own BEM
+   class so it stays a reusable primitive instead of a leak. The paint server
+   itself is declared in shell.component.html; the trailing `currentColor` is
+   SVG's paint fallback, so the glyph degrades to the inherited colour if that
+   <defs> is ever absent (a test harness without the Shell, for instance)
+   rather than disappearing. */
+.icon-gradient-active svg {
+  fill: url('#icon-gradient-active') currentColor;
 }

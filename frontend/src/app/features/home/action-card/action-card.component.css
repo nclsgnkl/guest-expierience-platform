@@ -8,8 +8,9 @@
    Combined with .shell__content's `min-width: 0` (which deliberately allows
    the row below it to shrink under a narrow viewport), this let the four
    cards shrink unevenly — each by however much its own text's min-content
-   width allowed, which is why "Haus & Funktionen" stayed wide (its longer
-   title wraps to two lines) while shorter-text cards visibly narrowed.
+   width allowed, which is why card 2 (then titled "Haus & Funktionen",
+   renamed to "Smart Home" in 2026-08-18's copy fix) stayed wide -- its longer
+   title wrapped to two lines -- while shorter-text cards visibly narrowed.
    `display: contents` removes the host's own box entirely, so .action-card
    becomes the real flex item and its flex-shrink below actually applies. */
 :host {
@@ -59,10 +60,27 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* Description row pinned to the bottom of the text block, so even a title
+     that changes height can never again desynchronise the four cards'
+     description and arrow baselines (defect D5, REQ-009). */
+  justify-content: flex-end;
   gap: var(--space-1);
 }
 
 .action-card__header {
+  /* Titles never wrap (REQ-009): the title box is 162px (--size-panel 196
+     minus 2x --border-glass 1px minus 2x --space-5 16px) and the original
+     "Haus & Funktionen" needed 167px of advance width at --text-title — it
+     fits in Figma, which does not re-wrap a fixed text frame, and did not fit
+     in a browser, which first pushed that card's text out of line with the
+     other three and then, once nowrap landed, ellipsized it. Resolved
+     2026-08-18 by renaming the copy to "Smart Home" (config, not CSS); the
+     box is unchanged. Truncation stays as the fallback: card copy is
+     property-authored config, so an over-long title fails visibly rather than
+     silently reflowing the row (02-design.md -> "Text must not wrap"). */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: var(--text-title);
   font-weight: var(--text-title-weight);
   line-height: var(--text-title-line-height);

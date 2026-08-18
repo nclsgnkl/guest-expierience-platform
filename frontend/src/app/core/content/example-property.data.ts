@@ -48,16 +48,26 @@ export const EXAMPLE_PROPERTY: PropertyConfig = {
       targetSectionId: 'info',
     },
     {
-      id: 'haus-und-funktionen',
+      id: 'smart-home-karte',
       icon: 'phosphorLightbulbFilament',
-      header: 'Haus & Funktionen',
+      /* "Smart Home", not "Haus & Funktionen" (user decision, 2026-08-18):
+         the original copy needs 167px of advance width in the card's 162px
+         title box and was ellipsized in a real browser. Renaming the copy was
+         chosen over widening the box, so `--space-5` card padding stands. The
+         title now reads the same as the sidebar entry for the section this
+         card navigates to — deliberate, not a duplicate. Content change only;
+         docs/design/screens/home.md's card table records it too. */
+      header: 'Smart Home',
       description: 'Alles im Haus auf einen Blick',
       targetSectionId: 'smart-home',
     },
     {
-      id: 'entdecken',
+      id: 'umgebung-karte',
       icon: 'phosphorMapPin',
-      header: 'Entdecken',
+      /* "Umgebung", not "Entdecken" (user decision, 2026-08-18): the card and
+         the section it targets now carry the same name. Content change only —
+         docs/design/screens/home.md's card table records it too. */
+      header: 'Umgebung',
       description: 'Tipps, Restaurants & Aktivitäten',
       targetSectionId: 'umgebung',
     },

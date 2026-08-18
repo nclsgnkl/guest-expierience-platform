@@ -28,9 +28,16 @@
 .shell {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  /* stretch, not center: the sidebar must span the shell's full content box
+     (REQ-022). `center` sized every flex item to its content height, which
+     is the other half of defect D1. */
+  align-items: stretch;
   gap: var(--space-8);
-  min-height: 100dvh;
+  /* Exactly the viewport, not at least it (REQ-024): with `min-height` a
+     child that overflows silently grows the page and produces a scrollbar;
+     with `height` it overflows visibly in development, so the no-scroll rule
+     stays met by construction rather than by `overflow: hidden`. */
+  height: 100dvh;
   padding: var(--space-6) var(--space-7);
   background-color: var(--mesh-6);
   background-image:
@@ -56,4 +63,22 @@
   flex: 1;
   align-self: stretch;
   min-width: 0;
+}
+
+/* Stops for the active-glyph paint server declared in this component's
+   template (REQ-023). Semantic roles only, per constitution principle 5 —
+   and because they resolve custom properties at render time, the runtime
+   branding hook (REQ-003) recolours the glyph without a rebuild. */
+.shell__defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.shell__defs-stop--start {
+  stop-color: var(--color-icon-active-start);
+}
+
+.shell__defs-stop--end {
+  stop-color: var(--color-icon-active-end);
 }

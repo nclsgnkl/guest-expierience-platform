@@ -12,5 +12,12 @@ import { Component } from '@angular/core';
 @Component({
   selector: 'app-hero-artwork',
   template: '',
+  /* The no-artwork variant renders nothing, so it must also occupy nothing:
+     an empty host is still a flex item of `.home-content` and still consumes
+     that row's gap, which pushed the whole content column 32px right (defect
+     D7, REQ-010). `display: none` takes it out of the flex formatting context
+     entirely while keeping the component as the seam a future artwork variant
+     slots into. */
+  styles: ':host { display: none; }',
 })
 export class HeroArtworkComponent {}

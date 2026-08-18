@@ -1,3 +1,15 @@
+/* The host element is the layout, not the template root (02-design.md ->
+   "The host element is the layout, not the template root"): with Angular's
+   default emulated encapsulation, <app-sidebar> — not .sidebar — is the flex
+   item inside .shell, and it carries no styles of its own. `.sidebar`'s
+   `align-self: stretch` was therefore applied to an element whose parent is
+   not a flex container and did nothing, collapsing the sidebar to content
+   height (defect D1, REQ-022). `display: contents` removes the host box so
+   the <nav> becomes the real flex item and its own stretch/height apply. */
+:host {
+  display: contents;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -29,10 +41,15 @@
   object-fit: contain;
 }
 
-.sidebar__menu-items {
+.sidebar__menu-items,
+.sidebar__settings {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* Both groups span the sidebar's inner width so their items derive the
+     same 84px square from it (REQ-022) — without this the settings group
+     shrink-wraps its label and its item comes out wider than the nav ones. */
+  width: 100%;
 }
 
 .sidebar-item {
@@ -41,8 +58,14 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-1);
-  width: var(--size-sidebar-item);
-  height: var(--size-sidebar-item);
+  /* Derived, not tokenised (REQ-022): the item is the sidebar's inner width
+     (--size-sidebar minus 2x --space-3 = 84px), square. --size-sidebar-item
+     (72px) is the Figma component's own box and is 12px narrower than what
+     the reference render shows, which is why "Smart Home" wrapped (D5).
+     Deriving keeps one source of truth — see docs/design/tokens.md -> Sizing. */
+  width: 100%;
+  aspect-ratio: 1;
+  height: auto;
   padding: var(--space-4) var(--space-3);
   border: none;
   background: transparent;
@@ -57,6 +80,12 @@
 }
 
 .sidebar-item__label {
+  /* Labels never wrap (REQ-007): "Smart Home" needs ~71px against a ~68px
+     label box and split onto two lines, which shifted that item's icon and
+     broke the nav column's rhythm (defect D5). A property-configured label
+     that is too long now overflows predictably instead of reflowing the
+     whole sidebar. */
+  white-space: nowrap;
   font-size: var(--text-label);
   font-weight: var(--text-label-weight);
   line-height: var(--text-label-line-height);

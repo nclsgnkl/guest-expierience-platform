@@ -70,6 +70,19 @@ describe('ShellComponent', () => {
     expect(otherElement.textContent).not.toContain('home content');
   });
 
+  it('declares the active-glyph paint server on every route (REQ-023)', async () => {
+    const harness = await RouterTestingHarness.create();
+
+    for (const url of ['/', '/other']) {
+      await harness.navigateByUrl(url, ShellComponent);
+      const element: HTMLElement = harness.routeNativeElement!;
+      const gradient = element.querySelector('#icon-gradient-active');
+
+      expect(gradient).toBeTruthy();
+      expect(gradient!.querySelectorAll('stop').length).toBe(2);
+    }
+  });
+
   it('feeds the sidebar the property config sourced from PropertyContentService, not a literal', async () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/', ShellComponent);

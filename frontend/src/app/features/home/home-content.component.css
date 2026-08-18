@@ -1,9 +1,24 @@
+/* Host participates in no layout of its own — the <div class="home-content">
+   is the box .shell__content lays out (02-design.md -> "The host element is
+   the layout, not the template root"). Without this, `.home-content`'s
+   `height: 100%` resolves against an auto-height host and the column
+   collapses to content height (defect D2, REQ-014). */
+:host {
+  display: contents;
+}
+
 .home-content {
   display: flex;
   flex-direction: row;
-  align-items: flex-end;
+  /* stretch + full height (REQ-014): `align-items: flex-end` bottom-aligned
+     the whole content column, which then sized to its content and made
+     .home-content__screen's own space-between and vertical padding inert —
+     that is what glued the heading onto the cards mid-screen (defect D2).
+     The column now fills the content area and pushes heading to the top,
+     cards to the bottom, leaving the space between them deliberately empty. */
+  align-items: stretch;
   gap: var(--space-7);
-  min-height: 100%;
+  height: 100%;
   width: 100%;
 }
 
@@ -11,7 +26,9 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: var(--space-6);
+  /* No gap: on a full-height column `space-between` does the distribution,
+     and a leftover gap would make "top-anchored / bottom-anchored" only
+     approximately true. */
   padding: var(--space-9) 0;
 }
 

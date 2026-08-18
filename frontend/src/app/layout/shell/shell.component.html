@@ -1,3 +1,20 @@
+<!-- Paint server for the active nav glyph (REQ-023). It lives here, in the
+     Shell's own template, for two reasons: the Shell renders on every route,
+     which is exactly the lifetime the sidebar needs; and template nodes carry
+     Angular's encapsulation attribute, so shell.component.css can style the
+     <stop>s from the token layer (a `stop-color` presentation attribute
+     cannot hold a var()). rotate(49 0.5 0.5) is the 139deg CSS angle: SVG's
+     default gradient axis runs left-to-right, i.e. CSS 90deg, so the rotation
+     about the object bounding box's centre is 139 - 90. -->
+<svg class="shell__defs" aria-hidden="true" focusable="false" width="0" height="0">
+  <defs>
+    <linearGradient id="icon-gradient-active" gradientTransform="rotate(49 0.5 0.5)">
+      <stop class="shell__defs-stop--start" offset="0%" />
+      <stop class="shell__defs-stop--end" offset="100%" />
+    </linearGradient>
+  </defs>
+</svg>
+
 <div class="shell">
   <app-sidebar
     [menuItems]="property.menuItems"

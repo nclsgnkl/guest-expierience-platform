@@ -15,8 +15,11 @@ import {
   phosphorMapPin,
   phosphorHouse,
   phosphorShoppingBag,
-  phosphorSparkle,
 } from '@ng-icons/phosphor-icons/regular';
+// The heading sparkle is the one glyph rendered in the `fill` weight: the
+// reference render shows it solid and gradient-filled, where every other glyph
+// is `regular` (docs/design/screens/home.md -> Heading block).
+import { phosphorSparkleFill } from '@ng-icons/phosphor-icons/fill';
 
 import { routes } from './app.routes';
 
@@ -39,7 +42,7 @@ export const appConfig: ApplicationConfig = {
       phosphorMapPin,
       phosphorHouse,
       phosphorShoppingBag,
-      phosphorSparkle,
+      phosphorSparkleFill,
     }),
   ],
 };

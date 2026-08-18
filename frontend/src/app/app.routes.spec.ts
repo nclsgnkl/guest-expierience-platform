@@ -13,8 +13,8 @@ import {
   phosphorLightbulbFilament,
   phosphorMapPin,
   phosphorShoppingBag,
-  phosphorSparkle,
 } from '@ng-icons/phosphor-icons/regular';
+import { phosphorSparkleFill } from '@ng-icons/phosphor-icons/fill';
 import { describe, expect, it } from 'vitest';
 
 import { routes } from './app.routes';
@@ -36,7 +36,7 @@ describe('app.routes', () => {
           phosphorLightbulbFilament,
           phosphorMapPin,
           phosphorShoppingBag,
-          phosphorSparkle,
+          phosphorSparkleFill,
         }),
       ],
     });

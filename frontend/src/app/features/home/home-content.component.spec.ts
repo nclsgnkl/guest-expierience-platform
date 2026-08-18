@@ -8,8 +8,8 @@ import {
   phosphorKey,
   phosphorLightbulbFilament,
   phosphorMapPin,
-  phosphorSparkle,
 } from '@ng-icons/phosphor-icons/regular';
+import { phosphorSparkleFill } from '@ng-icons/phosphor-icons/fill';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { HomeContentComponent } from './home-content.component';
@@ -21,7 +21,7 @@ describe('HomeContentComponent', () => {
         provideZonelessChangeDetection(),
         provideRouter([]),
         provideIcons({
-          phosphorSparkle,
+          phosphorSparkleFill,
           phosphorArrowRight,
           phosphorKey,
           phosphorLightbulbFilament,
