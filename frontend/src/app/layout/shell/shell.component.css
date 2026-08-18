@@ -2,7 +2,29 @@
    layers, edge-aligned on a 0% / 33.33% / 66.67% / 100% grid on both axes,
    colours from --mesh-1..16 (tokens.css). Painted once here so every route
    — Home and every section placeholder — shows the identical background.
-   See docs/design/tokens.md -> "Background implementation". */
+   See docs/design/tokens.md -> "Background implementation".
+
+   2026-08-18 fix: each layer now declares an explicit `ellipse 44rem 29rem`
+   size. Without it, `circle`'s default size is `farthest-corner` — for a
+   point sitting in a corner that's the full canvas diagonal, so every layer
+   washed out across almost the entire background and the four topmost
+   layers (mesh-1..4, painted last in source order = on top in CSS) hid
+   everything underneath. 44rem/29rem approximate one grid cell's spacing on
+   the design's 1280x832 logical viewport (1280/3 / 832/3 in rem), sized as
+   an ellipse rather than a circle because the grid's horizontal and
+   vertical spacing differ — a uniform circle would either gap vertically or
+   overreach horizontally.
+
+   2026-08-18 second fix (colours read too pale vs. the Figma reference):
+   two causes, both about how much of the canvas actually carries colour.
+   (a) There was no `background-color` at all, so wherever every layer had
+   faded out, the white page canvas showed through and desaturated the whole
+   composition — a mesh needs a floor, not transparency. (b) Each layer
+   ended at `transparent 60%`, i.e. alpha hit zero well before the next
+   grid point, leaving washed-out gaps between the colour centres; extending
+   to `transparent 100%` lets neighbouring blobs overlap so the blend stays
+   saturated. --mesh-6 is the base because it sits in the grid's interior
+   (row 2, col 2) and is the closest thing the palette has to its average. */
 .shell {
   display: flex;
   flex-direction: row;
@@ -10,23 +32,24 @@
   gap: var(--space-8);
   min-height: 100dvh;
   padding: var(--space-6) var(--space-7);
+  background-color: var(--mesh-6);
   background-image:
-    radial-gradient(circle at 0% 0%, var(--mesh-1) 0%, transparent 60%),
-    radial-gradient(circle at 33.33% 0%, var(--mesh-2) 0%, transparent 60%),
-    radial-gradient(circle at 66.67% 0%, var(--mesh-3) 0%, transparent 60%),
-    radial-gradient(circle at 100% 0%, var(--mesh-4) 0%, transparent 60%),
-    radial-gradient(circle at 0% 33.33%, var(--mesh-5) 0%, transparent 60%),
-    radial-gradient(circle at 33.33% 33.33%, var(--mesh-6) 0%, transparent 60%),
-    radial-gradient(circle at 66.67% 33.33%, var(--mesh-7) 0%, transparent 60%),
-    radial-gradient(circle at 100% 33.33%, var(--mesh-8) 0%, transparent 60%),
-    radial-gradient(circle at 0% 66.67%, var(--mesh-9) 0%, transparent 60%),
-    radial-gradient(circle at 33.33% 66.67%, var(--mesh-10) 0%, transparent 60%),
-    radial-gradient(circle at 66.67% 66.67%, var(--mesh-11) 0%, transparent 60%),
-    radial-gradient(circle at 100% 66.67%, var(--mesh-12) 0%, transparent 60%),
-    radial-gradient(circle at 0% 100%, var(--mesh-13) 0%, transparent 60%),
-    radial-gradient(circle at 33.33% 100%, var(--mesh-14) 0%, transparent 60%),
-    radial-gradient(circle at 66.67% 100%, var(--mesh-15) 0%, transparent 60%),
-    radial-gradient(circle at 100% 100%, var(--mesh-16) 0%, transparent 60%);
+    radial-gradient(ellipse 44rem 29rem at 0% 0%, var(--mesh-1) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 0%, var(--mesh-2) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 0%, var(--mesh-3) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 0%, var(--mesh-4) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 33.33%, var(--mesh-5) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 33.33%, var(--mesh-6) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 33.33%, var(--mesh-7) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 33.33%, var(--mesh-8) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 66.67%, var(--mesh-9) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 66.67%, var(--mesh-10) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 66.67%, var(--mesh-11) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 66.67%, var(--mesh-12) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 100%, var(--mesh-13) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 100%, var(--mesh-14) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 100%, var(--mesh-15) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 100%, var(--mesh-16) 0%, transparent 100%);
 }
 
 .shell__content {

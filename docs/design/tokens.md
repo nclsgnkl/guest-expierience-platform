@@ -279,10 +279,25 @@ Radii also halve cleanly.
 
 Normalised first (see the half-pixel note under "Scale"), then converted.
 
+> ⚠️ **Corrected 2026-08-18 — extraction error.** This table previously carried
+> a single `--size-icon-glyph` at `0.75rem` (12px), derived by reading Figma's
+> `aspect-[24/24]` as a 24px dimension. It is an aspect **ratio** (24:24 = 1:1)
+> and carries no size at all. Every icon in the built app rendered at roughly a
+> third of its intended size as a direct result. The real sizes come from the
+> surrounding Figma boxes and differ by context, so one token could never have
+> served all of them — hence the three below. Independently corroborated by
+> `design-sheet.md`'s own icon scale (Large 36 / Default 28 / Small 22).
+>
+> **Watch for this class of error elsewhere in this file:** any value sourced
+> from a Tailwind-style `aspect-[a/b]` in the MCP output describes proportion,
+> not measurement.
+
 | Token | **rem** | px @16 | Figma | Used for |
 |-------|---------|--------|-------|----------|
 | `--size-icon-tile` | `3.5rem` | 56 | 112 | Filled gradient icon tile |
-| `--size-icon-glyph` | `0.75rem` | 12 | 24 | Icon glyph box (1:1) |
+| `--size-icon-lg` | `2.25rem` | 36 | 72 | Glyph inside a filled icon tile |
+| `--size-icon-md` | `1.625rem` | 26 | ~52 | Sidebar navigation icon |
+| `--size-icon-sm` | `1.5rem` | 24 | 48 | Inline icons — card arrow, heading sparkle |
 | `--size-sidebar` | `6.25rem` | 100 | 199 → 200 | Sidebar width |
 | `--size-sidebar-item` | `4.5rem` | 72 | 146 → 144 | Sidebar item square |
 | `--size-panel` | `12.25rem` | 196 | 392 | Glass panel (square) |

@@ -1,12 +1,89 @@
 # Handoff: Home Screen Prototype
 
-**Current phase:** `06_review` — **done, NEEDS CHANGES**. See "Review session
-(2026-08-18)" below. Full findings in
-[`06-review.md`](06-review.md).
-**Status:** Reviewed (2026-08-18) — 2 Major findings (both cross-cutting,
-both confirmed trivial/zero-fallout to fix), 3 Minor, 3 Info. Every REQ-ID is
-implemented; hand back to `dev` for the two Major fixes, then this can flip
-to PASS without a full re-review.
+**Current phase:** `06_review` result is **PASS ✅** (findings #1–#5 from the
+first pass below were fixed and spot-verified — see `06-review.md`'s own
+"PASS ✅" section at the bottom, which supersedes the "NEEDS CHANGES" status
+this file's header used to carry). **But see "Post-review visual-bug fix
+(2026-08-18, outside the pipeline)" below** — that PASS was given before the
+`code-review` skill had a visual-check step at all (added later this same
+day, see that skill's own changelog note), so it did not catch two rendering
+bugs a human found by actually looking at the running app. Those are now
+fixed in source but **not yet verified** — see that section for exactly what
+still needs to happen next, on a machine that actually has the toolchain.
+
+## Post-review visual-bug fix (2026-08-18, outside the pipeline)
+
+**Not done by `dev`, and not build/test verified** — done in a plain
+(non-agent) Claude Code session on the user's Mac, which has **no Node.js/npm
+at all**, at the user's explicit choice to accept unverified edits here
+rather than route through `dev` on the Raspberry Pi. Both root causes were
+already fully diagnosed in conversation before editing (not guessed):
+
+1. **`frontend/src/app/layout/shell/shell.component.css`** — the 16
+   `radial-gradient` mesh layers had no explicit size, so `circle`'s default
+   (`farthest-corner` — the full canvas diagonal for a corner-positioned
+   point) washed every layer out across nearly the whole background, with
+   the four topmost layers (mesh-1..4, pink/peach) hiding everything below.
+   Fixed by giving every layer an explicit `ellipse 44rem 29rem` size, sized
+   to approximate one grid cell's spacing on the 1280×832 logical viewport.
+   Full rationale in that file's own updated header comment.
+2. **`frontend/src/app/features/home/action-card/action-card.component.css`**
+   — `.action-card` had `width`/`min-width` but no `flex-shrink: 0`, **and**
+   critically it's the template's root element, not the component's host —
+   with Angular's default view encapsulation, `<app-action-card>` (the host,
+   unstyled, no `:host` rule existed anywhere in this codebase) is the
+   actual flex item inside `.home-content__cards`, not `.action-card`.  The
+   host's default `flex-shrink: 1` let it shrink regardless of the inner
+   button's own width, combined with `.shell__content`'s deliberate
+   `min-width: 0` — each card then shrank by however much its own text's
+   min-content width allowed, unevenly. Fixed with `:host { display:
+   contents; }` (so `.action-card` becomes the real flex item) plus
+   `flex-shrink: 0` on `.action-card` itself. Full rationale in that file's
+   own new header comment.
+
+**Round 2 (same session, after the user ran the app and looked at it).** The
+two fixes above worked — the user confirmed the layout and background now
+read correctly — but the rendered screen surfaced two further defects that no
+document had caught:
+
+3. **All icons rendered at roughly a third of their intended size.** Root
+   cause was a **spec error, not an implementation error**:
+   `docs/design/tokens.md` defined a single `--size-icon-glyph` at 12px,
+   derived by reading Figma's `aspect-[24/24]` as a 24px dimension. It is an
+   aspect *ratio* (24:24 = 1:1) and carries no size. `dev` implemented the
+   spec faithfully; the spec was wrong. Worse, one token was applied to every
+   icon regardless of context, so no single correct value existed.
+   Replaced with three context-specific tokens, sizes re-derived from the
+   surrounding Figma boxes and cross-checked against `design-sheet.md`'s own
+   icon scale (which independently agrees):
+   `--size-icon-lg` 2.25rem/36px (glyph inside a filled tile),
+   `--size-icon-md` 1.625rem/26px (sidebar nav),
+   `--size-icon-sm` 1.5rem/24px (card arrow, heading sparkle).
+   All five call sites in `sidebar`, `action-card` and `heading-block`
+   templates repointed. **`docs/design/tokens.md` was corrected too**, with a
+   warning to watch for the same `aspect-[a/b]`-misread class of error
+   elsewhere in that file — otherwise the next feature reproduces this bug.
+4. **Colours read washed out versus the Figma reference.** Two causes, both
+   in `shell.component.css`: there was no `background-color` at all, so the
+   white page canvas showed through wherever the layers had faded out; and
+   each layer ended at `transparent 60%`, leaving desaturated gaps between
+   grid points. Added `background-color: var(--mesh-6)` as the floor and
+   extended every layer to `transparent 100%` so neighbours overlap.
+
+**What still needs to happen, on a machine with the toolchain (the Pi):**
+- `npm install` (`frontend/package.json` gained a new devDependency,
+  `playwright`, added in this same session for the new visual-check step —
+  unrelated to these two fixes but landed at the same time) then
+  `npx playwright install chromium` once.
+- `npm run build` and `npm test` — neither has run since these edits.
+- The visual check itself: start the dev server, screenshot, compare against
+  `docs/design/assets/home.png` — exactly the step `code-review`'s new step 0
+  describes. This is the first real exercise of that new rule.
+- If anything looks off, this is exactly the kind of fix worth a `reviewer`
+  pass rather than trusting it on sight — nothing here has been build/test
+  verified yet.
+
+## Review session (2026-08-18, `reviewer`)
 
 ## Review session (2026-08-18, `reviewer`)
 

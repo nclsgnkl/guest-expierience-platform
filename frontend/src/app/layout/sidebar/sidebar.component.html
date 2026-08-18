@@ -11,7 +11,7 @@
         [class.sidebar-item--active]="isActive(item)"
         (click)="navigateTo(item)"
       >
-        <ng-icon class="sidebar-item__icon" [name]="item.icon" size="var(--size-icon-glyph)" />
+        <ng-icon class="sidebar-item__icon" [name]="item.icon" size="var(--size-icon-md)" />
         <span class="sidebar-item__label">{{ item.label }}</span>
       </button>
     }
@@ -27,7 +27,7 @@
       <ng-icon
         class="sidebar-item__icon"
         [name]="settings().icon"
-        size="var(--size-icon-glyph)"
+        size="var(--size-icon-md)"
       />
       <span class="sidebar-item__label">{{ settings().label }}</span>
     </button>

@@ -121,7 +121,21 @@
 
   /* Sizing */
   --size-icon-tile: 3.5rem;
-  --size-icon-glyph: 0.75rem;
+
+  /* Icon glyph sizes. 2026-08-18: replaced a single --size-icon-glyph
+     (0.75rem/12px) that was applied to every icon regardless of context and
+     rendered all of them far too small. Root cause was a spec error, not an
+     implementation one: docs/design/tokens.md read Figma's `aspect-[24/24]`
+     as a 24px dimension, but that is an aspect RATIO (24:24 = 1:1) and
+     carries no size. Real sizes derived from the surrounding Figma boxes:
+       lg — tile 112px minus 2x20px padding = 72px Figma = 36px CSS
+       md — sidebar item 146px minus 56px padding, gap and label ~= 52px = 26px CSS
+       sm — Action column w-[48px] / Sparkle frame 45px = ~24px CSS
+     Independently corroborated by design-sheet.md's own icon scale
+     (Large 36 / Default 28 / Small 22). */
+  --size-icon-lg: 2.25rem;
+  --size-icon-md: 1.625rem;
+  --size-icon-sm: 1.5rem;
   --size-sidebar: 6.25rem;
   --size-sidebar-item: 4.5rem;
   --size-panel: 12.25rem;

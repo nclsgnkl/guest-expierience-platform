@@ -45,7 +45,11 @@ When reviewing a planned feature, also write findings to
 ## Review Process
 
 Load the `code-review` skill for the full checklist. Apply all categories to
-every review.
+every review — including step 0 (visual check) for any change that touches
+`docs/design/**`-backed components. Do not report PASS on a UI change without
+having actually looked at a rendered screenshot; a code/text comparison alone
+already let two visual bugs through once (`home-screen-prototype`,
+2026-08-18) — see `code-review`'s own note on this.
 
 ## Immediate 🔴 Critical Flags
 
@@ -62,6 +66,7 @@ every review.
 | An approval-gated decision (see `docs/constitution.md` → Decisions Requiring Your Approval) was implemented without a recorded user confirmation | Decision taken over the user's head (🟠 Major) |
 | UI code hardcodes a value that exists as a token in `docs/design/tokens.md` | Design token bypassed — drifts from the design (🟡 Minor) |
 | UI deviates from `docs/design/screens/<slug>.md` without the spec being updated | Implementation and design spec out of sync (🟠 Major) |
+| PASS reported for a UI/design-touching change without a captured-and-compared screenshot | Text can match the spec's prose while the render still doesn't match its intent (🟠 Major) |
 
 ## Output Format
 

@@ -1,9 +1,28 @@
+/* 2026-08-18 fix: with Angular's default (Emulated) view encapsulation, the
+   template's root <button> is a CHILD of the <app-action-card> host, not a
+   replacement for it — so <app-action-card> is the actual flex item inside
+   .home-content__cards, not .action-card. With no styling of its own, the
+   host defaulted to `display: inline` (blockified by the flex context) and
+   `flex-shrink: 1` (the browser's initial value for any flex item), so it
+   could still shrink regardless of .action-card's own width/min-width.
+   Combined with .shell__content's `min-width: 0` (which deliberately allows
+   the row below it to shrink under a narrow viewport), this let the four
+   cards shrink unevenly — each by however much its own text's min-content
+   width allowed, which is why "Haus & Funktionen" stayed wide (its longer
+   title wraps to two lines) while shorter-text cards visibly narrowed.
+   `display: contents` removes the host's own box entirely, so .action-card
+   becomes the real flex item and its flex-shrink below actually applies. */
+:host {
+  display: contents;
+}
+
 .action-card {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
   gap: var(--space-1);
+  flex-shrink: 0;
   width: var(--size-panel);
   min-width: var(--size-panel);
   min-height: var(--size-panel);
