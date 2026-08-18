@@ -72,7 +72,52 @@ Single fixed canvas, no responsive behaviour defined.
 - `Screen` column distributes `Heading` and the card row with `space-between` and `128px` vertical padding.
 - `Widgets` column is `flex: 1` — it absorbs all remaining horizontal space.
 
+> ⚠️ **Read the two middle bullets together, not separately (note added
+> 2026-08-18, after they were misimplemented).**
+>
+> `align: end` describes where a column's **bottom edge** lands. It does **not**
+> mean the column shrinks to its content: the `Screen` column is full height,
+> and `space-between` + `128px` padding is what puts the heading at the **top**
+> and the cards at the **bottom** with empty space between them. Bottom-aligning
+> the whole column instead collapses that empty space and glues the heading onto
+> the cards in mid-screen — which is exactly what the first implementation did.
+>
+> **Measured from [`../assets/home-no-artwork.png`](../assets/home-no-artwork.png)**
+> (edge scan, CSS px on the 1280 × 832 logical viewport — this is the
+> no-artwork variant's real geometry, which was never extracted from Figma, so
+> these are the only concrete numbers that exist for it):
+>
+> | Element | x | y | w | h |
+> |---|---|---|---|---|
+> | Sidebar | 32 | **24** | 100 | **784** (= viewport height − 2 × 24 outer padding) |
+> | Active nav pill | 40 | 195 | **84** | **84** |
+> | Heading block (ink top) | 172 | ≈ 88–98 | **390** | — |
+> | Card row | **172** | — | 820 (4 × 196, gaps 12) | 196 |
+> | Card row bottom edge | — | **744** | — | — |
+>
+> Three things follow that the prose above does not spell out: the sidebar runs
+> the **full** height (24 → 808), the content column starts at x = 172 —
+> immediately after the sidebar plus one `--space-8` gap, with **nothing** in
+> between — and the heading/card pair is inset `--space-9` (64px) from the top
+> and bottom of the content area (24 + 64 = 88; 808 − 64 = 744).
+
 ## Components
+
+> ⚠️ **Glyph sizes in this section were corrected 2026-08-18 — read this before
+> trusting any icon dimension below.** Every "`24px` glyph" this section used to
+> carry came from reading Figma's `aspect-[24/24]` as a 24px measurement. It is
+> an aspect **ratio** (24:24 = 1:1) and carries no size at all; the same misread
+> is what made every icon in the built app render at roughly a third of its
+> intended size. The real sizes differ by context and come from the surrounding
+> Figma boxes — `--size-icon-lg` (2.25rem / 36px CSS, 72 raw) for a glyph inside
+> a filled tile, `--size-icon-md` (1.625rem / 26px CSS, ~52 raw) for sidebar
+> navigation, `--size-icon-sm` (1.5rem / 24px CSS, 48 raw) for inline icons.
+> Note that `--size-icon-sm` **is** 24px, so the card arrow and heading sparkle
+> below were numerically right for the wrong reason — they are stated as tokens
+> now so the coincidence cannot be mistaken for corroboration. `tokens.md` →
+> Sizing is the authority. **Any other value in this file sourced from an
+> `aspect-[a/b]` describes proportion, not measurement** — including the `24px`
+> in the card-4 clarification note below, which is unverified.
 
 ### Sidebar (`Menu Bar`, instance `18:204`)
 
@@ -107,7 +152,11 @@ padding `16px` horizontal / `28px` vertical.
 - **Active** (`state = true`): background `--gradient-menu-active`, radius `--radius-md`, label `--text-label-active` (ExtraBold).
 - **Inactive** (`state = false`): no background, label `--text-label` (Bold).
 
-Both states use `--color-text-primary` for the label. Icon glyph box is `24px`, 1:1.
+Both states use `--color-text-primary` for the label. The icon glyph box is
+**1:1** — Figma's `aspect-[24/24]` is that ratio and nothing more. Its size is
+`--size-icon-md` (1.625rem / **26px** CSS, ~52 raw), the sidebar-navigation
+value, derived from the surrounding Figma box; see the warning under
+"Components".
 
 `[NEEDS CLARIFICATION: no hover, focus, pressed or disabled state exists in the component. Required before implementation — this is a navigation control.]`
 
@@ -123,23 +172,47 @@ centered, padding `32px` horizontal / `48px` vertical.
 
 Structure, top to bottom:
 
-1. **Icon block** — `flex: 1`, padding `10px` / `16px`, containing an `Intense_Icon`: `112px` tile, radius `--radius-xl`, `--gradient-icon`, opacity 90%, padding `20px`, `24px` glyph.
+1. **Icon block** — `flex: 1`, padding `10px` / `16px`, containing an
+   `Intense_Icon`: `112px` tile, radius `--radius-xl`, `--gradient-icon`,
+   opacity 90%, padding `20px`, glyph at `--size-icon-lg` (2.25rem / **36px**
+   CSS, 72 raw) — a glyph inside a filled tile, not the `aspect-[24/24]` ratio
+   this used to be read as.
 2. **Text block** — `flex: 1`, column, gap `8px`:
    - **Header** — `--text-title`, `--color-text-primary`, full width
-   - **Description row** — description text `--text-body` / `--color-text-secondary` (`flex: 1`), plus a `48px`-wide **Action** column bottom-aligned holding a `24px` `ArrowRight` glyph
+   - **Description row** — description text `--text-body` /
+     `--color-text-secondary` (`flex: 1`), plus a `48px`-wide **Action** column
+     bottom-aligned holding an `ArrowRight` glyph at `--size-icon-sm`
+     (1.5rem / **24px** CSS, 48 raw). 24px is correct here, but as the
+     inline-icon token, not because `aspect-[24/24]` said so.
 
-**Props:** `header` (default `"Haus & Funktionen"`), `description` (default
+**Props:** `header` (Figma default `"Haus & Funktionen"`), `description` (default
 `"Tipps, Restaurants & Aktivitäten"`), `eigenschaft` (single value `"Default"`).
 
 | # | Node | Glyph | Header | Description |
 |---|------|-------|--------|-------------|
 | 1 | `15:62` | `Key` | Check-Out | Bis 11:00 Uhr am Abreisetag |
-| 2 | `15:74` | `LightbulbFilament` | Haus & Funktionen | Alles im Haus auf einen Blick |
-| 3 | `15:87` | `MapPin` | Entdecken | Tipps, Restaurants & Aktivitäten |
+| 2 | `15:74` | `LightbulbFilament` | Smart Home | Alles im Haus auf einen Blick |
+| 3 | `15:87` | `MapPin` | Umgebung | Tipps, Restaurants & Aktivitäten |
 | 4 | `15:100` | `FileText` | Wichtige Infos | Hausregeln, WLAN, Parken & mehr |
 
 ✅ **Done 2026-08-17:** cards 2–4 were carrying the component default; their
 text overrides are now set in Figma. The table above reflects the design file.
+
+**Amended 2026-08-18 (user decision):** card 3's header is **"Umgebung"**, not
+"Entdecken" — it now reads the same as the section it navigates to. Figma still
+says "Entdecken" (the suggestion in "PNG vs Figma" above is the older wording);
+the table and the shipped config are the authority for this string until the
+design file catches up.
+
+**Amended 2026-08-18 (user decision, second pass):** card 2's header is
+**"Smart Home"**, not "Haus & Funktionen". The original copy needs 167px of
+advance width in the card's real 162px title box (196 − 2 × 1px glass border −
+2 × 16px padding) and was rendered ellipsized; the user chose to rename the
+copy rather than widen the box, so the card's padding is unchanged. Like card
+3, it now reads the same as the section it navigates to — that repetition of
+the sidebar's "Smart Home" label is deliberate, not a duplication to
+de-duplicate. Figma still says "Haus & Funktionen"; the table and the shipped
+config are the authority until the design file catches up.
 
 `[NEEDS CLARIFICATION: the panel has one variant ("Default") and no hover/pressed state, but it carries an arrow affordance and is clearly interactive.]`
 
@@ -147,17 +220,57 @@ text overrides are now set in Figma. The table above reflects the design file.
 
 ### Heading block (`19:102`)
 
-Fixed `780px` wide, column, gap `12px`:
+Fixed `780px` wide (raw Figma — **390px CSS**, see the note below), column,
+gap `12px`:
 
-1. **Subtitle row** — `24px` `Sparkle` glyph + "Schön, dass ihr da seid" in `--text-body-lg`, gap `10px`
-2. **Headline** — "Willkommen im AirBnb von Lisa!" in `--text-display`
+1. **Subtitle row** — `Sparkle` glyph at `--size-icon-sm` (1.5rem / **24px**
+   CSS, 48 raw) + "Schön, dass ihr da seid" in `--text-body-lg`, gap `10px`.
+   Same as the card arrow: 24px is right as the inline-icon token, not as a
+   reading of `aspect-[24/24]`.
+2. **Headline** — "Willkommen im Airbnb von Lisa!" in `--text-display` (the
+   Figma layer and the reference render both read "AirBnb"; **"Airbnb"** is the
+   correct trademark spelling and is what ships — corrected here 2026-08-18 so
+   REQ-008's "matches this document exactly" is true of the shipped copy, see
+   `design-sheet.md` → Schreibweise)
 3. **Spacer** — empty `30px`-high frame (`19:115`) — in the PNG this position holds a hand-drawn underline + heart
 4. **Paragraph** — "Entspannt euch, genießt die Zeit und fühlt euch wie zuhause." in `--text-body-lg`
 
 All four use `--color-text-primary`.
 
+> ⚠️ **Overridden 2026-08-18 by the user — the Sparkle does not.** The
+> round-3 review compared the rendered pixels against
+> [`../assets/home-no-artwork.png`](../assets/home-no-artwork.png) and found the
+> reference's sparkle is a **filled** glyph carrying the same pink→violet
+> gradient as the active nav icon, not an outline glyph in flat
+> `--color-text-primary`. The build now matches it: Phosphor weight `fill`
+> (`phosphorSparkleFill`) plus the shared `.icon-gradient-active` paint server
+> — the identical mechanism and ruling as the active nav glyph below, so the
+> gradient still comes from `--color-icon-active-start`/`-end` and still
+> follows a property's runtime branding override. Measured after the fix: ink
+> runs `(201,91,199)` at the top to `(173,92,220)` at the bottom, against the
+> reference's `(220,96,185)` → `(179,95,216)`, with zero flat-navy pixels. The
+> other three elements of this block are unchanged.
+>
+> **The Figma component still shows the outline glyph in flat ink**, so a
+> future re-extraction will not reproduce this — same gap as the nav icon, and
+> recorded here for the same reason.
+
+> Note the weight exception this creates: `regular` is used for every glyph in
+> this screen **except** this one. See "Assets to export" below, where the
+> `regular`-throughout decision and its two overrides are recorded together.
+
 > The `30px` spacer is an empty frame, not an asset. The decorative underline
 > visible in the PNG does not exist in the Figma file.
+
+> ⚠️ **`780px` is a raw 2× value — the CSS width is `390px` (corrected
+> 2026-08-18).** Like every other number in this Components section it has to be
+> halved (sidebar 199 → 100, logo tile 112 → 56, glass panel 392 → 196, widget
+> column 443 → 220, `--text-display` 96 → 48); this one was carried into
+> `--size-heading` unhalved, which is why the build's headline stayed on one
+> line where the reference render wraps to two. The measured table under
+> "Layout" above also carried `780` and is corrected to `390`. Verified in a
+> browser at 390px: headline breaks 359 + 375px, paragraph 347 + 150px, against
+> the reference render's 356 + 369 and 348 + 150.4.
 
 `[NEEDS CLARIFICATION: guest name "Lisa"/"Anna" is hardcoded — confirm it is dynamic content.]`
 
@@ -213,8 +326,8 @@ Two requirements follow:
    the image removed* rather than a recomposition. With neither artwork nor
    widgets, the right ~40% of the canvas carries nothing. It reads as calm
    rather than broken, so this is a judgement call, not a defect — but the
-   heading block still occupies only its original 780px and the card row still
-   stops well short of the right edge.
+   heading block still occupies only its original 390px (780 raw) and the card
+   row still stops well short of the right edge.
    **Deferred to the planning phase (2026-08-17).** The right region is not
    meant to stay empty — widgets are wanted there, and their selection and
    layout will be worked out during `/plan` rather than settled here. Until
@@ -260,7 +373,9 @@ data sources**, which is an approval-gated infrastructure decision under
 
 Real German copy throughout — no lorem ipsum. Informal address (*ihr/euch*)
 consistently. Note the spelling **"AirBnb"** in the headline (Figma) vs
-**"Airbnb"** (PNG); the latter is the correct trademark spelling.
+**"Airbnb"** (PNG); the latter is the correct trademark spelling and the one
+this document and the shipped config now use (2026-08-18). The Figma file is
+the outlier and still needs correcting.
 
 ## Assets to export
 
@@ -280,7 +395,8 @@ Consequences:
 - Only **two** real assets need exporting: the final logo (pending) and the hero
   photo (dynamic, per-property) — neither of which is a Phosphor glyph.
 - **Package (decided 2026-08-17):** `@ng-icons/core` + `@ng-icons/phosphor-icons`.
-- **Weight (decided 2026-08-17): `regular` throughout, in every state.**
+- **Weight (decided 2026-08-17): `regular` throughout, in every state —
+  with one exception added 2026-08-18, see below.**
   Using `fill` for the active sidebar item was proposed and **rejected on
   aesthetic grounds** — it read as too heavy against the soft design.
 
@@ -289,3 +405,44 @@ Consequences:
   (`--text-label-active`, ExtraBold vs Bold). That is sufficient and not
   colour-only, so it holds up for accessibility; the icon simply does not
   participate in the distinction.
+
+  > ⚠️ **Overridden 2026-08-18 by the user — the icon *does* participate now.**
+  >
+  > The paragraph above stands as written for the **icon weight**: `regular` is
+  > still used in every state, and switching the active icon to Phosphor's
+  > `fill` weight is still rejected for the reason given. What changed is the
+  > separate question of the active glyph's **colour**.
+  >
+  > After the screen was built and run, the user compared it against
+  > [`../assets/home-no-artwork.png`](../assets/home-no-artwork.png) and found
+  > the active glyph there is not flat `--color-text-primary` at all: it carries
+  > a pink→violet gradient. Measured off that render (linear regression across
+  > the glyph's stroke pixels): a **139°** axis from `#f45aa8` to `#8b5cf6` —
+  > i.e. `--color-brand-primary` → `--color-brand-secondary`. The user confirmed
+  > those values and the override.
+  >
+  > **So the active state now rests on three signals** — the
+  > `--gradient-menu-active` background, the heavier label, and the
+  > gradient-filled glyph. None of them is colour-only, so the accessibility
+  > argument in the original decision is unaffected; and the aesthetic objection
+  > that killed `fill` does not apply, because a gradient recolours the same
+  > `regular` stroke rather than thickening it.
+  >
+  > The token is `--gradient-icon-active` — see
+  > [`../tokens.md`](../tokens.md) → Gradients, which carries the full
+  > provenance (measured from a render, not extracted from Figma) and the SVG
+  > realisation. **The Figma component still does not contain this fill**, so a
+  > future re-extraction will not reproduce it; that gap is recorded in
+  > `tokens.md` rather than silently accepted.
+  >
+  > `[NEEDS CLARIFICATION: apply the same gradient in the Figma MenuIcons component so design file and build stop disagreeing. Not urgent, not blocking — but until it happens, tokens.md is the only record.]`
+
+  > ⚠️ **Second override, 2026-08-18 — the heading Sparkle is `fill`.** The
+  > `regular`-throughout rule now has exactly one weight exception: the Sparkle
+  > in the Heading block, which the reference render shows solid and
+  > gradient-filled (see the note in "Heading block" above). The aesthetic
+  > objection that killed `fill` for the **sidebar** stands and is unaffected —
+  > the sidebar's active glyph is still `regular`, recoloured, not thickened.
+  > The registered icon name is therefore `phosphorSparkleFill`, imported from
+  > `@ng-icons/phosphor-icons/fill`; every other glyph still comes from
+  > `.../regular`.

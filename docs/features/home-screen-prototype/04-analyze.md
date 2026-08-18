@@ -1,6 +1,21 @@
 # Analyze: Home Screen Prototype
 **Feature:** [index.md](../index.md) | **PRD:** [01-prd.md](01-prd.md) | **Design:** [02-design.md](02-design.md) | **TODO:** [03-todo.md](03-todo.md)
-**Result:** PASS
+**Result:** **PASS** — cross-artifact consistency is clean for REQ-001…REQ-025.
+Two approval gates are **open by design** (raised, not decided by an agent) and
+block exactly one task, R7; see "Approval gates" below. Nothing is blocked on a
+missing or contradictory artifact.
+
+> **Re-run 2026-08-18 — third pass (round 3, visual-defect correction).** The
+> feature was implemented, reviewed PASS, then run and looked at; six visual
+> defects were found and a seventh while verifying them. `01-prd.md`,
+> `02-design.md` and `03-todo.md` were amended (REQ-022…REQ-025 added; REQ-014
+> and REQ-016 amended in place; acceptance criteria strengthened on REQ-007,
+> REQ-009, REQ-010, REQ-011), and `docs/design/tokens.md` and
+> `docs/design/screens/home.md` were corrected. This gate was re-run against
+> the amended artifacts. The second-pass matrix below is kept and extended
+> rather than replaced.
+>
+> Superseded by round 3 in the matrix below: REQ-014's and REQ-016's rows.
 
 > Re-run 2026-08-18 after the user reviewed the first PASS and answered the
 > flagged open questions — several answers changed the design (shared
@@ -35,6 +50,22 @@
 | REQ-019 | Content service contract (`targetSectionId`, `getSectionRoute()`); Card → section resolution | Content service: model, example data, `PropertyContentService`; Home content: `ActionCardComponent` | ✅ |
 | REQ-020 | Routing & the shared shell; Module layout (`ShellComponent`) | Shell & sidebar: build `ShellComponent`; Routing: wire `app.routes.ts` | ✅ |
 | REQ-021 | Routing & the shared shell (`SectionPlaceholderComponent`) | Routing & section placeholders: build `SectionPlaceholderComponent` | ✅ |
+| REQ-022 | Round 3 → The host element is the layout; Full-height sidebar and group distribution | R1 (`:host` convention), R2 (full-height sidebar) | ✅ |
+| REQ-023 | Round 3 → Gradient-filled icon glyph | R6 (three tasks: tokens, `<defs>` + stops, global rule + template class) | ✅ |
+| REQ-024 | Round 3 → No scrollbars (REQ-024) and responsive scaling (REQ-025) | R7 (⛔ blocked on approval), R8 (verification) | ✅ |
+| REQ-025 | Round 3 → Responsive scaling (REQ-025) — approval-gated | R7 (⛔ blocked on approval), R8 (verification) | ✅ |
+
+**Round-3 re-coverage of amended requirements** (these already had rows above;
+the round-3 tasks that now also serve them):
+
+| REQ-ID | What changed | Round-3 task(s) |
+|--------|--------------|-----------------|
+| REQ-007 | Acceptance strengthened: sidebar labels must not wrap | R2 (item width makes the label fit), R5 (`nowrap`) |
+| REQ-009 | Acceptance strengthened: card titles must not wrap; card text baselines must align | R5 |
+| REQ-010 | Acceptance strengthened: the empty hero component must occupy no layout space at all | R1 (`:host { display: none }`) |
+| REQ-011 | Acceptance strengthened: the logo asset must actually decode | R4 (asset fix + parse test) |
+| REQ-014 | **Amended:** full-height content column, heading top-anchored, cards bottom-anchored, no spurious 32px offset | R1 (D7 offset), R3 (vertical composition) |
+| REQ-016 | **Superseded by REQ-025**, guard rail moves 1280px → 1024px | R7 |
 
 ## Checks
 
@@ -148,6 +179,112 @@
       `docs/constitution.md` → "Decisions Requiring Your Approval" was
       touched by this revision.
 
+## Round-3 checks
+
+- [x] **Coverage** — REQ-022…REQ-025 each map to ≥1 round-3 task (matrix
+      above). Every amended requirement (REQ-007, REQ-009, REQ-010, REQ-011,
+      REQ-014, REQ-016) picks up at least one round-3 task that satisfies its
+      strengthened acceptance criteria. No requirement is left served only by
+      work that has already shipped and demonstrably did not satisfy it.
+- [x] **No orphans** — every round-3 task carries a `REQ-ID` except R0
+      (baseline install/build/test) and R8's out-of-band-regression re-check,
+      both tagged `_no REQ-ID (process)_` explicitly, consistent with how the
+      existing Cleanup section is treated.
+- [x] **Every defect traces to a requirement** — checked in the other
+      direction too, which is the check that would have caught this round's
+      real failure. All seven defects in `01-prd.md` → "Defect trace (round 3)"
+      map to a requirement: D1→REQ-022, D2→REQ-014, D3→REQ-023, D4→REQ-011,
+      D5→REQ-007/REQ-009, D6→REQ-024/REQ-025, D7→REQ-010/REQ-014. Three of them
+      (D4, D5, D7) violated requirements that **already existed and were marked
+      ✅ in the second-pass matrix above** — coverage of a REQ-ID by a task is
+      not evidence the requirement is met, only that someone was told to meet
+      it. Noted here because the matrix format invites exactly that
+      misreading.
+- [x] **Design fidelity** — `02-design.md` → "Round 3" addresses each new
+      requirement with a concrete mechanism, not a restatement: REQ-022 (the
+      `:host` convention + `align-items: stretch` + derived item size, with the
+      space-between arithmetic checked against the reference render), REQ-023
+      (four candidate techniques compared, one chosen, with the
+      `@ng-icons`-injects-outside-encapsulation constraint that dictates where
+      each piece lives), REQ-024 (met by construction, explicitly *not* by
+      `overflow: hidden`, with the enforcing measurement named), REQ-025 (the
+      mechanism is proposed with alternatives and marked approval-gated rather
+      than settled).
+- [x] **No contradictions introduced** — checked the four places this revision
+      was most likely to create one:
+      - PRD Non-goals said "responsive/phone layouts" were out of scope, which
+        REQ-025 would have contradicted. Amended in place: phone and portrait
+        stay out; a landscape *scaling contract* is in.
+      - REQ-016 ("layout is fixed at 1280×832 … min-width guard rail") directly
+        contradicted REQ-025. Marked superseded, guard rail value updated, kept
+        for traceability rather than deleted.
+      - `docs/design/tokens.md` → "Minimum supported width" said `1280px`.
+        Revised, with the old value struck through, not silently overwritten.
+      - `docs/design/screens/home.md` explicitly *rejected* an active-icon
+        fill state, which REQ-023 overrides. The override is recorded there
+        with its date and the old rationale intact — the file no longer
+        contradicts the PRD in either direction.
+      One contradiction is left standing **deliberately and visibly**:
+      `tokens.md` still lists `--size-sidebar-item` at 72px while the sidebar
+      renders 84px. Both are true (component box vs. instance in the frame) and
+      the note explains which governs; collapsing it to one number would lose
+      the traceability to Figma.
+- [x] **Constitution compliance (v1.1.0)** — re-reviewed for what round 3
+      changes:
+      - **Principle 1** (property content is data): unaffected. The card-title
+        `text-overflow: ellipsis` is the one place round 3 touches
+        property-authored content, and it *preserves* the principle (any
+        configured title renders without breaking the layout) at the cost of a
+        documented authoring constraint. No content moves into code.
+      - **Principle 2** (content via service): untouched — no component gains a
+        data import.
+      - **Principle 3** (no sensitive data logged): not applicable.
+      - **Principle 4** (self-hosted, no internet): unaffected. No new
+        dependency: the gradient uses inline SVG and CSS, the scaling proposal
+        uses only CSS. `playwright` is already in `package.json` and is **not**
+        being turned into a shipped or standing test dependency by this round —
+        see `02-design.md` → Test strategy, which explicitly defers the
+        still-open E2E-framework decision instead of quietly making it.
+        (Since 2026-08-18 `docs/constitution.md` v1.3.0 lists `playwright` as an
+        approved dependency, scoped to review-time verification; the
+        E2E-framework decision it does **not** make is still open.)
+      - **Principle 5** (semantic tokens only, never a raw hex or px):
+        satisfied and slightly *strengthened*. The new gradient is added at both
+        layers with the end stop mapped onto the existing `--brand-secondary`
+        rather than a duplicate literal; the sidebar item's 84px is derived from
+        `--size-sidebar` and `--space-3` rather than hardcoded; the one new
+        `px`-ish value (`min-width: 1024px`) is a guard rail, matching the
+        existing exception. `aspect-ratio: 1` and `white-space: nowrap` are
+        unitless.
+      - **Principle 6** (tests accompany code): R4's parse test and R6's class
+        test are new; R8 records the measurements that jsdom cannot make. The
+        honest limit — that most of this round is only verifiable in a real
+        engine — is stated in the design doc rather than papered over.
+      - **Principle 7** (traceability): this matrix, plus the reverse
+        defect→REQ trace above.
+      - **Constraints**: no dependency-manifest edit; branch discipline
+        unchanged (`feature/home-screen-prototype`); no external runtime
+        request added; **no design-tool request spent** — every measurement in
+        this round came from the committed reference PNG and from the running
+        app, which is the behaviour the metering constraint asks for.
+      - **Decisions Requiring Your Approval**: two items hit this list and both
+        are *raised, not taken* — see below. A third (the constitution
+        amendment itself) is user-approved in substance, with only its wording
+        outstanding; `docs/constitution.md` is deliberately not edited here.
+
+## Approval gates (open — this is the correct state, not a gap)
+
+| # | Item | Blocks | Status |
+|---|------|--------|--------|
+| 1 | **Responsive scaling mechanism** — viewport-proportional root font size. A new cross-cutting convention *and* a change to what the constitution's "`rem` against a 16px root" means | Task **R7** only | Proposed with recommendation, two sub-questions (cap at 16px?; the accessibility trade). Awaiting the user |
+| 2 | **`frontend/CLAUDE.md` entry** — proposed by `dev` during implementation, never written or approved; round 3 adds three conventions to it | Nothing (documentation only) | Proposed. Should be confirmed as one file, not in two passes |
+| 3 | **Constitution amendment** making "no scrollbars" a project constraint, 1.1.0 → 1.2.0 | Nothing in this feature (REQ-024 binds it regardless); binds *future* features | User has approved the substance; exact wording proposed separately for confirmation |
+
+None of these is a cross-artifact inconsistency, which is what this gate
+checks. Per `docs/constitution.md`, an agent may not decide them, so "open" is
+the only correct state for them to be in — and R1–R6 and R8 do not depend on
+any of them.
+
 ## Gaps
 
-None.
+None. R1–R6 and R8 are implementable now; R7 waits on approval gate 1.

@@ -1,7 +1,23 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.1.0 | **Last amended:** 2026-08-17
+**Version:** 1.3.0 | **Last amended:** 2026-08-18
 
+> **1.3.0** — approved `playwright` as a **verification tool**, and recorded that
+> this is deliberately not the still-open end-to-end framework decision. It had
+> already been installed ahead of this approval; the amendment makes the
+> manifest and this file agree again rather than pretending otherwise.
+>
+> **1.2.0** — added the "nothing scrolls" constraint and the supported viewport
+> range it applies to (1024 x 768 landscape minimum, 1280 x 832 design size,
+> portrait out of scope), and made the `rem` root font size viewport-
+> proportional rather than a constant 16px. The scroll rule is additive; the
+> root-size change rewrites the second sentence of the styling constraint, so
+> tokens authored against a fixed 16px root keep their authored values but no
+> longer render at a fixed physical size. Open risk recorded with it: at the
+> 1024 x 768 floor the 12px label token renders at 9.6px, which is pending a
+> hardware legibility check -- if it fails, the floor rises and this bumps
+> again.
+>
 > **1.1.0** — added principle 4 (self-hosted on premises, untrusted local
 > network, no central patching) and the two security constraints that follow
 > from it. Additive, nothing contradicted.
@@ -76,17 +92,39 @@
   signals for local UI state. No backend, auth or admin area in the first step —
   content comes from static JSON/TS files.
 - **Styling is plain CSS with custom properties.** No Tailwind, no SCSS, no
-  component library as a visual base. Sizes are expressed in `rem` against a
-  16px root, never in fixed pixels — this is what lets the UI scale to other
-  display sizes later. Exceptions: hairline borders and blur radii stay in `px`.
+  component library as a visual base. Sizes are expressed in `rem`, never in
+  fixed pixels. The root font size is **viewport-proportional**, not a
+  constant: it equals 16px at the 1280 x 832 design size and scales with the
+  viewport, which is what makes the whole UI scale without breakpoints. Author
+  every token as though the root were 16px; the root does the scaling. It is
+  deliberately **not capped** at the top end, so a larger display renders a
+  proportionally larger UI. Exceptions: hairline borders and blur radii stay in
+  `px`.
+- **Nothing scrolls.** Every screen fits its viewport on both axes — no
+  horizontal scrollbar, no vertical one, on any route. This holds across the
+  whole supported viewport range: **1024 x 768 landscape (minimum) up to the
+  1280 x 832 design size and beyond**. Portrait orientation, and anything below
+  the minimum, are out of scope and carry no guarantee. Between those sizes the
+  UI scales proportionally — there are no breakpoints and no second layout. The
+  rule is met **by construction** (a layout that would overflow is a bug to
+  fix), never by `overflow: hidden`, which hides the regression instead of
+  preventing it. Checkable at review time: on every route,
+  `scrollWidth <= clientWidth` and `scrollHeight <= clientHeight`.
 - **Approved dependencies:** `@angular/cdk` (overlay, dialog, menu, focus trap,
   a11y — used unstyled), `@ng-icons/core` + `@ng-icons/phosphor-icons`
   (Phosphor icon set), **`vitest` + `jsdom`** (unit tests — the Angular CLI
-  default since v21, installed by `ng new` rather than added by hand).
-  Anything beyond these needs approval as below.
+  default since v21, installed by `ng new` rather than added by hand), and
+  **`playwright`** (a devDependency used as a *verification tool* — the
+  `code-review` visual check drives a real browser to screenshot each route and
+  measure geometry, wrapping and scroll dimensions, because jsdom computes no
+  layout and decodes no images). Anything beyond these needs approval as below.
 - **Tests run on Vitest.** Karma/Jasmine are not used; Karma has been deprecated
-  since 2023 and Angular's default moved to Vitest. No end-to-end framework is
-  chosen yet — that is a separate decision, still open.
+  since 2023 and Angular's default moved to Vitest. **No end-to-end framework is
+  chosen yet — that decision is still open**, and approving `playwright` above
+  did not quietly make it. Playwright is sanctioned for *measurement during
+  review*, not as a test suite: no committed E2E specs, nothing wired into
+  `npm test`, no assertions living in a browser runner. Standing up a real E2E
+  suite — in Playwright or anything else — remains a separate approval.
 - **No dependency-manifest edits** (`package.json`, `pom.xml`, `requirements.txt`, …) without explicit approval.
 - **Branch discipline** — no write work on `main`/`master`; use a feature branch.
 - Secrets never hardcoded, never logged.

@@ -144,7 +144,17 @@ Request received
 9. **Continuous Improvement** — after completing significant tasks (features, refactorings, multi-step workflows), ask: *"Should learnings from this session be captured in the agent setup?"* If yes, run phase `07_improve` from the `spec-pipeline` skill. Skip for trivial bug fixes or single-file changes.
 10. **Branch guard** — before delegating to `dev`, verify the current branch with `git branch --show-current`. If it is `main`/`master`, create/switch to a feature branch first (e.g. `git checkout -b feature/<slug>`), then delegate. Never let write work start directly on `main`/`master`.
 11. **Give subagents context explicitly** — since each subagent starts fresh, your delegation prompt to it must include the relevant file paths (e.g. `docs/features/<slug>/03-todo.md`) rather than assuming it knows what you know.
-12. **Relay open decisions, don't resolve them** — if a subagent's report comes back as `⏸ Awaiting decision` (an architecture/dependency/infra choice, or a proposed nested `CLAUDE.md` entry — see `docs/constitution.md` → Decisions Requiring Your Approval), present its recommendation to the user as-is and wait for their answer. Once they answer, re-delegate to the same subagent with the decision included in the prompt. Never answer on the user's behalf, even if the recommendation looks obviously right.
+12. **Never downgrade an approval gate from opt-in to opt-out.** The
+    constitution requires the *exact text* of an approval-gated item (a nested
+    `CLAUDE.md` entry, a constitution amendment) to be confirmed **before** it
+    is written. "Let the subagent write it and show the user afterwards so they
+    can object" is not that, even when the user has already said yes in
+    principle — a yes given without the text is not a yes to the text. If you
+    have approval but no wording, get the wording first: have the subagent
+    propose it and end its turn, relay it, then re-delegate. This was violated
+    once (2026-08-18, `frontend/CLAUDE.md`) and the review caught it as a
+    finding, costing an extra round.
+13. **Relay open decisions, don't resolve them** — if a subagent's report comes back as `⏸ Awaiting decision` (an architecture/dependency/infra choice, or a proposed nested `CLAUDE.md` entry — see `docs/constitution.md` → Decisions Requiring Your Approval), present its recommendation to the user as-is and wait for their answer. Once they answer, re-delegate to the same subagent with the decision included in the prompt. Never answer on the user's behalf, even if the recommendation looks obviously right.
 
 ## Response Format
 

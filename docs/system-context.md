@@ -3,8 +3,10 @@
 High-level map of existing components and cross-cutting concerns. Read this
 before planning a new feature to spot related or conflicting work.
 
-> **Status:** no code exists yet. This records decisions already taken, so the
-> first build starts from them rather than re-deciding.
+> **Status:** `frontend/` exists and is implemented (the `home-screen-prototype`
+> feature); everything below reflects real code, not only intent. Updated
+> 2026-08-18 with the cross-cutting conventions that came out of that feature's
+> visual-defect round.
 
 ## Deployment model
 
@@ -133,6 +135,43 @@ below.
   is needed. Karma/Jasmine are deliberately not used. **No end-to-end framework
   is chosen** (Angular ships no default; Playwright and Cypress are the usual
   candidates) — an open, approval-gated decision for when one is first needed.
+  **`playwright` is nonetheless an approved devDependency since
+  `docs/constitution.md` v1.3.0 — as a *verification tool only*:** it drives a
+  real browser at review time to measure geometry, wrapping and scroll
+  dimensions, which jsdom cannot compute. `frontend/tools/measure.mjs` is that
+  instrument; it reports numbers and asserts nothing. Approving it explicitly
+  did **not** decide the E2E question above — committed specs, a browser test
+  runner or anything wired into `npm test` still needs that separate approval.
+- **Viewport & scaling (added 2026-08-18).** Design size **1280 × 832**
+  logical px; supported floor **1024 × 768, landscape**; portrait explicitly
+  out of scope. Between floor and design size the UI **scales proportionally**
+  — no breakpoints, no second layout, no reflow. **No screen ever shows a
+  scrollbar**, on any axis, on any route: the user extended this to every
+  future screen, so treat it as binding when planning a new one. It is met by
+  construction (nothing overflows) and verified by measuring
+  `scrollWidth`/`scrollHeight` against `clientWidth`/`clientHeight` — never by
+  `overflow: hidden`, which would hide regressions instead of preventing them.
+  Full contract in `docs/design/tokens.md` → "Minimum supported width".
+  The scaling **mechanism** — an uncapped viewport-proportional root font size,
+  `html { font-size: min(1.25vw, 1.9231vh) }` — was **approved by the user on
+  2026-08-18** and is recorded in `docs/constitution.md` v1.2.0.
+- **Component host elements are part of the layout (added 2026-08-18).** With
+  Angular's default emulated encapsulation, `<app-foo>` — not the template's
+  root element — is what the parent lays out, and it is unstyled
+  (`display: inline`, `flex-shrink: 1`, `height: auto`). A component that takes
+  part in its parent's flex/grid/height chain must declare it on its own
+  `:host` (`display: contents` when the template root should be the item;
+  `display: none` when the component renders nothing). Four separate visual
+  bugs in the first feature came from this one gap. Not applicable to hosts
+  that carry a role/label/landmark, since `display: contents` removes them from
+  the accessibility tree.
+- **Icon glyphs cannot be styled from a component stylesheet.** `@ng-icons`
+  appends its `<svg>` via `Renderer2`, outside the Angular template, so the
+  node carries no `_ngcontent-*` attribute and **no scoped selector can ever
+  match it**. Anything that must reach the glyph itself (e.g. the
+  gradient-filled active nav icon) needs a document-level rule in
+  `global.css`, keyed on a purpose-named class. Inheritable properties
+  (`color` → `currentColor`) still work normally and should be preferred.
 - **Logging:** `<not yet decided>`
 - **Persistence:** none in the first step — static JSON / TS content. A Java +
   Quarkus backend is planned after the MVP; the datastore behind it is not yet
@@ -152,12 +191,18 @@ None are committed.
 
 ## Open Structural Questions
 
-- ~~Viewport contradiction~~ — **resolved 2026-08-17.** The MVP targets large
-  touchscreens only, rendering the fixed 1280 × 832 layout as designed. No
-  breakpoints, no responsive work. Phone support is deferred and will be a
-  layout project, not a token change. Open sub-questions (minimum supported
-  width, and whether type sizes need scaling for viewing distance) are tracked
-  in `docs/design/tokens.md` → "Breakpoints".
+- ~~Viewport contradiction~~ — **resolved 2026-08-17, revised 2026-08-18.** The
+  MVP still targets large touchscreens and still has no breakpoints and no
+  second layout, but "the fixed 1280 × 832 layout" is no longer accurate: a
+  supported range now exists (1024 × 768 landscape → 1280 × 832 → larger),
+  covered by proportional scaling, with a hard no-scrollbar rule. See
+  "Cross-Cutting Concerns → Viewport & scaling" above and
+  `docs/design/tokens.md` → "Minimum supported width". Phone support is still
+  deferred and still a layout project. The type-size-at-viewing-distance
+  sub-question is now sharper, not resolved: at the floor, body text renders at
+  11.2px and sidebar labels at 9.6px, below the edge `design-sheet.md` already
+  warns about — the pending hardware check must happen at the floor size, not
+  only at the design size.
 - **Widget column** (`docs/design/screens/home.md`) is intentionally undesigned;
   `README.md` treats the widgets as hypotheses to be validated or dropped.
   **Planning resolution (`home-screen-prototype`, 2026-08-18):** no *content*

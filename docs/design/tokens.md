@@ -57,10 +57,20 @@ dimensions — scales proportionally. Fixed px would require revisiting every
 token instead.
 
 ```css
-html { font-size: 16px; }          /* 11–13" tablet — the design baseline */
-/* later, per device class: */
-/* html { font-size: 20px; }       →  entire UI scales 1.25× */
+/* As built, 2026-08-18 (user-approved; docs/constitution.md v1.2.0): */
+html { font-size: min(1.25vw, 1.9231vh); }
+/* = 16px at the 1280 × 832 design size, 12.8px at the 1024 × 768 floor,
+   larger above — deliberately uncapped, so a bigger display renders a
+   proportionally bigger UI. 1280/16 = 80 → 1.25vw; 832/16 = 52 → 1.9231vh;
+   the smaller of the two binds, so both axes always fit. */
 ```
+
+**Amended 2026-08-18.** The root is no longer the constant `16px` above — it is
+viewport-proportional, which is what the paragraph above always anticipated.
+Tokens are still authored *as though* the root were 16px; only their rendered
+physical size changes. Accepted trade: a viewport-derived root overrides the
+browser's font-size preference (acceptable on a fixed-purpose kiosk, and the
+previous constant was equally absolute).
 
 Two deliberate exceptions, which must **not** scale:
 
@@ -162,6 +172,59 @@ are genuinely violet, not a warm hue.)
 |-------|-------|------|
 | `--gradient-icon` | `linear-gradient(223.139deg, var(--color-brand-primary) 55.732%, var(--color-brand-primary-deep) 88.083%)` | Filled icon tiles and the logo |
 | `--gradient-menu-active` | `linear-gradient(-74.707deg, rgba(255,243,250,0.9) 7.717%, rgba(255,243,250,0.5) 92.116%)` | Active state of a sidebar item |
+| `--gradient-icon-active` ⚠️ | `linear-gradient(139deg, var(--color-brand-primary), var(--color-brand-secondary))` | Active sidebar item's **icon glyph** (the `MenuIcons` `state = true` glyph). Added 2026-08-18 — **measured from the reference render, not extracted from Figma.** See the provenance note below |
+
+> ⚠️ **`--gradient-icon-active` provenance: measured, not extracted (2026-08-18).**
+>
+> Every other value in this file came out of Figma via `design-import`. This one
+> did not. It was measured **pixel-by-pixel from
+> [`../assets/home-no-artwork.png`](../assets/home-no-artwork.png)** — a linear
+> regression fitted across the active "Home" glyph's stroke pixels — because the
+> Figma component carries no such fill and the render clearly does. Recorded here
+> rather than in a component so the two-layer architecture still holds, but the
+> difference in provenance is real and must not be forgotten:
+>
+> - **If this file is ever re-imported from Figma, this row will not come back.**
+>   Either the gradient gets added to the Figma component, or this row is
+>   carried forward by hand. Do not treat its absence from a fresh extraction as
+>   evidence it was wrong.
+> - The measured axis was **139°** in CSS notation (top-left → bottom-right); the
+>   measured stops were **`#f45aa8` → `#8b5cf6`**.
+> - **The end stop is not a new colour.** `#8b5cf6` is within one 8-bit unit per
+>   channel of `Brand_Secondary-Purple` (`#8a5cf6`), which this file has carried
+>   since the first extraction — a difference far below perceptual threshold and
+>   well inside PNG-render tolerance. It is therefore recorded as
+>   `var(--color-brand-secondary)`, **not** as a new primitive. Introducing a
+>   near-duplicate violet primitive would have left a per-property branding
+>   override (which rewrites `--brand-secondary`) unable to reach the nav icon —
+>   the property would rebrand everywhere except there.
+> - This also resolves the older note above that `--color-brand-secondary` is
+>   "defined but not visibly applied in this frame". It is applied now.
+>
+> **Realisation in code is not a CSS `background`.** A CSS gradient cannot paint
+> an SVG glyph: `fill` takes a paint server, not a `linear-gradient()`. The
+> gradient is therefore realised as an SVG `<linearGradient>` referenced by
+> `fill: url(#…)`, which has two consequences for this token layer:
+>
+> - the `139deg` CSS angle becomes `gradientTransform="rotate(49 0.5 0.5)"` on
+>   the default left→right SVG gradient axis (SVG's default axis equals CSS
+>   `90deg`, so the rotation is `139 − 90`);
+> - an SVG `<stop>` cannot consume a CSS gradient value, so the two stops are
+>   also exposed as their own semantic roles — `--color-icon-active-start`
+>   (= `var(--brand-primary)`) and `--color-icon-active-end`
+>   (= `var(--brand-secondary)`) — and the `--gradient-icon-active` value above
+>   is the canonical *specification* of what those two roles compose into.
+>
+> Full technique, including why the rule cannot live in a component stylesheet,
+> is in `docs/features/home-screen-prototype/02-design.md` → "Gradient-filled
+> icon glyph".
+>
+> **This overrides a design decision recorded elsewhere.**
+> [`screens/home.md`](screens/home.md) → "Assets to export" decided on
+> 2026-08-17 that the icon does *not* participate in the active/inactive
+> distinction (a `fill`-weight active icon was proposed and rejected as too
+> heavy). The user overrode that on 2026-08-18 after seeing the built screen.
+> The old rationale is kept in that file alongside the override, not deleted.
 
 ### Background implementation
 
@@ -299,16 +362,59 @@ Normalised first (see the half-pixel note under "Scale"), then converted.
 | `--size-icon-md` | `1.625rem` | 26 | ~52 | Sidebar navigation icon |
 | `--size-icon-sm` | `1.5rem` | 24 | 48 | Inline icons — card arrow, heading sparkle |
 | `--size-sidebar` | `6.25rem` | 100 | 199 → 200 | Sidebar width |
-| `--size-sidebar-item` | `4.5rem` | 72 | 146 → 144 | Sidebar item square |
+| `--size-sidebar-item` ⚠️ | `4.5rem` | 72 | 146 → 144 | Sidebar item square — **but see the measured correction below** |
 | `--size-panel` | `12.25rem` | 196 | 392 | Glass panel (square) |
-| `--size-widget-col` | `13.75rem` | 220 | 443 → 440 | Right-hand widget column width |
+| `--size-heading` | `24.375rem` | 390 | 780 | Heading block width — **see the correction below** |
+
+> ⚠️ **`--size-widget-col` removed, 2026-08-18.** It used to sit in this table
+> at `13.75rem` (220 CSS / 443 raw). The widget column is `flex: 1` in Figma and
+> in the implementation, so a fixed width was never referenced by anything and
+> the token was deleted from `frontend/src/styles/tokens.css`. The 220px figure
+> survives only as the value the column happens to measure at the 1280 × 832
+> design size (measured: 224px) — not as something to set.
+>
+> ⚠️ **`--size-heading` — halving correction, 2026-08-18.** It shipped as
+> `48.75rem` (780px), which is the **raw Figma value**, not the CSS one. Every
+> other size in `docs/design/screens/home.md` → Components is halved on the way
+> in (199 → 100, 112 → 56, 392 → 196, 443 → 220, display type 96 → 48); this one
+> was not, so the heading block rendered twice as wide as designed and its
+> headline stayed on one line where the reference render wraps to two. The CSS
+> value is **390px**. Verified in a browser: at 390px the headline breaks
+> 359 + 375px and the paragraph 347 + 150px, against the reference render's
+> 356 + 369 and 348 + 150.4. Same error family as the `aspect-[24/24]` glyph
+> misread above.
+>
+> ⚠️ **`--size-sidebar-item` — measured correction, 2026-08-18.** The `4.5rem`
+> above is the Figma **component's own** box (`MenuIcons`, 146 raw). In the
+> exported render the item does not keep that width: it and its active-state
+> pill measure **84 × 84 CSS px**, which is exactly `--size-sidebar` (100) minus
+> twice the sidebar's `--space-3` (8) horizontal padding — i.e. the item is
+> stretched to fill the sidebar's inner width by the sidebar's own auto-layout.
+> Measured from [`../assets/home-no-artwork.png`](../assets/home-no-artwork.png)
+> by edge scan: at y = 240 the active pill spans x 40 → 124 inside a sidebar
+> spanning x 32 → 132; vertically the pill spans y 195 → 279.
+>
+> **Implement it as derived, not as a second literal:** the item takes the
+> sidebar's inner width and is square (`width: 100%` inside the sidebar's
+> padding box, `aspect-ratio: 1`). That keeps one source of truth
+> (`--size-sidebar` and `--space-3`) instead of a magic 84. The 72px token stays
+> recorded here for traceability back to the Figma component, but it is not what
+> the screen shows — and taking it literally is what made the "Smart Home" label
+> wrap in the built app (the 72px item leaves a 56px label box; the label needs
+> ~71px, which the real 84px item provides).
+>
+> This is the same class of error as the `aspect-[a/b]` one flagged above: a
+> value read off a *component definition* rather than off its *instance in the
+> frame*.
 
 ## Breakpoints
 
-**None — deliberately.** Decided 2026-08-17.
+**None — deliberately.** Decided 2026-08-17. Still none after the 2026-08-18
+revision below: scaling to the new 1024 × 768 floor is a *proportional* change,
+not a second layout, so it introduces no breakpoint.
 
 The MVP targets **large touchscreens only**, sized generously enough to render
-the layout exactly as designed: permanent sidebar, four cards across, 780px
+the layout exactly as designed: permanent sidebar, four cards across, 390px
 heading block. There is no responsive behaviour to specify, because there is no
 second layout.
 
@@ -329,15 +435,48 @@ gets bigger.
 
 ### Minimum supported width
 
-`1280px`. Below it the layout breaks rather than degrades: the sidebar, the
-780px heading block and four 196px cards with gaps consume the full width by
-design.
+~~`1280px`.~~ **Revised 2026-08-18 — now `1024 × 768`, landscape.** (Original
+text: `1280px`; below it the layout breaks rather than degrades, since the
+sidebar, the 390px heading block and the 820px card row (four 196px cards with
+gaps) consume the full width by design.)
 
-**Recommendation:** treat widths below the minimum as **out of scope rather
-than broken** — the app is deployed on known hardware, so this is a guard
-rail for development, not a user-facing state. A simple `min-width` on the
-layout root with page scrolling is enough; no dedicated fallback screen is
-worth building until phone support becomes real.
+The user set a supported floor of **1024 × 768 in landscape** — classic
+iPad-landscape, chosen as a typical tablet size after the user explicitly
+delegated the choice. Between that floor and the 1280 × 832 design size the UI
+**scales**; it does not reflow:
+
+| | |
+|---|---|
+| Design size | 1280 × 832 (root font size 16px — the `rem` baseline above) |
+| Supported floor | **1024 × 768, landscape** (0.8 × the design width) |
+| Between them | The same composition, proportionally smaller. No breakpoints, no rewrapping, no element moving to another row, **no scrollbars** |
+| Above the design size | Proportions kept, everything simply larger — as "Units" already anticipated |
+| Portrait | **Out of scope.** The design is unambiguously landscape; a portrait viewport is treated exactly like a below-floor one |
+| Below the floor | Nothing guaranteed. The `min-width` guard rail stays, moved from `1280px` to `1024px`, and scrolling there is acceptable |
+
+**"No scrollbars" is a project-wide rule, not a Home-screen one** (user, 2026-08-18:
+*"das gilt auch für jeden zukünftigen Screen"*). It is proposed as a
+constitution-level constraint; until that amendment is ratified, treat it as
+binding on any screen planned after this date.
+
+**Resolved 2026-08-18 (was `[NEEDS CLARIFICATION]`).** The user approved the
+recommended mechanism: `html { font-size: min(1.25vw, 1.9231vh) }`, uncapped —
+see "Units" above for the as-built rule and `docs/constitution.md` v1.2.0 for
+the ratified constraint. Implemented and measured on every route at 1024 × 768,
+1280 × 832 and 1440 × 900: no overflow on either axis at any of them.
+
+**Still true, unchanged:** treat sizes below the floor as **out of scope rather
+than broken** — the app is deployed on known hardware, so this is a guard rail
+for development, not a user-facing state. A simple `min-width` on the layout
+root with page scrolling is enough; no dedicated fallback screen is worth
+building until phone support becomes real.
+
+**Legibility consequence, flagged not solved:** at the floor everything is 0.8×,
+so `--text-body` renders at 11.2px and the sidebar labels at 9.6px.
+[`design-sheet.md`](design-sheet.md) already calls 14px/12px "at the lower
+edge" for an 11–13" touchscreen; 11.2/9.6px is below that edge. The floor is a
+*supported* size, not the *target* size (1280 × 832 stays the target), but this
+belongs on the same hardware check that entry already asks for.
 
 ---
 
@@ -417,7 +556,8 @@ applyBranding(brand: PropertyBranding) {
   variables would, nesting is native CSS now, and the token layer must be
   runtime-swappable anyway — which SCSS cannot do. One less build step.
   Reversible later via the Angular CLI, per project.
-- **Units in `rem`** against a `16px` root (see "Units").
+- **Units in `rem`**, authored against a `16px` root; the root itself is
+  viewport-proportional since 2026-08-18 (see "Units").
 - **Dark-mode trigger:** a `data-theme` attribute on `<html>`. It defaults to
   the system preference (`prefers-color-scheme`) but an explicit user choice in
   `Einstellungen → Darstellung` must win over it — so the attribute is authored
@@ -443,7 +583,11 @@ applyBranding(brand: PropertyBranding) {
 
 ## Open questions
 
-- `[NEEDS CLARIFICATION: responsive behaviour — no breakpoints exist]`
+- `[NEEDS CLARIFICATION: responsive behaviour — no breakpoints exist.` **Partly
+  resolved 2026-08-18:** a supported range (1024 × 768 landscape → 1280 × 832 →
+  larger) and a no-scrollbar rule are now decided; still no breakpoints, because
+  the range is covered by proportional scaling. The scaling *mechanism* remains
+  approval-gated — see "Minimum supported width".`]`
 - `[NEEDS CLARIFICATION: explicit line-heights are missing everywhere]`
 - `[NEEDS CLARIFICATION: promote the five raw surface/gradient colors to Figma variables?]`
 - `[NEEDS CLARIFICATION: no dark-mode palette exists — is one wanted?]`

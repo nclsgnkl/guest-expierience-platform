@@ -210,8 +210,24 @@ auf „Auto"; diese Werte sind die verbindlichen. Siehe `tokens.md`.
 | | |
 |---|---|
 | Gewicht | `regular` — in **allen** Zuständen, auch aktiv |
-| Glyph-Box | 12 px (1:1) |
+| Glyph-Box | ⚠️ keine feste Größe — siehe Korrektur unten |
 | Gefüllte Icon-Kachel | 56 px, Radius 30, Icon-Verlauf, 90 % Deckkraft |
+
+> ⚠️ **Korrektur 2026-08-18: „Glyph-Box 12 px" war ein Lesefehler.** Der Wert
+> stammte aus Figmas `aspect-[24/24]`, halbiert auf CSS-px. `aspect-[a/b]`
+> beschreibt ein **Seitenverhältnis** (24:24 = 1:1) und enthält keine Größe.
+> Die tatsächlichen Glyph-Größen werden aus den umgebenden Figma-Boxen
+> abgeleitet und stehen in `tokens.md` → Sizing (`--size-icon-lg` 36 px,
+> `--size-icon-md` 26 px, `--size-icon-sm` 24 px) — bei Widerspruch gilt
+> `tokens.md` (siehe `docs/constitution.md`). Deckt sich mit der Icon-Skala
+> weiter unten in diesem Dokument (Large 36 / Default 28 / Small 22).
+
+> ⚠️ **Korrektur 2026-08-18: `regular` gilt nicht mehr „in allen Fällen".**
+> Zwei Glyphen weichen ab, beide auf Nutzerentscheidung und gegen den Render
+> geprüft: das Icon des **aktiven** Sidebar-Eintrags und das **Sparkle** im
+> Heading-Block tragen den Marken-Verlauf (Pink → Violett), das Sparkle
+> zusätzlich im Gewicht `fill`. Details in `screens/home.md` und
+> `docs/features/home-screen-prototype/01-prd.md` → REQ-023.
 
 ⚠️ v1 sah aktive Icons in Primary Pink vor. Gebaut wurde stattdessen: das Icon
 bleibt unverändert, der aktive Zustand entsteht aus Hintergrundverlauf und

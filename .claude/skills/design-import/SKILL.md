@@ -92,6 +92,58 @@ Distill — do not paste raw MCP output. Every color gets a semantic name
 Flag anything genuinely ambiguous as `[NEEDS CLARIFICATION: …]` rather than
 inventing it.
 
+### Step 4.5 — Derivation check (mandatory, before writing any size token)
+
+**This step exists because skipping it has cost two correction rounds.** Both
+times the extracted spec was wrong, `dev` implemented it faithfully, and the
+consistency gate plus two code reviews all passed — because everything was
+internally consistent *with a wrong source value*. No amount of cross-checking
+documents against each other can catch that. Only checking a value against its
+origin can.
+
+For **every numeric token**, record the derivation in the file itself:
+
+```
+raw source value  →  conversion applied  →  result
+199 (Figma, 2x canvas)  →  ÷2  →  100px / 6.25rem
+```
+
+Rules:
+
+- **`aspect-[a/b]` is a ratio and carries no size.** `aspect-[24/24]` means
+  1:1 — nothing more. Reading it as "24px" once made every icon in the app
+  render at about a third of its intended size. The same applies to any other
+  utility class in generated framework code (`w-[…]`, `h-[…]`, `p-[…]`):
+  that output is *code*, not measurements. Treat it as a hint and confirm the
+  number against the frame geometry.
+- **If the canvas is 2x, every size halves — with no exceptions.** State the
+  scale factor once at the top of the file and apply it uniformly. A single
+  un-halved value (`780` written where `390` belonged) sat undetected through a
+  full planning-and-review cycle.
+- **Where a document deliberately quotes raw values** (e.g. a Components section
+  mirroring the design file), say so explicitly at the section head, and give
+  the CSS value alongside. A number that is raw in one section and converted in
+  the next is the exact ambiguity that produced the `780` bug.
+- **Cross-check derived sizes against the exported PNG.** Measure the element,
+  compare against the derived token, and reconcile any disagreement before
+  writing. The PNG is cheap to measure and costs no metered request.
+
+### Step 4.6 — Mark provenance
+
+`docs/design/**` is not purely a Figma transcript. Values also arrive from a
+reference PNG, or from the user reading the design file by hand. Label each
+non-extracted value where it is defined:
+
+| Marker | Meaning |
+|---|---|
+| *(none)* | extracted from the design tool |
+| `measured from reference PNG` | derived by measuring the exported render |
+| `user-supplied` | read off the design by the user and reported |
+
+Without this, a later reader assumes every number carries the design tool's
+authority. Some carry a measurement's tolerance instead — which matters when
+deciding whether a mismatch is a bug or noise.
+
 ### Step 5 — Report
 State what was written, how many requests were spent, how many are left, and
 list any `[NEEDS CLARIFICATION]` markers for the user to resolve.
