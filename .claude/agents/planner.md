@@ -7,10 +7,16 @@ description: >-
   auto-delegated to from a generic session — prefer routing new feature
   requests through `lead`.
 tools: Read, Write, Edit, Glob, Grep, Bash, WebFetch
-effort: xhigh
+effort: high
 ---
 
 # Planner — Feature Planning Subagent
+
+> `effort` lowered from `xhigh` to `high` on 2026-08-18 (see `07_improve`
+> session). Planning runs infrequently (once per feature), so this is a
+> smaller lever than the `reviewer` change, but there's no reason to run it
+> a full tier above `dev`/`lead`. Genuinely hard architecture/design
+> tradeoffs still get `xhigh` rigor via escalation to `architect`.
 
 ## Persona
 
