@@ -81,18 +81,36 @@ boundary. It does not answer it for the MVP, which has no server-side logic.
 
 ## Components
 
+Introduced by `docs/features/home-screen-prototype/` (see that feature's
+`02-design.md` for the full rationale). **Revised 2026-08-18**: the sidebar
+and background moved into a shared, route-agnostic `layout/` area (they are
+no longer Home-specific), and the generic placeholder was replaced by a
+section-aware one:
+
 | Component | Location | Responsibility |
 |-----------|----------|-----------------|
-| _none yet_ | — | — |
+| `PropertyContentService` | `frontend/src/app/core/content/` | Supplies per-property/guest content via DI (constitution principle 2), including sidebar `menuItems`/`settings` and each card's `targetSectionId` → route resolution (`getSectionRoute()`); backed by static TS today, swappable for the future Quarkus backend |
+| `ShellComponent` | `frontend/src/app/layout/shell/` | App-wide shell rendered on every route: mesh-gradient background + `SidebarComponent` + `<router-outlet>` for the routed main content |
+| `SidebarComponent` | `frontend/src/app/layout/sidebar/` | Config-driven nav — 5 `menuItems` (Home, Info, Umgebung, Smart Home, Services) + 1 structurally-fixed `settings` entry (`MenuIcons`), active state from current route |
+| `HomeContentComponent` | `frontend/src/app/features/home/` | Home's main-content region only (heading block, hero artwork, 4 action cards, reserved empty widget-column space) — composed inside `ShellComponent`'s router-outlet, not the sidebar/background |
+| `HeroArtworkComponent` | `frontend/src/app/features/home/hero-artwork/` | Renders the no-artwork fallback (no image; background now lives in `ShellComponent`) |
+| `HeadingBlockComponent` | `frontend/src/app/features/home/heading-block/` | Subtitle, headline, paragraph — from `PropertyContentService`; property-level content, not per-guest |
+| `ActionCardComponent` | `frontend/src/app/features/home/action-card/` | `GlassPanel` action card; resolves its destination from `targetSectionId` via `PropertyContentService.getSectionRoute()`, keyboard- and touch-activatable |
+| `SectionPlaceholderComponent` | `frontend/src/app/features/section-placeholder/` | Shared main-content stub, rendered inside `ShellComponent`, for the 5 sections with no design yet (Info, Umgebung, Smart Home, Services, Einstellungen) |
 
-Designed but not implemented: see `docs/design/screens/home.md` — sidebar
-(`MenuIcons`), action card (`GlassPanel`), gradient icon tile (`IntenseIcon`).
+Still designed but not implemented: nothing — the Home screen's designed
+components are now all covered by the row above. The **widget column**
+remains undesigned (no content built), but its layout space is reserved
+(`flex: 1`, empty) rather than collapsed — see "Open Structural Questions"
+below.
 
 ## Cross-Cutting Concerns
 
 - **Design tokens:** CSS custom properties in two layers (primitive → semantic).
   Components reference semantic roles only. Full rationale and shape in
-  `docs/design/tokens.md` → "Implementation". No Tailwind.
+  `docs/design/tokens.md` → "Implementation". No Tailwind. As of
+  `home-screen-prototype`, this moved from spec to real code:
+  `frontend/src/styles/tokens.css`.
 - **Theming:** two independent axes.
   - *Appearance* (`data-theme` on `<html>`) overrides **semantic** roles.
   - *Property branding* overrides **primitives**, written at runtime from a
@@ -142,3 +160,12 @@ None are committed.
   in `docs/design/tokens.md` → "Breakpoints".
 - **Widget column** (`docs/design/screens/home.md`) is intentionally undesigned;
   `README.md` treats the widgets as hypotheses to be validated or dropped.
+  **Planning resolution (`home-screen-prototype`, 2026-08-18):** no *content*
+  built in the first prototype — no Figma design exists for any widget, and
+  weather/recommendations would each need an external data source (an
+  infrastructure decision gated under `docs/constitution.md`). **User
+  confirmed 2026-08-18:** unlike the content, the column's *space* is
+  reserved (`flex: 1`, empty) in the Home layout, matching the designed
+  proportions, so this stays a content/future-feature decision rather than
+  a layout one to revisit later. Selecting and designing the widget set
+  itself remains deferred to its own future feature.
