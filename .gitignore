@@ -430,3 +430,9 @@ FodyWeavers.xsd
 
 # macOS
 .DS_Store
+
+# --- Monorepo overrides (backend-foundation) ---
+# The Visual Studio template above ignores **/[Pp]ackages/* — but this repo's
+# top-level packages/ (generated, committed TypeScript API client) must be tracked.
+!/packages/
+!/packages/**

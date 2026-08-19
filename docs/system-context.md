@@ -8,18 +8,24 @@ before planning a new feature to spot related or conflicting work.
 > below reflects real code, not only intent. Updated 2026-08-19 with
 > `appearance-and-language`'s components, its two runtime axes and the one
 > thing the app now persists.
+>
+> **Updated again 2026-08-19: the backend is decided and in flight.** The
+> owner's decision interview is recorded in `docs/backend/specification.md`
+> and ratified as constitution **v1.4.0**. Sections below marked *(decided
+> 2026-08-19)* describe that decided-but-being-built state; the component
+> tables still list only real code.
 
 ## Deployment model
 
-**Self-hosted, one instance per property.** Every apartment or hotel runs its
-own server inside the building, serving the app to a touchscreen on site. There
-is no central multi-tenant service.
+**Self-hosted, one instance per building.** Every hotel, apartment house or
+holiday home runs its own server inside the building, serving **n room kiosks**
+and one manager UI on site. There is no central multi-tenant service.
 
 What this buys us, and what it costs:
 
 | | |
 |---|---|
-| ✅ **Tenant isolation is physical** | One instance holds one property's data. No cross-tenant leakage is even possible, and no tenant-scoping logic is needed in queries |
+| ✅ **Tenant isolation is physical — *between buildings*** | One instance holds one building's data; cross-*building* leakage is impossible. **Narrowed 2026-08-19:** inside a building the backend serves many rooms, so **room-level scoping is mandatory** — the room is derived from the authenticated device token, never from a client-supplied parameter, and every query touching room-scoped data is security-relevant (constitution v1.4.0, principle 4) |
 | ✅ **No internet dependency** | The app keeps working when the property's connection is down — which is exactly when a guest needs the WiFi password |
 | ⚠️ **No central patching** | A vulnerability persists until someone updates that box. This is the dominant long-term risk and the reason to keep the dependency count low |
 | ⚠️ **Shared network** | The server sits on the same LAN as guest devices |
@@ -33,41 +39,36 @@ weakest at.
 
 ### Open security questions
 
-These need answering before content that matters is served. None block the first
-build, but they shape it.
+Three of the five were **resolved on 2026-08-19** by the owner's backend
+decisions (`docs/backend/specification.md`, constitution v1.4.0):
 
-- `[NEEDS DECISION: does the app authenticate the guest at all?` Today's plan
-  serves static JSON from a local server. Door codes, key-box codes and WiFi
-  passwords would therefore be retrievable by **any device on the LAN**, without
-  authentication, simply by requesting the file — including a neighbour in range
-  or a guest whose stay has ended. "It's only on the local network" is a weak
-  boundary for a door code. Options range from accepting it (the touchscreen is
-  in the flat anyway) through a per-stay PIN to a short-lived token. The answer
-  determines whether sensitive content may live in the client bundle at all.`]`
-- `[NEEDS DECISION: HTTPS on the local network?` Plain HTTP exposes everything to
-  passive sniffing on shared WiFi. Certificates for a LAN device are awkward but
-  solvable (self-signed with a provisioning step, or a real cert on a local
-  domain).`]`
+- ~~Does the app authenticate the guest at all?~~ — **Resolved: device
+  pairing with an opaque token.** The kiosk is paired once by the manager and
+  holds a long-lived token (stored hashed server-side, revocable). The token
+  is identity *and* authentication: no valid token, no room data, and a device
+  cannot change which room it claims to be. Sensitive content is served, never
+  bundled.
+- ~~HTTPS on the local network?~~ — **Resolved: yes, always.** The instance
+  generates its own CA and server certificate on first start; the pairing flow
+  installs the CA on the kiosk. No internet, no ACME, no manual certificate
+  work on site.
+- ~~How is the guest-preference endpoint secured?~~ (raised 2026-08-18 by
+  `appearance-and-language`) — **Resolved by the same device token.** The
+  preference write rides the authenticated guest API; the record's scope
+  ("the screen", no identifiers) is unchanged — the stay-level language/theme
+  override now has a `Stay` anchor server-side.
+
+Still open, both operational rather than application code:
+
 - `[NEEDS DECISION: how does the touchscreen get locked down?` Kiosk mode, no
   browser chrome, no navigating away, no developer tools. This is device
   provisioning rather than application code, but it is part of the security
   story and nobody else will do it.`]`
 - `[NEEDS DECISION: how do instances get updated,` and who is responsible for
-  it? See the patching risk above.`]`
-- `[NEEDS DECISION: how is the guest-preference endpoint secured?`
-  **Raised 2026-08-18 by `appearance-and-language`, not answered by it.** Once
-  the preference is stored server-side (Cross-Cutting Concerns → Persistence),
-  the endpoint that stores it is the product's **first unauthenticated *write*
-  surface** on a LAN shared with guest devices and possibly neighbours.
-  *Where* the server keeps it is a separate, still-unmade and approval-gated
-  decision; this question stands whatever that answer is. The impact is nuisance
-  rather than disclosure — someone could change what the screen shows, not read
-  a door code — but it is a mutation reachable by anyone in range, and it
-  belongs to the backend feature's design. Note the same feature deliberately
-  does **not** pre-empt the authentication question above: the stored record is
-  scoped to *the screen* and carries **no identifier of any kind** (no guest,
-  stay, session or device id), so whatever that decision lands on, scoping the
-  record later is a change inside the gateway and the backend only.`]`
+  it? See the patching risk above. **Sharpened 2026-08-19:** the backend adds
+  a schema and a database to every update — the mechanics are decided (image
+  tag change + restart, Flyway pulls the schema forward), the *who and when*
+  are not.`]`
 
 ## Stack
 
@@ -80,8 +81,13 @@ Per `README.md` → "Erste Technische Richtung":
   no admin area in the first step
 - Target: **touch-optimised web app** for tablet and touchscreen
 
-**Planned backend: Java + Quarkus**, after the MVP. The static JSON stage is
-explicitly temporary. Two things follow:
+**Backend: Java 21 + Quarkus — decided 2026-08-19, in flight.** No longer
+"planned after the MVP": the full decision log (BCE packaging, Panache
+repositories, contract-first OpenAPI with a generated TS client, PostgreSQL,
+Flyway, Docker Compose, device pairing, admin bearer token, HTTPS with a
+self-generated CA) lives in `docs/backend/specification.md` and is ratified in
+constitution v1.4.0. The static JSON stage is explicitly temporary. Two things
+follow:
 
 - Constitution principle 2 (*content is reached through a service, never
   imported into a component*) is what makes this swap cheap. Components must
@@ -143,6 +149,34 @@ above: these are real files under `frontend/src/`, not intent.
 
 Full rationale for the eight rows above:
 `docs/features/appearance-and-language/02-design.md`.
+
+Added by `docs/features/backend-foundation/` (2026-08-19) — **the backend's
+first real code**, same rule as above (real files, not intent):
+
+| Component | Location | Responsibility |
+|-----------|----------|-----------------|
+| `api/openapi.yaml` | repo root `api/` | **The API contract — source of truth.** OpenAPI 3.1; tag `system` with `getSystemHealth`/`getSystemReadiness`/`getSystemInfo` plus the shared `ApiError` shape. The Maven build generates both sides from it; editing it is how any API change starts |
+| Quarkus backend | `backend/app/` | Java 21, Quarkus 3.33 LTS (3.33.3.1), Maven wrapper, dependencies exactly the constitution v1.5.0 allow-list. Flyway `V1__foundation_baseline.sql` (single-row `instance_info` + seed) migrates at startup; Dev Services provisions `postgres:17.11` for dev/test; `%prod` reads the datasource from env vars. Fail-closed security (`quarkus.security.deny-unannotated-members=true`) and no-SQL/no-access logging committed for all profiles |
+| `de.gxp.system` | `backend/app/src/main/java/de/gxp/system/` | **The BCE reference package** every later feature copies (spec §4 strict): `SystemResource` (Boundary, one delegating line per method, implements generated `SystemApi`), `SystemControl` (public Control, `@Transactional` + `@PermitAll` on methods, speaks generated DTOs, throws the 503), package-private `InstanceInfo`/`InstanceInfoRepository`/`InstanceInfoMapper` (hand-written) |
+| `packages/api-client/` | repo root `packages/` | **Generated** TypeScript-Angular client — committed, never hand-edited, deterministic (no diff on unchanged contract); a diff there means the contract changed. Uses only `@angular/common/http` + `rxjs`; no npm manifest changed anywhere. Not yet consumed — that is `guest-frontend-integration`'s |
+| Compose unit | `backend/compose.yaml` | Deployment unit: `app` (JVM image) + `db` (`postgres:17.11`), **one** named volume `gxp-pgdata` (backup = one `pg_dump`), required interpolation for `GXP_DB_PASSWORD`/`GXP_ADMIN_PASSWORD` (fails fast when unset; admin password is passthrough until the auth feature). **HTTP only — dev/preview until TLS lands** with `device-pairing-and-guest-api` |
+
+Added by `docs/features/backend-domain-config/` (2026-08-19) — the domain
+model, every spec §5 invariant server-side, and the secured manager CRUD API
+(same rule: real files, not intent):
+
+| Component | Location | Responsibility |
+|-----------|----------|-----------------|
+| Manager contract | `api/openapi.yaml` (tags `manager-*`) | Auth (`managerLogin`/`managerLogout`/`changeManagerPassword`), property, rooms, menu catalogue (read-only) + menu-config + action-cards (both scopes), stays, assets — every operation except login under the `bearerAuth` scheme. One generated interface per `manager-*` tag keeps one Boundary per BCE package |
+| `de.gxp.auth` | `backend/app/src/main/java/de/gxp/auth/` | Manager auth, isolated so the later per-user swap touches no other Boundary/Control: `AuthResource`/`AuthControl`, package-private `TokenStore` (in-memory, SHA-256 hashes, 600 s sliding idle), `Pbkdf2PasswordHasher` (JDK, 600k iterations, self-describing format), `LoginRateLimiter` (5 fails → 30 s, 429), `AdminPasswordSeeder` (first-start seed from `GXP_ADMIN_PASSWORD`, refuse-to-start), and the SPI adapters `BearerAuthMechanism`/`TokenIdentityProvider`/`TokenExpiryResponseFilter` (`GXP-Token-Expires` on every authenticated response) |
+| `de.gxp.text` | `.../de/gxp/text/` | `TemplateControl` — stateless raw-template validation (unknown/out-of-context placeholder → named 400) and server-side resolution (`\|time`/`\|date` in the property timezone + language locale). Consumed by property/menu now, by the guest API next feature |
+| `de.gxp.property` | `.../de/gxp/property/` | The single property row (`CHECK (id = 1)`, no create/delete API) incl. offered languages/appearances, brand primitives, asset refs (kind-checked) and raw greeting/standby templates |
+| `de.gxp.room` | `.../de/gxp/room/` | Rooms CRUD; unique non-empty code, overrides validated against the property's offered sets; delete = 409 naming stays, cascades the room's own config rows; hosts the per-room row lock stays serialize on |
+| `de.gxp.menu` | `.../de/gxp/menu/` | ONE consistency unit on purpose: catalogue reads (5 seeded kiosk sections; `einstellungen` deliberately not in it), per-field menu-config inheritance (room → property → catalogue default) — **except `enabled`, which resolves under the CEILING rule** (user decision 2026-08-19: `enabled(room, k) = enabled(property, k) AND room-override(default true)`; a property disable wins over any room enable — the guest API MUST resolve the same way), whole-set action cards (0–4), and invariants 1–3 incl. the affected-scope 409 listing every stranded card plus the ceiling guards (`item-disabled-at-property`, `menu-item-enabled-by-rooms`) |
+| `de.gxp.stay` | `.../de/gxp/stay/` | Stays CRUD; `BOOKED`/`CANCELLED` stored, "active" derived from the clock; invariant 5 (no overlap per room) under the room-row lock — concurrent writes serialize |
+| `de.gxp.asset` | `.../de/gxp/asset/` | PNG/JPEG only (content-verified by decoding), 10 MiB cap → 413, > 2560 px downscaled, sha-256 = strong ETag (304), payload-free metadata projection, delete guard naming referrers |
+| `de.gxp.api` | `.../de/gxp/api/` | Infrastructure: `ApiErrorMappers` (bean-validation + malformed JSON → the shared `ApiError` shape) and `ApiErrors` (the thrown non-2xx builders every Control uses) |
+| Flyway V2/V3 | `.../db/migration/` | `V2__domain_config.sql` (all domain tables + checks + `UNIQUE NULLS NOT DISTINCT` scopes + neutral seeds), `V3__admin_credential.sql` (single-row, seeded by code, not SQL). `V1`/`instance_info` untouched |
 
 Still designed but not implemented: nothing — the Home screen's designed
 components are now all covered by the row above. The **widget column**
@@ -281,13 +315,14 @@ below.
     or device id. It is scoped to *the screen*. This deliberately does not
     pre-empt the open guest-authentication question above; scoping the record
     later is a change inside the gateway and the server, nowhere else.
-  - **What is still open and approval-gated:** where the server keeps it. A
-    Java + Quarkus backend is planned after the MVP; **nothing behind it has
-    been chosen**, and this entry records a fact about the app, not that
-    choice. The endpoint's shape, its server-side validation, its security
-    (see the open question above) and what clears the record at check-out all
-    belong to that feature —
-    `docs/features/appearance-and-language/02-design.md` §6.7.
+  - **Where the server keeps it — decided 2026-08-19: PostgreSQL**, behind
+    the Quarkus backend (constitution v1.4.0). In the decided domain model the
+    language/theme override hangs off the **`Stay`** entity, resolving
+    Stay → Room → Property. The endpoint's shape, its server-side validation,
+    its security (device token — see above, resolved) and what clears the
+    record at check-out belong to the backend features now in flight —
+    background in `docs/features/appearance-and-language/02-design.md` §6.7
+    and `docs/backend/specification.md` §5.
 - **Messaging / async:** two boundaries, both about the preference above and
   nothing else. Everything else in the app is synchronous.
   - **One bootstrap-gated read.** An app initializer applies the property
@@ -304,13 +339,41 @@ below.
     **nothing is logged** — the app has no logging convention yet and a failed
     preference write is not the place to invent one (constitution principle 3
     also applies: none of this may reach a log).
-- **Auth:** none in the first step.
+- **Auth:** **implemented for the manager (2026-08-19, `backend-domain-config`)**
+  — shared admin password to `/api/manager/login` only (PBKDF2-hashed in
+  Postgres, seeded from `GXP_ADMIN_PASSWORD` on first start, rotated via
+  `PUT /api/manager/password`, every change drops all tokens), opaque 256-bit
+  bearer token with a 10-minute sliding idle expiry in an in-memory store
+  (`GXP-Token-Expires` on every authenticated response), fail-closed
+  `@RolesAllowed("admin")` on every manager Control method, 401 + `Bearer`
+  challenge for anyone else on the LAN. Device tokens for kiosks and HTTPS
+  with the instance CA are still `device-pairing-and-guest-api`'s; until TLS
+  lands the compose unit stays dev/preview-only. Nothing auth-related exists
+  in `frontend/` yet.
+- **Persistence (backend, 2026-08-19):** the domain schema is real — property
+  (single row), rooms, menu catalogue/config, action cards, stays, assets
+  (BYTEA) and the admin credential, all via Flyway V1–V3 with the seeds that
+  make a fresh instance usable (REQ-334). Manager writes go through the CRUD
+  API above; the kiosk still renders static TS until
+  `device-pairing-and-guest-api`/`guest-frontend-integration`.
+- **Hand-off notes from `backend-domain-config`:**
+  - **`einstellungen` is fixed app chrome, not a catalogue item** — a manager
+    cannot disable the settings entry; the guest API must serve it as fixed
+    chrome (design decision, recorded in the PRD/design).
+  - **`/q/openapi` is disabled in `%prod`** (user decision 2026-08-19,
+    closes foundation review 🟡 #1): no dev-time surface runs in prod —
+    `%prod.quarkus.smallrye-openapi.enabled=false` (404 in prod; dev/test
+    still serve the document), Swagger UI and Dev Services explicitly
+    guarded, Dev UI dev-mode-only by construction. See the commented block
+    in `backend/app/src/main/resources/application.properties`.
 
 ## Integration Points
 
 | System | Direction | Notes |
 |--------|-----------|-------|
 | Figma (`AirBnB-Screen`) | inbound, manual | Design source. Only the `design-import` skill may query it, and the plan is metered — see `docs/design/extraction-log.md` |
+| `api/openapi.yaml` → `backend/app` + `packages/api-client/` | build-time, both directions of the repo | The contract toolchain (real since 2026-08-19): `./mvnw verify` regenerates the JAX-RS interfaces/DTOs into `target/` (uncommitted — drift is a compile failure) **and** the committed TS client. Contract, backend code and client move in one commit — workflow in `backend/README.md` |
+| PostgreSQL | outbound from `backend/app` | The only datastore (constitution v1.4.0). Dev/test: Quarkus Dev Services container, zero manual setup; prod: the `db` service in `backend/compose.yaml`. Schema exclusively via Flyway versioned SQL |
 
 Potential future integrations implied by the design's widget column (weather,
 nearby recommendations) would each be an approval-gated infrastructure decision.

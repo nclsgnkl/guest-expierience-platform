@@ -1,0 +1,15 @@
+export * from './managerAssets.service';
+import { ManagerAssetsService } from './managerAssets.service';
+export * from './managerAuth.service';
+import { ManagerAuthService } from './managerAuth.service';
+export * from './managerMenu.service';
+import { ManagerMenuService } from './managerMenu.service';
+export * from './managerProperty.service';
+import { ManagerPropertyService } from './managerProperty.service';
+export * from './managerRooms.service';
+import { ManagerRoomsService } from './managerRooms.service';
+export * from './managerStays.service';
+import { ManagerStaysService } from './managerStays.service';
+export * from './system.service';
+import { SystemService } from './system.service';
+export const APIS = [ManagerAssetsService, ManagerAuthService, ManagerMenuService, ManagerPropertyService, ManagerRoomsService, ManagerStaysService, SystemService];

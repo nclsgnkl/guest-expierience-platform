@@ -1,0 +1,1275 @@
+openapi: 3.1.0
+info:
+  title: Guest Experience Platform API
+  description: >-
+    Contract-first API of the Guest Experience Platform backend — one
+    self-hosted instance per building. This file is the source of truth:
+    the Maven build generates the JAX-RS interfaces/DTOs (never committed)
+    and the TypeScript client in packages/api-client/ (committed, never
+    hand-edited) from it.
+  version: 1.0.0
+tags:
+  - name: system
+    description: Box diagnosis — health, readiness and instance metadata.
+  - name: manager-auth
+    description: >-
+      Manager session lifecycle. The shared admin password is sent to
+      managerLogin ONLY; every other manager operation authenticates with the
+      opaque bearer token it returns (10-minute idle expiry, sliding). Every
+      authenticated response carries the refreshed expiry in the
+      GXP-Token-Expires header (ISO-8601 instant) so a client can warn before
+      idle-out. One interface is generated per manager-* tag so each BCE
+      package keeps its own Boundary.
+  - name: manager-property
+    description: >-
+      The single property (invariant 4 — exactly one row, no create/delete).
+      Template fields (greeting, standby) are stored and returned RAW; the
+      manager edits templates, not resolved text.
+  - name: manager-rooms
+    description: Rooms of the property, with per-room overrides.
+  - name: manager-menu
+    description: >-
+      Menu catalogue (read-only, Flyway-seeded — deliberately no write
+      operation), per-scope menu configuration (per-field inheritance room →
+      property → catalogue default) and per-scope action cards (whole-set
+      replace, 0–4). The structurally fixed settings entry (einstellungen) is
+      NOT part of the catalogue — it is app chrome a manager must not disable.
+  - name: manager-stays
+    description: Stays; "active" is derived from the clock, never stored.
+  - name: manager-assets
+    description: >-
+      Binary assets (PNG/JPEG only, content-verified, 10 MiB cap, server-side
+      downscaled to 2560 px longest edge), stored in PostgreSQL.
+paths:
+  /api/system/health:
+    get:
+      tags: [system]
+      operationId: getSystemHealth
+      summary: Liveness — answers whenever the process serves HTTP
+      description: Static response, touches no database.
+      responses:
+        "200":
+          description: The process is up and serving HTTP.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemHealth"
+  /api/system/ready:
+    get:
+      tags: [system]
+      operationId: getSystemReadiness
+      summary: Readiness — verifies database connectivity
+      responses:
+        "200":
+          description: The instance is ready; the database answered a probe query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemReadiness"
+        "503":
+          description: The database is unreachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/system/info:
+    get:
+      tags: [system]
+      operationId: getSystemInfo
+      summary: Instance metadata
+      description: >-
+        Returns instance metadata; instanceName is read from PostgreSQL
+        through the full BCE stack (Flyway-seeded row).
+      responses:
+        "200":
+          description: Instance metadata.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfo"
+  /api/manager/login:
+    post:
+      tags: [manager-auth]
+      operationId: managerLogin
+      summary: Log in with the shared admin password
+      description: >-
+        The only operation that ever sees the password. Success returns an
+        opaque 256-bit bearer token with a sliding 10-minute idle expiry.
+        Failure is a deliberately generic 401 (no oracle); after 5 consecutive
+        failures the endpoint locks for 30 seconds (429 + Retry-After).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in; token is in-memory only on the client.
+          headers:
+            GXP-Token-Expires:
+              $ref: "#/components/headers/GXPTokenExpires"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Wrong password — deliberately generic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "429":
+          description: Locked after 5 consecutive failures.
+          headers:
+            Retry-After:
+              description: Seconds until the lock lifts.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/logout:
+    post:
+      tags: [manager-auth]
+      operationId: managerLogout
+      summary: Invalidate the presented bearer token immediately
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Token dropped server-side.
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/password:
+    put:
+      tags: [manager-auth]
+      operationId: changeManagerPassword
+      summary: Change the shared admin password
+      description: >-
+        Verifies the current password, enforces the minimal policy
+        (at least 8 characters), stores the new hash and immediately drops
+        EVERY active bearer token — including the caller's.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChangeRequest"
+      responses:
+        "204":
+          description: Password changed; all bearer tokens are dropped.
+        "400":
+          description: Current password mismatch or policy violation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/property:
+    get:
+      tags: [manager-property]
+      operationId: getProperty
+      summary: Read the single property (settings options and raw templates included)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The property.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyDto"
+        "401":
+          description: Missing, unknown or expired token.
+    put:
+      tags: [manager-property]
+      operationId: updateProperty
+      summary: Replace the single property
+      description: >-
+        Validates the IANA timezone, hex brand colors, defaults contained in
+        their offered sets, language codes (de/en in v1), referenced asset
+        kinds and every template field against its allowed placeholder set.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropertyDto"
+      responses:
+        "200":
+          description: The stored property.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyDto"
+        "400":
+          description: Validation failure (timezone, colors, options, templates).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/rooms:
+    get:
+      tags: [manager-rooms]
+      operationId: listRooms
+      summary: List rooms
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All rooms.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoomDto"
+        "401":
+          description: Missing, unknown or expired token.
+    post:
+      tags: [manager-rooms]
+      operationId: createRoom
+      summary: Create a room
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomDto"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomDto"
+        "400":
+          description: Validation failure (empty code, override not offered).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: Room code already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/rooms/{roomId}:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+    get:
+      tags: [manager-rooms]
+      operationId: getRoom
+      summary: Read one room
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomDto"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      tags: [manager-rooms]
+      operationId: updateRoom
+      summary: Replace one room
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomDto"
+      responses:
+        "200":
+          description: The stored room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoomDto"
+        "400":
+          description: Validation failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Room code already exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags: [manager-rooms]
+      operationId: deleteRoom
+      summary: Delete a room (cascades its own config overrides)
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Deleted; the room's own menu/card overrides went with it.
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The room still has stays — they are named, never destroyed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/menu/catalogue:
+    get:
+      tags: [manager-menu]
+      operationId: getMenuCatalogue
+      summary: Read the release menu catalogue (read-only)
+      description: >-
+        Seeded by Flyway, writable through no API. Covers exactly the real
+        kiosk sections of this release.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The catalogue definitions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuItemDefinitionDto"
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/menu-config:
+    get:
+      tags: [manager-menu]
+      operationId: getMenuConfig
+      summary: Read the property-scope menu override entries
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The property scope's override entries (absent fields inherit).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuItemConfigEntryDto"
+        "401":
+          description: Missing, unknown or expired token.
+    put:
+      tags: [manager-menu]
+      operationId: updateMenuConfig
+      summary: Replace the property-scope menu override entries atomically
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/MenuItemConfigEntryDto"
+      responses:
+        "200":
+          description: The stored override entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuItemConfigEntryDto"
+        "400":
+          description: Unknown menu item key or duplicate entry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: >-
+            Disabling would strand action cards (invariant 3) — every
+            offending card and its scope is listed in details; nothing is
+            silently dropped.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/rooms/{roomId}/menu-config:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+    get:
+      tags: [manager-menu]
+      operationId: getRoomMenuConfig
+      summary: Read a room scope's menu override entries
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The room scope's override entries (absent fields inherit).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuItemConfigEntryDto"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      tags: [manager-menu]
+      operationId: updateRoomMenuConfig
+      summary: Replace a room scope's menu override entries atomically
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/MenuItemConfigEntryDto"
+      responses:
+        "200":
+          description: The stored override entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MenuItemConfigEntryDto"
+        "400":
+          description: Unknown menu item key or duplicate entry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Disabling would strand action cards (invariant 3).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/action-cards:
+    get:
+      tags: [manager-menu]
+      operationId: getActionCards
+      summary: Read the property-scope action cards
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The property scope's cards (0–4, sorted).
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 4
+                items:
+                  $ref: "#/components/schemas/ActionCardDto"
+        "401":
+          description: Missing, unknown or expired token.
+    put:
+      tags: [manager-menu]
+      operationId: updateActionCards
+      summary: Replace the property-scope card set wholesale
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 4
+              items:
+                $ref: "#/components/schemas/ActionCardDto"
+      responses:
+        "200":
+          description: The stored card set.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 4
+                items:
+                  $ref: "#/components/schemas/ActionCardDto"
+        "400":
+          description: >-
+            Invariant 1 (more than 4 cards / duplicate sortIndex), unknown
+            target key, or invalid template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: A target is disabled in this scope (invariant 2).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/rooms/{roomId}/action-cards:
+    parameters:
+      - $ref: "#/components/parameters/RoomId"
+    get:
+      tags: [manager-menu]
+      operationId: getRoomActionCards
+      summary: Read a room scope's own action cards
+      description: >-
+        Returns the room's OWN card rows (possibly empty). A room with at
+        least one card replaces the property set wholesale on the kiosk.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The room scope's own cards (0–4, sorted).
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 4
+                items:
+                  $ref: "#/components/schemas/ActionCardDto"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      tags: [manager-menu]
+      operationId: updateRoomActionCards
+      summary: Replace a room scope's card set wholesale
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 4
+              items:
+                $ref: "#/components/schemas/ActionCardDto"
+      responses:
+        "200":
+          description: The stored card set.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 4
+                items:
+                  $ref: "#/components/schemas/ActionCardDto"
+        "400":
+          description: Invariant 1, unknown target key, or invalid template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: A target is disabled in this scope (invariant 2).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/stays:
+    get:
+      tags: [manager-stays]
+      operationId: listStays
+      summary: List stays, optionally filtered by room
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roomId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Stays (all, or the room's).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StayDto"
+        "401":
+          description: Missing, unknown or expired token.
+    post:
+      tags: [manager-stays]
+      operationId: createStay
+      summary: Create a stay
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StayDto"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StayDto"
+        "400":
+          description: >-
+            Validation failure (checkIn not before checkOut, override not in
+            the property's offered set, unknown room).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: Overlaps a non-cancelled stay of the room — named.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/stays/{stayId}:
+    parameters:
+      - name: stayId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags: [manager-stays]
+      operationId: getStay
+      summary: Read one stay
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The stay.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StayDto"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such stay.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      tags: [manager-stays]
+      operationId: updateStay
+      summary: Replace one stay
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StayDto"
+      responses:
+        "200":
+          description: The stored stay.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StayDto"
+        "400":
+          description: Validation failure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such stay.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Overlaps a non-cancelled stay of the room — named.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags: [manager-stays]
+      operationId: deleteStay
+      summary: Delete a stay
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such stay.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/assets:
+    get:
+      tags: [manager-assets]
+      operationId: listAssets
+      summary: List asset metadata (payload-free)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Metadata of every stored asset — the payload column is never read.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssetMetadataDto"
+        "401":
+          description: Missing, unknown or expired token.
+    post:
+      tags: [manager-assets]
+      operationId: uploadAsset
+      summary: Upload an image as a raw binary body (no multipart)
+      description: >-
+        PNG or JPEG only; the declared content type must match the decoded
+        format. Images over 2560 px longest edge are downscaled server-side;
+        sha256/size/dimensions describe the STORED bytes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/AssetKind"
+      requestBody:
+        required: true
+        content:
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: Stored; metadata reflects the stored (possibly downscaled) bytes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetMetadataDto"
+        "400":
+          description: Undecodable body or declared type does not match the content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "413":
+          description: Larger than the 10 MiB cap.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/assets/{assetId}:
+    parameters:
+      - name: assetId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags: [manager-assets]
+      operationId: getAssetBinary
+      summary: Read the binary (strong ETag, 304 on If-None-Match)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The stored bytes.
+          headers:
+            ETag:
+              description: Strong ETag — the SHA-256 of the stored bytes.
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: If-None-Match matched the stored SHA-256.
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such asset.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags: [manager-assets]
+      operationId: deleteAsset
+      summary: Delete an asset
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such asset.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Referenced by the property or a room — the referrer is named.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >-
+        Opaque manager bearer token from managerLogin. Stored hashed
+        server-side, in-memory only; a restart logs everyone out.
+  parameters:
+    RoomId:
+      name: roomId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  headers:
+    GXPTokenExpires:
+      description: >-
+        Refreshed idle expiry of the presented (or issued) bearer token,
+        ISO-8601 instant. Present on every authenticated response.
+      schema:
+        type: string
+        format: date-time
+  schemas:
+    LoginRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 1
+    LoginResponse:
+      type: object
+      required: [token, idleTimeoutSeconds, expiresAt]
+      properties:
+        token:
+          type: string
+          description: Opaque bearer token — keep in memory only.
+        idleTimeoutSeconds:
+          type: integer
+          format: int64
+        expiresAt:
+          type: string
+          format: date-time
+    PasswordChangeRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+        newPassword:
+          type: string
+          minLength: 8
+    LanguageCode:
+      type: string
+      description: v1 supports exactly the kiosk's compiled catalogues.
+      enum: [de, en]
+    AppearanceMode:
+      type: string
+      enum: [light, dark, system]
+    LocalizedText:
+      type: object
+      description: Language-keyed map (keys are LanguageCode values).
+      additionalProperties:
+        type: string
+    LanguageOptionDto:
+      type: object
+      required: [code, shortLabel, label, locale]
+      properties:
+        code:
+          $ref: "#/components/schemas/LanguageCode"
+        shortLabel:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          description: Endonym — never translated.
+          minLength: 1
+        locale:
+          type: string
+          description: BCP-47 tag governing time/date formatting (e.g. de-DE, en-GB).
+          minLength: 1
+    AppearanceOptionDto:
+      type: object
+      required: [mode, icon]
+      properties:
+        mode:
+          $ref: "#/components/schemas/AppearanceMode"
+        icon:
+          type: string
+          minLength: 1
+    PropertyDto:
+      type: object
+      required:
+        - name
+        - mainLanguage
+        - timezone
+        - brandPrimary
+        - brandPrimaryDeep
+        - brandSecondary
+        - defaultAppearance
+        - languages
+        - appearances
+        - heroSubtitle
+        - headline
+        - paragraph
+        - standbyHeadline
+        - standbyMessage
+      properties:
+        name:
+          type: string
+          minLength: 1
+        mainLanguage:
+          $ref: "#/components/schemas/LanguageCode"
+        timezone:
+          type: string
+          description: IANA zone id — ZoneId-validated server-side.
+          minLength: 1
+        brandPrimary:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        brandPrimaryDeep:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        brandSecondary:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+        defaultAppearance:
+          $ref: "#/components/schemas/AppearanceMode"
+        logoAssetId:
+          type: integer
+          format: int64
+          description: Optional; the referenced asset must be kind LOGO.
+        artworkAssetId:
+          type: integer
+          format: int64
+          description: Optional house default; must be kind ARTWORK.
+        languages:
+          type: array
+          description: Offered languages, in display order; must contain mainLanguage.
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/LanguageOptionDto"
+        appearances:
+          type: array
+          description: Offered appearance options, in display order; must contain defaultAppearance.
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/AppearanceOptionDto"
+        heroSubtitle:
+          $ref: "#/components/schemas/LocalizedText"
+        headline:
+          description: Greeting template — all four placeholders allowed. Raw.
+          $ref: "#/components/schemas/LocalizedText"
+        paragraph:
+          $ref: "#/components/schemas/LocalizedText"
+        standbyHeadline:
+          description: Standby template — only {property.name} (no stay when vacant). Raw.
+          $ref: "#/components/schemas/LocalizedText"
+        standbyMessage:
+          $ref: "#/components/schemas/LocalizedText"
+    StayStatus:
+      type: string
+      description: Stored state; "active" is derived (BOOKED and check-in ≤ now < check-out).
+      enum: [BOOKED, CANCELLED]
+    StayDto:
+      type: object
+      required: [roomId, displayName, checkIn, checkOut, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        roomId:
+          type: integer
+          format: int64
+        displayName:
+          type: string
+          minLength: 1
+        checkIn:
+          type: string
+          format: date-time
+        checkOut:
+          type: string
+          format: date-time
+        language:
+          $ref: "#/components/schemas/LanguageCode"
+        appearance:
+          $ref: "#/components/schemas/AppearanceMode"
+        status:
+          $ref: "#/components/schemas/StayStatus"
+    AssetKind:
+      type: string
+      enum: [LOGO, ARTWORK]
+    AssetMetadataDto:
+      type: object
+      required: [id, mimeType, byteSize, width, height, sha256, kind]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        mimeType:
+          type: string
+          enum: [image/png, image/jpeg]
+        byteSize:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
+        sha256:
+          type: string
+          description: Hex SHA-256 of the stored bytes — doubles as the strong ETag.
+        kind:
+          $ref: "#/components/schemas/AssetKind"
+    MenuItemDefinitionDto:
+      type: object
+      required: [key, route, defaultIcon, defaultSortIndex, label, introducedRelease]
+      properties:
+        key:
+          type: string
+        route:
+          type: string
+          description: Kiosk route; the home section's route is the empty string.
+        defaultIcon:
+          type: string
+        defaultSortIndex:
+          type: integer
+        label:
+          $ref: "#/components/schemas/LocalizedText"
+        introducedRelease:
+          type: string
+    MenuItemConfigEntryDto:
+      type: object
+      description: >-
+        One scope's override entry for a catalogue item. Every field except
+        menuItemKey is optional — an absent field inherits per-field
+        (room → property → catalogue default).
+      required: [menuItemKey]
+      properties:
+        menuItemKey:
+          type: string
+        enabled:
+          type: boolean
+        sortIndex:
+          type: integer
+        iconOverride:
+          type: string
+        label:
+          $ref: "#/components/schemas/LocalizedText"
+    ActionCardDto:
+      type: object
+      required: [sortIndex, icon, targetMenuItemKey, title, description]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        sortIndex:
+          type: integer
+          minimum: 0
+          maximum: 3
+        icon:
+          type: string
+          minLength: 1
+        targetMenuItemKey:
+          type: string
+          description: >-
+            Must exist in the catalogue and be enabled in this card's scope.
+            Deliberately not unique — several cards may target the same item.
+        title:
+          description: Raw title template per language.
+          $ref: "#/components/schemas/LocalizedText"
+        description:
+          description: Raw description template per language.
+          $ref: "#/components/schemas/LocalizedText"
+    RoomDto:
+      type: object
+      required: [code, displayName]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        code:
+          type: string
+          minLength: 1
+        displayName:
+          type: string
+          minLength: 1
+        artworkAssetId:
+          type: integer
+          format: int64
+          description: Optional override; must be kind ARTWORK.
+        defaultLanguage:
+          $ref: "#/components/schemas/LanguageCode"
+        defaultAppearance:
+          $ref: "#/components/schemas/AppearanceMode"
+    SystemHealth:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [UP]
+    SystemReadiness:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [READY]
+    SystemInfo:
+      type: object
+      required: [instanceName, applicationVersion]
+      properties:
+        instanceName:
+          type: string
+        applicationVersion:
+          type: string
+    ApiError:
+      description: >-
+        Shared error shape. code is machine-usable (e.g.
+        menu-item-targeted-by-cards, stay-overlap, asset-in-use,
+        unknown-placeholder); details carries one entry per offending
+        item where a list is needed. Extended additively only.
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiErrorDetail"
+    ApiErrorDetail:
+      description: One offending item of a rejected request.
+      type: object
+      required: [message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        scope:
+          type: string
+          description: Affected scope — "property" or "room:{id}".
+        reference:
+          type: string
+          description: Machine-usable reference (card id, key, stay id, …).

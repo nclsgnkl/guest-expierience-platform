@@ -1,7 +1,40 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.3.0 | **Last amended:** 2026-08-18
+**Version:** 1.5.1 | **Last amended:** 2026-08-19
 
+> **1.5.1** — name correction, not a new approval: `quarkus-junit5` was renamed
+> **`quarkus-junit`** upstream in Quarkus 3.31 (the old id is only a relocation
+> pom), verified by `dev` at scaffold time against Quarkus 3.33 per the
+> "versions verified at scaffold time" clause. Same artifact, same intent —
+> recorded so the manifest and this file agree (the v1.3.0 lesson).
+>
+> **1.5.0** — resolved two of `docs/backend/specification.md` §11's open items
+> with the owner (2026-08-19): (item 4) the manager UI enters the artifact via
+> a **plain Maven copy step** into `META-INF/resources` — Quinoa rejected as an
+> avoidable community extension on unpatchable boxes; (item 5) the admin
+> password is **seeded from the environment variable on first start only**,
+> thereafter stored hashed in Postgres and **changeable by the manager in the
+> UI**; every password change immediately drops all active bearer tokens.
+> Additive — the env-var-on-first-start rule stands.
+>
+> **1.4.0** — **the backend exists now.** Amended with the project owner's
+> explicit permission of 2026-08-19, implementing §10 of
+> `docs/backend/specification.md` (the owner's decision interview of the same
+> day). A **major-feeling minor**: nothing previously *approved* is contradicted,
+> but the constraint *"No backend, auth or admin area in the first step"*
+> described the MVP and is now false — it is rewritten, not just extended.
+> Changes: (a) principle 4's tenant-isolation claim narrowed to *between
+> buildings*, with mandatory room-level scoping inside one; (b) frontend/backend
+> stack constraints split, backend stack recorded (Java 21 + Quarkus + Maven,
+> imperative, BCE, Panache repositories, contract-first OpenAPI); (c) the
+> infrastructure decisions approved 2026-08-19 recorded (PostgreSQL, Flyway,
+> Docker Compose, assets in the DB); (d) backend dependency allow-list added
+> with the same force as the frontend one; (e) auth & transport model recorded
+> (device tokens via pairing, short-lived sliding admin bearer token, HTTPS
+> with an instance-generated CA); (f) the kiosk caching constraint added
+> (last-known-good never holds guest-sensitive values); (g) the second Angular
+> frontend + shared library recorded, including the twice-made rejection of LIT.
+>
 > **1.3.0** — approved `playwright` as a **verification tool**, and recorded that
 > this is deliberately not the still-open end-to-end framework decision. It had
 > already been installed ahead of this approval; the amendment makes the
@@ -61,10 +94,19 @@
    and key-box codes, alarm codes, WiFi passwords and host contact details.
    None of it may reach a log, an analytics event, or an error report — not even
    at debug level, and not in a stack trace's captured state.
-4. **Self-hosted on premises, on a network we do not control.** Every property
-   runs its **own instance** on a local server in the building; there is no
-   central service holding many properties. Three consequences bind every
-   change:
+4. **Self-hosted on premises, on a network we do not control.** Every
+   **building** (hotel, apartment house, holiday home) runs its **own
+   instance** on a local server on site, serving n room kiosks and one manager
+   UI; there is no central service holding many properties. Four consequences
+   bind every change:
+   - **Physical tenant isolation holds *between buildings only*** (amended
+     2026-08-19). Inside a building, one backend serves many rooms, so
+     **room-level scoping is mandatory** and is the single most important
+     security property of the backend: room 101 must never receive room 102's
+     door code. The room is derived from an **authenticated device identity**
+     (the pairing token) — never from a path, query or header parameter the
+     client supplies. Every query touching room-scoped data is
+     security-relevant.
    - **It must run without internet.** No runtime dependency on an external
      host — no CDN fonts or stylesheets, no third-party scripts, no analytics or
      telemetry, no remote images. Fonts, icons and assets ship inside the build
@@ -88,9 +130,87 @@
 
 ## Constraints
 
-- **Angular + TypeScript** (strict mode), standalone components, Angular Router,
-  signals for local UI state. No backend, auth or admin area in the first step —
-  content comes from static JSON/TS files.
+- **Guest frontend: Angular + TypeScript** (strict mode), standalone
+  components, Angular Router, signals for local UI state. Content is reached
+  through services (principle 2); static TS/JSON is the stand-in until the
+  corresponding backend endpoint exists. *(Rewritten in v1.4.0 — this
+  constraint previously read "No backend, auth or admin area in the first
+  step", which described the MVP and is now false.)*
+- **Backend: Java 21 (LTS) + Quarkus, built with Maven** (`backend/app/`) —
+  one instance per building. **Imperative/blocking**, not reactive:
+  `quarkus-rest` + Hibernate ORM with **Panache repositories** (entities carry
+  no persistence methods). Packages follow **BCE (Boundary–Control–Entity),
+  by feature**, under the strict rules of `docs/backend/specification.md` §4 —
+  binding highlights: a Boundary method is **one delegating line** (no
+  validation, mapping, branching or transactions — not even for plain CRUD);
+  `@Transactional` sits on the Control; the Control is the package's public
+  type and speaks generated API DTOs; Entities, Repositories and Mappers stay
+  package-private; mappers are hand-written, no mapping framework.
+- **Contract-first API.** `api/openapi.yaml` is the source of truth. The Maven
+  build generates the JAX-RS interfaces + DTOs (implementations hand-written)
+  **and** the TypeScript client in `packages/api-client/` — which is generated
+  output, never edited by hand; a diff there means the contract changed. A
+  contract breach fails the build, not the runtime.
+- **Backend infrastructure (approved by the owner 2026-08-19):**
+  **PostgreSQL** is the only datastore — binary assets (logo, artwork) live in
+  it as `BYTEA` so one `pg_dump` is the entire backup, with the mandatory
+  mitigations (hard size cap, server-side downscaling on upload, streaming
+  delivery, strong SHA-256 ETags). **Flyway** migrations run at startup
+  (versioned SQL in the repo; also the home of menu-catalogue seeding; no
+  Hibernate schema generation). **Docker Compose** (app + Postgres, one named
+  volume) is the deployment unit. First run yields a usable instance with no
+  manual database work, and refuses to start if the admin password environment
+  variable is unset.
+- **Auth & transport (approved by the owner 2026-08-19):** kiosks authenticate
+  with a **long-lived opaque device token** obtained through the manager-
+  confirmed pairing flow — the token is identity *and* authentication, stored
+  **hashed**, revocable from the manager UI, and the room is always derived
+  from it (see principle 4). The manager sends the **one shared admin
+  password** only to `/api/manager/login` and receives a short-lived opaque
+  bearer token (**10-minute idle expiry, sliding**, in-memory store on the
+  server, in-memory only on the client, 256-bit `SecureRandom`, stored
+  hashed). Password hashing is **JDK PBKDF2** — no Elytron. Authorization
+  hangs off `@RolesAllowed` on Control methods with `deny-unannotated-members`
+  so a new endpoint **fails closed**. All LAN traffic is **HTTPS** with an
+  instance-generated CA distributed to kiosks at pairing — non-negotiable,
+  since a shared password over plain HTTP is readable by the guest WiFi.
+  Accepted and recorded: no per-user audit trail until a user table replaces
+  the shared password; auth is isolated so that swap touches no Boundary or
+  Control. **Password lifecycle (v1.5.0):** the environment variable seeds the
+  password on **first start only**; from then on it lives hashed in Postgres
+  and the manager changes it through an authenticated manager-UI endpoint. A
+  password change **immediately invalidates every active bearer token** — the
+  old credential must never survive into another idle window.
+- **The manager UI enters the Quarkus artifact via a plain Maven copy step**
+  of the built Angular `dist` into `META-INF/resources` (v1.5.0, owner
+  decision). Quinoa is rejected: a Quarkiverse community extension is one more
+  thing to keep patched on boxes nobody can reach, for a job a build step does.
+- **Approved backend dependencies** (same force as the frontend list — nothing
+  beyond this without a fresh approval; versions verified against the chosen
+  Quarkus release at scaffold time): `quarkus-rest`, `quarkus-rest-jackson`,
+  `quarkus-hibernate-orm-panache`, `quarkus-jdbc-postgresql`,
+  `quarkus-hibernate-validator`, `quarkus-smallrye-openapi`, `quarkus-flyway`,
+  `quarkus-security`; build/test-time: `openapi-generator-maven-plugin`,
+  `quarkus-junit` (named `quarkus-junit5` before Quarkus 3.31 — same artifact,
+  see v1.5.1), `rest-assured`, Quarkus Dev Services (no separate
+  Testcontainers dependency). **Deliberate non-additions**, with replacements
+  named so they are not re-added by reflex: `quarkus-elytron-security-common`
+  (→ JDK PBKDF2), `quarkus-smallrye-jwt` (→ opaque in-memory token), any
+  mapping framework / Lombok / utility libraries (→ plain hand-written Java).
+- **The kiosk's last-known-good cache never holds guest-sensitive values** —
+  no door codes, key-box codes, alarm codes or WiFi passwords, ever, because
+  the kiosk stands in a guest-accessible room (principle 3 applied to
+  persistence, not just logs). The kiosk may render its last successful
+  response when the backend is unreachable, with a discreet staleness hint.
+- **Second frontend: the manager UI is a second Angular app**
+  (`backend/manager-ui/`), shipped inside the Quarkus artifact,
+  dependency-lean: no component library, plain CSS, native form controls. The
+  handful of components a manager preview shares with the guest screen live in
+  a **plain Angular library** (`packages/ui/`, ng-packagr), which consumes the
+  same primitive token layer; the manager's own chrome gets its **own semantic
+  layer** and must not borrow the guest screen's roles. **LIT was rejected for
+  the second time on 2026-08-19** (first: `docs/design/tokens.md`) — reasoning
+  recorded in `docs/backend/specification.md` §7; do not re-litigate.
 - **Styling is plain CSS with custom properties.** No Tailwind, no SCSS, no
   component library as a visual base. Sizes are expressed in `rem`, never in
   fixed pixels. The root font size is **viewport-proportional**, not a

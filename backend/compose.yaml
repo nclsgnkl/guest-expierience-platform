@@ -1,0 +1,50 @@
+# Guest Experience Platform — deployment unit (REQ-206): app + PostgreSQL,
+# ONE named volume, so the whole instance backs up as one pg_dump (spec §9).
+#
+# !! DEV/PREVIEW ONLY until `device-pairing-and-guest-api` adds TLS — this
+# !! serves plain HTTP, and the local network is not trusted (constitution
+# !! principle 4). Do not deploy to a real building off this file alone.
+#
+# Required environment variables (compose refuses to start when unset):
+#   GXP_DB_PASSWORD     — PostgreSQL password
+#   GXP_ADMIN_PASSWORD  — admin password, read on FIRST start only: seeded
+#                         hashed (PBKDF2) into PostgreSQL, boot refuses when
+#                         unset/blank and no hash exists; ignored once a hash
+#                         is stored — rotate via PUT /api/manager/password
+#                         (constitution v1.5.x password lifecycle)
+
+name: gxp
+
+services:
+  app:
+    image: gxp-backend:1.0.0-SNAPSHOT
+    build:
+      context: ./app
+      dockerfile: src/main/docker/Dockerfile.jvm
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GXP_DB_JDBC_URL: jdbc:postgresql://db:5432/gxp
+      GXP_DB_USERNAME: gxp
+      GXP_DB_PASSWORD: ${GXP_DB_PASSWORD:?set the database password (GXP_DB_PASSWORD)}
+      GXP_ADMIN_PASSWORD: ${GXP_ADMIN_PASSWORD:?set the initial admin password (GXP_ADMIN_PASSWORD)}
+    ports:
+      - "8080:8080"   # HTTP only — see dev/preview warning above
+
+  db:
+    image: postgres:17.11
+    environment:
+      POSTGRES_DB: gxp
+      POSTGRES_USER: gxp
+      POSTGRES_PASSWORD: ${GXP_DB_PASSWORD:?set the database password (GXP_DB_PASSWORD)}
+    volumes:
+      - gxp-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gxp -d gxp"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  gxp-pgdata:
