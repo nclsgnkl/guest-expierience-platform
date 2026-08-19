@@ -63,7 +63,7 @@ recorded because the pipeline's later phases will be tempted to re-open them.
 | 1 | **`Stay` is an entity; `Guest` is not** | Guest name, stay period, check-out time and language preference hang off a `Stay`. No separate person aggregate and no contact details — minimal PII on a box that stands in a physically accessible building. Gives "dynamic check-out time" and "derive language from guest data" a real anchor without collecting people |
 | 2 | **Structural configuration resolves Property → Room; preferences resolve Stay → Room → Property** | One rule to remember: *configuration lives on the house and the room, data lives on the stay*. A suite may deviate from the house default; the manager UI shows the house standard plus a few explicit room overrides rather than n rooms to maintain individually |
 | 3 | **Device pairing with an opaque token** | The kiosk is paired once by the manager and stores a long-lived token. The token is identity **and** authentication: no valid token, no room data, and a device cannot change which room it claims to be. Resolves the open `NEEDS DECISION` in `system-context.md` → "does the app authenticate the guest at all?" |
-| 4 | **One shared admin password, verified statelessly (v1)** | Deliberately chosen over per-user accounts. Consequence accepted and recorded: there is **no** "who changed this" audit trail and no revoking an individual person's access. It follows that **no session is needed either** — see §6: HTTP Basic over HTTPS, no login endpoint, no cookie, no server-side auth state. Auth is to be isolated so a user table and real sessions can replace it later without touching a Boundary or a Control |
+| 4 | **One shared admin password, exchanged for a short-lived bearer token** | Per-user accounts were deliberately deferred. Consequence accepted and recorded: there is **no** "who changed this" audit trail and no revoking an individual person's access. The password is sent **once**, to `/api/manager/login`, and exchanged for an opaque token that idles out after 10 minutes and is refreshed by every action — see §6. Auth is to be isolated so a user table can replace it later without touching a Boundary or a Control |
 | 5 | **The menu catalogue is release data** | A menu item *is* a route with an implemented screen, so the manager cannot invent one. The backend seeds a catalogue per release (stable `key`, default label, default icon, frontend route); the manager only enables/disables, reorders, and overrides label and icon. A new menu item becomes a seed row plus a frontend screen — not a feature |
 | 6 | **i18n: structure now, one language maintained** | Every manager-authored text carries a language key from day one, but the manager UI maintains only the house's main language in v1. Avoids the expensive migration across every content type that WiFi/house-rules/surroundings will add, without paying for translation workflows yet |
 | 7 | **Guest API is split: shell vs. screen** | `GET /api/guest/session` for everything route-independent, `GET /api/guest/screens/{key}` for screen content. Two calls at boot, one per navigation. New screens are a new `screens/{key}` without touching the existing contract, and a screen holding sensitive data can be secured separately instead of riding in a shared payload |
@@ -265,39 +265,60 @@ normally gets `304`. **The room is derived from the device token — never from 
 path, query or header parameter the client supplies.** A room id in the URL would
 reintroduce exactly the enumeration hole that decision 3 closes.
 
-### Manager (HTTP Basic over HTTPS — **no session**)
+### Manager (short-lived bearer token with sliding expiry)
 
-Every manager request carries `Authorization: Basic`, checked against the stored
-password hash. **There is no session, no login endpoint, no cookie and no
-server-side auth state.**
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/manager/login` | Password in, opaque bearer token out. The **only** endpoint that ever sees the password |
+| `POST` | `/api/manager/logout` | Invalidates the token immediately |
 
-This is not a shortcut, it is the honest consequence of decision 4: with a
-single shared password a session buys almost nothing. It cannot revoke one
-person's access, because there is only one credential, and rotating the password
-is the only revocation available either way. What a session *would* add is
-server-side state to store, expire and invalidate on a box nobody maintains.
+Every other manager request carries `Authorization: Bearer <token>`. The token
+is idle-expiring: **10 minutes** by default, and every authenticated request
+resets the clock. After that the manager logs in again.
 
-Four consequences to build for:
+Why this rather than sending the password on each request (HTTP Basic), which
+an earlier draft proposed:
 
-- **The Angular app collects the password in its own form** and sets the header
-  itself, holding it in memory only. The browser's native auth dialog never
-  appears, because the API does not send a `WWW-Authenticate` challenge — a
-  missing or wrong credential is a plain `401` the app handles and renders.
-- **"Logout" is discarding the value client-side**, and a page reload means
-  re-entering it. On a manager's laptop that is acceptable, and it is also the
-  reason not to put the password in `localStorage`.
-- **Brute-force protection must be explicit.** Without a login endpoint there is
-  nothing single to rate-limit, so the limit belongs on *every* manager path:
-  failed-attempt counting per source address with a growing delay, held in
-  memory. Required, not optional — the credential sits behind endpoints
-  reachable from the entire LAN.
-- **TLS is what makes this safe** (decision 18). The password travels on every
-  request; over plain HTTP it would be readable by anything on the guest WiFi.
+- **The password crosses the wire once**, not on every request — far fewer
+  chances to lose it to a log, a proxy or a misconfigured TLS chain.
+- **Idle logout is a real security property here**, not convenience. The manager
+  laptop may sit at a hotel reception desk. Basic authentication has no notion
+  of idleness at all.
+- **Brute-force limiting gets a single choke point again.** Rate limiting and
+  failed-attempt lockout live on `/api/manager/login` alone, instead of having
+  to be applied to every manager path.
+- **Logout becomes real** — the server drops the token — instead of "the client
+  forgot the password".
 
-Endpoints: CRUD over property, rooms, menu configuration, action cards, stays,
-assets and devices (including **revoking** a device); read-only access to the
-menu catalogue; and a preview endpoint returning the guest screen shape for an
-unsaved draft configuration.
+Shape:
+
+- **The token store is in memory, not in the database.** With one administrator
+  it is a map with a handful of entries and a timeout; it needs no maintenance,
+  and it avoids a database write on *every* request just to slide an expiry. A
+  restart means logging in again, which is acceptable and arguably desirable.
+- **Sliding means extending the existing token's expiry, not rotating it.**
+  Rotation on every response would race whenever two requests are in flight and
+  buys little against a 10-minute idle window. Note the option exists if the
+  threat model ever changes.
+- **The token is 256 bits of `SecureRandom`, stored hashed** — the same
+  treatment device tokens get, so a heap dump does not hand over a live
+  credential.
+- **The client holds it in memory only.** No `localStorage`; a reload means
+  logging in again. The app must read the refreshed expiry from each response so
+  it can warn before an idle timeout rather than failing a form submission.
+- **Guest devices use the same header and mechanism** — `Authorization: Bearer`
+  with a `device` role instead of `admin`, differing only in that device tokens
+  are long-lived and revocable from the manager UI. One authentication path to
+  review, not two.
+
+**TLS is what makes any of this safe** (decision 18). Over plain HTTP the login
+request and every bearer token afterwards are readable by anything on the guest
+WiFi.
+
+Endpoints beyond login/logout: CRUD over property, rooms, menu configuration,
+action cards, stays, assets and devices (including **revoking** a device);
+read-only access to the menu catalogue; and a preview endpoint returning the
+guest screen shape for an unsaved draft configuration.
 
 ---
 
@@ -357,7 +378,7 @@ rather than assumed.
 | `quarkus-hibernate-validator` | Constitution: *input validated at every system boundary* |
 | `quarkus-smallrye-openapi` | Serves the contract and the dev UI |
 | `quarkus-flyway` | Migrations and catalogue seeding (decision 15) |
-| `quarkus-security` + `quarkus-elytron-security-common` | Basic authentication and `BcryptUtil` for the admin password hash. **No session store and no JWT extension** — the stateless choice in §6 is what keeps this to two small extensions |
+| `quarkus-security` | Kept for **one specific reason**: authorization hangs off `@RolesAllowed` on the individual Control method, with `deny-unannotated-members` so a new endpoint fails closed. The alternative — a filter matching path prefixes — is exactly where authorization holes appear, because an endpoint added under the wrong prefix is silently public. Core Quarkus, versioned with the platform |
 
 **Build-time**
 
@@ -367,9 +388,15 @@ rather than assumed.
 | `quarkus-junit5`, `rest-assured` | Tests |
 | Quarkus Dev Services | Starts Postgres for dev and test; no separate Testcontainers dependency |
 
-**A deliberate non-addition:** no mapping framework, no Lombok, no utility
-library. Constitution principle 4 — every dependency is code that must be kept
-patched on machines nobody can reach.
+**Deliberate non-additions**, each with its replacement named — constitution
+principle 4: every dependency is code that must be kept patched on machines
+nobody can reach.
+
+| Not used | Instead |
+|---|---|
+| `quarkus-elytron-security-common` | Its role here was `BcryptUtil`, i.e. hashing **one** password that is now checked only at login. **PBKDF2 from the JDK** (`SecretKeyFactory`, `PBKDF2WithHmacSHA256`, high iteration count) covers that in a few lines with no dependency at all |
+| `quarkus-smallrye-jwt` | The manager token is opaque and validated against an in-memory store (§6). A signed JWT would add an extension and a key to manage, in exchange for statelessness this instance has no use for |
+| Any mapping framework, Lombok, utility libraries | Hand-written mappers and plain Java |
 
 **A pleasant consequence worth protecting:** because the TypeScript client is
 generated by the *Maven* build into `packages/api-client/`, **neither Angular app
@@ -434,7 +461,7 @@ For the project owner to ratify. Proposed, not written — per
 | 2 | **No design exists for 1–3 action cards** (decision 16). The row is specified only at four | Design |
 | 3 | **No design exists for the manager frontend at all** — not tokens, not layout, not components | Design |
 | 4 | **How the manager UI gets into the artifact:** the Quinoa extension, or a plain Maven step copying the built `dist` into `META-INF/resources`. Quinoa is a Quarkiverse (community) extension; on a system that cannot be patched centrally, the zero-extension copy is the leaner choice. *Recommendation: the copy step* | Owner |
-| 5 | **Admin password rotation** — environment variable, or changeable through the UI and stored hashed in the database? One upside of the stateless choice in §6: a rotation takes effect on the next request everywhere, with no sessions to hunt down and invalidate | Owner |
+| 5 | **Admin password rotation** — environment variable, or changeable through the UI and stored hashed in the database? Whichever is chosen, a rotation must also drop every token currently in the in-memory store, or the old credential keeps working for up to one idle window | Owner |
 | 6 | **Clock and timezone.** Check-out times and stay dates need a correct clock on a box that may have no internet and therefore no NTP | Owner |
 | 7 | **Who backs the instance up, and how often?** Still open from `system-context.md`, and now there is real data to lose | Owner |
 | 8 | **How do instances get updated?** Open since 2026-08-17 and now the dominant operational risk, since the backend adds a schema and a database to every update | Owner |
