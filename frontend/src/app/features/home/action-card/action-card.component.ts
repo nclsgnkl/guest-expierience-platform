@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { NgIcon } from '@ng-icons/core';
 
 import { PropertyContentService } from '../../../core/content/property-content.service';
-import type { ActionCard } from '../../../core/content/property.model';
+import type { ResolvedActionCard } from '../../../core/content/property.model';
 
 /**
  * Glass Panel action card (docs/design/screens/home.md -> Glass Panel).
@@ -20,7 +20,7 @@ import type { ActionCard } from '../../../core/content/property.model';
   styleUrl: './action-card.component.css',
 })
 export class ActionCardComponent {
-  card = input.required<ActionCard>();
+  card = input.required<ResolvedActionCard>();
 
   private readonly content = inject(PropertyContentService);
   private readonly router = inject(Router);

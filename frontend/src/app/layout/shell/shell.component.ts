@@ -5,6 +5,7 @@ import { filter } from 'rxjs';
 
 import { PropertyContentService } from '../../core/content/property-content.service';
 import { SidebarComponent } from '../sidebar/sidebar.component';
+import { StatusBarComponent } from '../status-bar/status-bar.component';
 
 /**
  * App-wide shell rendered on every route (REQ-020): the mesh-gradient
@@ -17,7 +18,7 @@ import { SidebarComponent } from '../sidebar/sidebar.component';
  */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, SidebarComponent],
+  imports: [RouterOutlet, SidebarComponent, StatusBarComponent],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.css',
 })
@@ -25,7 +26,7 @@ export class ShellComponent {
   private readonly content = inject(PropertyContentService);
   private readonly router = inject(Router);
 
-  protected readonly property = this.content.getProperty();
+  protected readonly property = this.content.property;
   protected readonly activeRoute = signal(this.router.url);
 
   constructor() {

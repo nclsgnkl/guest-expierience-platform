@@ -1,2 +1,7 @@
+/* The CDK's overlay positioning stylesheet, required by the status bar's
+   dropdowns (@angular/cdk/menu -- 02-design.md §8.4). It ships inside the
+   installed package, so this is a bundled asset and never an external
+   request (constitution principle 4 / REQ-106). */
+@import '@angular/cdk/overlay-prebuilt.css';
 @import './styles/tokens.css';
 @import './styles/global.css';

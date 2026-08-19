@@ -6,10 +6,10 @@ import { phosphorArrowRight, phosphorKey } from '@ng-icons/phosphor-icons/regula
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PropertyContentService } from '../../../core/content/property-content.service';
-import type { ActionCard } from '../../../core/content/property.model';
+import type { ResolvedActionCard } from '../../../core/content/property.model';
 import { ActionCardComponent } from './action-card.component';
 
-const TEST_CARD: ActionCard = {
+const TEST_CARD: ResolvedActionCard = {
   id: 'check-out',
   icon: 'phosphorKey',
   header: 'Test-Header',

@@ -1,0 +1,46 @@
+/* `.settings` is what `.shell__content` lays out, not the host
+   (frontend/CLAUDE.md -> Layout). */
+:host {
+  display: contents;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+  /* Top inset matching Home's content column, which is what keeps this
+     screen clear of the reserved status-bar corner: the bar's box ends at
+     y = 68 and this starts the title at y = 88 (02-design.md §9.1). Left
+     alignment comes from `.shell__content` itself, so there is no
+     horizontal padding here. */
+  padding-top: var(--space-9);
+  color: var(--color-text-primary);
+}
+
+.settings__title {
+  margin: 0;
+  font-size: var(--text-h1);
+  font-weight: var(--text-h1-weight);
+  line-height: var(--text-h1-line-height);
+}
+
+.settings__panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Width is derived, not a new token: exactly three action cards plus their
+   two gaps, so the screen lines up with Home's grid instead of introducing
+   an arbitrary measurement (02-design.md §9.1). The glass recipe is the
+   existing one, so dark mode needs nothing extra here. */
+.settings__panel {
+  width: calc(3 * var(--size-panel) + 2 * var(--space-4));
+  padding: var(--space-6);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: var(--blur-glass);
+}

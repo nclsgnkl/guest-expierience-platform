@@ -17,9 +17,10 @@ import { PropertyContentService } from '../../../core/content/property-content.s
 export class HeadingBlockComponent {
   private readonly content = inject(PropertyContentService);
 
-  protected readonly property = this.content.getProperty();
+  protected readonly property = this.content.property;
 
   protected get headline(): string {
-    return this.property.headline.replace('{guestName}', this.property.guestName);
+    const property = this.property();
+    return property.headline.replace('{guestName}', property.guestName);
   }
 }

@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 
 import { PropertyContentService } from '../../core/content/property-content.service';
+import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
+import { SessionPreferenceGateway } from '../../core/preferences/session-preference-gateway';
 
 /**
  * Regression guard for defect D4 (REQ-011): the shipped logo asset was valid
@@ -18,7 +21,13 @@ import { PropertyContentService } from '../../core/content/property-content.serv
  * the part of D4 a unit test can catch, and this is it.
  */
 describe('branding logo asset', () => {
-  const logoAsset = new PropertyContentService().getProperty().logoAsset;
+  // Through the injector, not `new`: the service resolves the active
+  // language through `PreferencesService`, which in turn needs its gateway —
+  // so this needs an injection context (the logo itself is not localised).
+  TestBed.configureTestingModule({
+    providers: [{ provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway }],
+  });
+  const logoAsset = TestBed.inject(PropertyContentService).property().logoAsset;
   const assetPath = resolve(process.cwd(), 'src', logoAsset);
   const source = readFileSync(assetPath, 'utf8');
 

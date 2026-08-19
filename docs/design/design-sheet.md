@@ -18,10 +18,18 @@ Komponenten, Bewegung und Sprache.
 | | Bedeutung |
 |---|---|
 | ✅ | Gebaut und aus Figma ausgelesen — verbindlich |
-| 📋 | Vorschlag, noch nicht gezeichnet — Absicht, keine Spezifikation |
+| 📋 | **Nicht aus Figma** — entweder noch nicht gezeichnet (Absicht, keine Spezifikation) oder selbst entworfen und gebaut, ohne Figma-Vorlage |
 | ⚠️ | Bewusste Abweichung von v1, siehe Protokoll am Ende |
 
-**Verwandte Dokumente:** [`tokens.md`](tokens.md) · [`screens/home.md`](screens/home.md) · [`extraction-log.md`](extraction-log.md)
+> **Ergänzt 2026-08-18.** 📋 hieß bis dahin ausschließlich *"Vorschlag, noch
+> nicht gezeichnet"*. Seit dem dunklen Thema und der Statusleiste gibt es einen
+> zweiten Fall: **entworfen, gemessen und im Code gebaut — aber nicht in
+> Figma**. Beide teilen die eine Eigenschaft, auf die es ankommt: **ein
+> erneuter Figma-Import bringt diese Werte nicht zurück**, ihr Fehlen in einer
+> frischen Extraktion ist kein Beleg dafür, dass sie falsch sind. Wo der
+> Unterschied zählt, sagt der jeweilige Abschnitt es ausdrücklich.
+
+**Verwandte Dokumente:** [`tokens.md`](tokens.md) · [`dark-theme.md`](dark-theme.md) · [`screens/home.md`](screens/home.md) · [`extraction-log.md`](extraction-log.md)
 
 ---
 
@@ -161,6 +169,31 @@ Danger   #F26666
 Info     #67B8FF
 Offline  #A79DBA
 ```
+
+### Dark Mode 📋 — vollständig entworfen, **nicht in Figma**
+
+Alle Farben oben sind das **helle** Thema. Seit 2026-08-18 existiert ein
+komplettes dunkles Gegenstück: **[`dark-theme.md`](dark-theme.md)** — sechzehn
+Mesh-Primärwerte, zwei neue Ink-Werte, drei neue Oberflächen und die
+vollständige Rollentabelle für `[data-theme='dark']`, jede Textrolle mit
+gemessenem WCAG-Kontrast.
+
+📋 steht hier **nicht** für "noch nicht entworfen" — das Thema ist
+entworfen, gemessen und gebaut. Es steht für *nicht aus Figma ausgelesen*:
+Es gibt keinen dunklen Frame, keinen dunklen Variablensatz, keine dunkle
+Komponentenvariante. Ein erneuter Import bringt keinen dieser Werte zurück.
+Wird eine dunkle Variante je in Figma gezeichnet, gewinnt diese — dann wird
+`dark-theme.md` zum Abweichungsprotokoll.
+
+**Werte stehen ausschließlich in `dark-theme.md`**, bewusst weder hier noch in
+`tokens.md`: `tokens.md` ist der Figma-Bestand, dieses Dokument ist Prosa über
+das System — eine 30-zeilige Token-Tabelle mit Kontrastmessungen würde beides
+verfälschen. Kurzfassung der Haltung: **gleiche Struktur, nicht gleiche
+Helligkeit.** Dieselben Rollen, dieselbe Glasoptik (die Oberflächen bleiben
+transluzent und weiterhin `blur(8px)`), dieselbe Geometrie — nur die Farbe
+wandert in ein Nachtband. Bemerkenswert: **im dunklen Thema liegt keine
+Textrolle unter 4,5 : 1, im hellen zwei** (`Text_Secondary` auf Glas 3,99 und
+auf der Sidebar 3,48).
 
 ---
 
@@ -340,6 +373,32 @@ auf den 1280er-Maßstab umgerechnet.
 | **Weather Card** | Temperatur groß, Zustand, Ort, Tageshinweis |
 | **Smart Home Tile** | Min-Höhe 90, Aktiv-Fill `rgba(244, 90, 168, 0.16)` |
 | **Chip** | Höhe 28, Radius 999, aktiv `#2C1F4A` auf weiß |
+
+### Selbst entworfen, ohne Figma-Vorlage 📋 — Statusleiste und Einstellungen
+
+Gebaut am 2026-08-18 durch `docs/features/appearance-and-language/`, aber
+**nicht in Figma gezeichnet** — deshalb 📋 und nicht ✅, obwohl beide auf
+jedem Screen laufen. Die Statusleiste wurde aus dem KI-Konzeptbild
+[`assets/home-concept-ai.png`](assets/home-concept-ai.png) abgelesen, das
+Komposition und grobe Proportion liefert, aber **keine token-genauen Werte**;
+für den Einstellungen-Screen existiert überhaupt keine Vorlage.
+
+| Komponente | Eckdaten |
+|---|---|
+| **Statusleiste** | Overlay oben rechts (kein Fließelement, damit die vermessene Homescreen-Geometrie sich nicht verschiebt): Sprachwähler (Globus + Kürzel + Caret), Darstellungswähler (Sonne/Mond, ohne Textlabel), Haarlinie, Uhr |
+| **Dropdown** | Glas-Panel, Radius 24, Zeilen mind. 44 hoch, gewählte Zeile mit `Menü aktiv`-Verlauf und `Check`-Glyphe |
+| **Einstellungen-Screen** | Seitentitel H1 32/ExtraBold, zwei Glas-Panels (*Sprache*, *Darstellung*), pro Einstellung alle Optionen sichtbar statt eingeklappt |
+
+Zwei bewusste Abweichungen von diesem Dokument, beide protokolliert: der
+Darstellungswähler trägt **kein Textlabel** (sonst springt die Breite der
+Leiste beim Sprachwechsel), und die Uhr nutzt **Bold 700 statt Caption
+Medium 500** — nur 400, 700 und 800 sind selbst gehostet, und 500 hieße eine
+vierte `woff2`-Datei für eine einzige Zeile. Neue Tokens dieser beiden Screens
+stehen in `tokens.md` → "In-house tokens", nicht in den Figma-Tabellen.
+
+Vollständige Spezifikation:
+`docs/features/appearance-and-language/02-design.md` §8 (Statusleiste) und
+§9 (Einstellungen).
 
 ---
 

@@ -17,13 +17,19 @@
 
 <div class="shell">
   <app-sidebar
-    [menuItems]="property.menuItems"
-    [settings]="property.settings"
-    [logoAsset]="property.logoAsset"
+    [menuItems]="property().menuItems"
+    [settings]="property().settings"
+    [logoAsset]="property().logoAsset"
     [activeRoute]="activeRoute()"
   />
 
   <main class="shell__content">
     <router-outlet />
   </main>
+
+  <!-- App chrome, so a sibling of <main> and not inside it: the status bar is
+       not part of the main landmark. It is an absolute overlay in `.shell`'s
+       top-right padding box and takes no flow space, so adding it moves
+       nothing (REQ-112, 02-design.md §8.1). -->
+  <app-status-bar />
 </div>

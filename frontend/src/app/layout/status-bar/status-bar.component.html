@@ -1,0 +1,36 @@
+<div class="status-bar">
+  <app-status-bar-menu
+    [options]="languageOptions()"
+    [selectedValue]="language()"
+    [triggerLabel]="t('statusBar.language.aria')"
+    (optionSelected)="chooseLanguage($event)"
+  >
+    <ng-icon name="phosphorGlobe" size="var(--size-icon-xs)" aria-hidden="true" />
+    <span class="status-bar__language-code">{{ shortLabel() }}</span>
+  </app-status-bar-menu>
+
+  <app-status-bar-menu
+    [options]="appearanceOptions()"
+    [selectedValue]="appearance()"
+    [triggerLabel]="t('statusBar.appearance.aria')"
+    (optionSelected)="chooseAppearance($event)"
+  >
+    <!-- No text label beside it, deliberately: the bar's width must not move
+         when the language changes (02-design.md §8.3). -->
+    @if (appearanceIcon(); as icon) {
+      <ng-icon [name]="icon" size="var(--size-icon-xs)" aria-hidden="true" />
+    }
+  </app-status-bar-menu>
+
+  <span class="status-bar__divider" aria-hidden="true"></span>
+
+  <!-- `aria-label` gives the bare digits their meaning; the visible text stays
+       the accessible content. The `datetime` attribute is the machine-readable
+       half and is always 24-hour, whatever the locale renders. -->
+  <time
+    class="status-bar__clock"
+    [attr.datetime]="datetime()"
+    [attr.aria-label]="t('statusBar.time.aria')"
+    >{{ time() }}</time
+  >
+</div>

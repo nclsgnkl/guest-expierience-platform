@@ -5,7 +5,7 @@
     <app-heading-block />
 
     <div class="home-content__cards">
-      @for (card of property.cards; track card.id) {
+      @for (card of property().cards; track card.id) {
         <app-action-card [card]="card" />
       }
     </div>

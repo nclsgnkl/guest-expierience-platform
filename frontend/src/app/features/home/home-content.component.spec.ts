@@ -13,11 +13,14 @@ import { phosphorSparkleFill } from '@ng-icons/phosphor-icons/fill';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { HomeContentComponent } from './home-content.component';
+import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
+import { SessionPreferenceGateway } from '../../core/preferences/session-preference-gateway';
 
 describe('HomeContentComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
+        { provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway },
         provideZonelessChangeDetection(),
         provideRouter([]),
         provideIcons({

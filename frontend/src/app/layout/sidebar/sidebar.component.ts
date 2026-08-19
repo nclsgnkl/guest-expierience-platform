@@ -2,7 +2,8 @@ import { Component, inject, input } from '@angular/core';
 import { Router } from '@angular/router';
 import { NgIcon } from '@ng-icons/core';
 
-import type { MenuItem } from '../../core/content/property.model';
+import type { ResolvedMenuItem } from '../../core/content/property.model';
+import { TranslationService } from '../../core/i18n/translation.service';
 
 /**
  * Config-driven nav (docs/design/screens/home.md -> Sidebar). `menuItems`
@@ -20,19 +21,25 @@ import type { MenuItem } from '../../core/content/property.model';
   styleUrl: './sidebar.component.css',
 })
 export class SidebarComponent {
-  menuItems = input.required<MenuItem[]>();
-  settings = input.required<MenuItem>();
+  /* The nav's accessible name is app chrome, not property content, so it
+     comes from the catalogue like every other chrome string (REQ-107,
+     frontend/CLAUDE.md -> Appearance & language). The menu *labels* beside it
+     are property-authored and still arrive resolved, as inputs. */
+  protected readonly t = inject(TranslationService).t;
+
+  menuItems = input.required<ResolvedMenuItem[]>();
+  settings = input.required<ResolvedMenuItem>();
   logoAsset = input.required<string>();
   activeRoute = input.required<string>();
 
   private readonly router = inject(Router);
 
-  isActive(item: MenuItem): boolean {
+  isActive(item: ResolvedMenuItem): boolean {
     const path = item.route === '' ? '/' : item.route;
     return this.activeRoute() === path;
   }
 
-  navigateTo(item: MenuItem): void {
+  navigateTo(item: ResolvedMenuItem): void {
     this.router.navigateByUrl(item.route === '' ? '/' : item.route);
   }
 }

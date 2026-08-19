@@ -13,6 +13,14 @@
    while failing at bundle or runtime (round-3 review finding #5). */
 declare module 'node:fs' {
   export function readFileSync(path: string, encoding: 'utf8'): string;
+
+  /** Only the `withFileTypes` overload is used — see core/i18n/german-literals.spec.ts. */
+  export interface Dirent {
+    name: string;
+    isFile(): boolean;
+    isDirectory(): boolean;
+  }
+  export function readdirSync(path: string, options: { withFileTypes: true }): Dirent[];
 }
 
 declare module 'node:path' {

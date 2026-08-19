@@ -86,6 +86,12 @@ baseline root size for reference, and the raw Figma value for traceability.
 
 ## Colors
 
+> **Light theme only.** Every colour in this section is the light palette, as
+> it exists in Figma. The dark palette has no Figma counterpart and lives in
+> [`dark-theme.md`](dark-theme.md) — **no dark value belongs in this file**.
+> `--color-divider`, added in-house for the status bar, is recorded under
+> "In-house tokens" below rather than here.
+
 ### Figma variables
 
 | Token | Figma variable | Value | Role |
@@ -93,11 +99,37 @@ baseline root size for reference, and the raw Figma value for traceability.
 | `--color-brand-primary` | `Brand_Primary-Pink` | `#f45aa8` | Brand pink; icon gradient start, logo, accents |
 | `--color-brand-secondary` | `Brand_Secondary-Purple` | `#8a5cf6` | Brand purple |
 | `--color-text-primary` | `Text_Primary` | `#2c1f4a` | Headings, card titles, menu labels — default text color |
-| `--color-text-secondary` | `Text_Secondary` | `#6e6486` | Card descriptions, supporting copy |
+| `--color-text-secondary` ⚠️ | `Text_Secondary` | `#6e6486` → shipped as `#5a516e` | Card descriptions, supporting copy — **the shipped value deliberately deviates from Figma**, see the note below |
 | `--color-text-on-dark` | `Text_On-Dark` | `#ffffff` | Text on dark/saturated surfaces |
 
 > ✅ **Done 2026-08-17:** was `Test_Primary` (a typo); renamed to `Text_Primary`
 > in Figma. Spec and design file agree.
+
+> ⚠️ **`--color-text-secondary` — deliberate deviation from Figma, 2026-08-19.**
+>
+> Figma's `Text_Secondary` is **`#6e6486`**, and that is what this record says
+> the design file contains — it has not changed there. The **implementation
+> ships `#5a516e`** instead, as `--ink-600` in `frontend/src/styles/tokens.css`.
+>
+> Reason: accessibility. `#6e6486` measures **4.01 : 1** on a glass card,
+> **3.80 : 1** on the Settings panel and **3.60 : 1** on the sidebar in light
+> mode — all below **WCAG AA's 4.5 : 1** for normal-size text, and the
+> large-text exemption does not apply (the copy on this role is `--text-body`,
+> 0.875rem / 14 px at weight 400). `06-review.md` finding #3 on
+> `appearance-and-language`; the user approved darkening the role on
+> 2026-08-19.
+>
+> `#5a516e` is `#6e6486` scaled by **0.65 in linear-light space**, which
+> preserves the hue — the same purple-grey, one step deeper — so the ink ramp
+> still reads as one family rather than gaining a new colour. It measures
+> **5.41 / 5.12 / 4.85** on those same three surfaces, sampled from real pixels
+> with `frontend/tools/measure.mjs`. The **dark theme is untouched**: it maps
+> the role to `--ink-300`, which already passed.
+>
+> This is recorded, not overwritten: if Figma is ever brought in line, the
+> deviation disappears — until then `#6e6486` is what the design file says and
+> `#5a516e` is what ships. Full measurements in
+> `docs/features/appearance-and-language/02-design.md` §3.4.
 
 `--color-brand-secondary` is defined but **not visibly applied** in this frame.
 Its intended use (host-contact buttons) lives in the not-yet-built widget column.
@@ -296,6 +328,9 @@ layers, so not the default.
 > not reproduce identically across browsers and platforms.
 > `[NEEDS CLARIFICATION: set explicit line-heights. Suggested: 1.1 for --text-display, 1.3 for titles/labels, 1.5 for body.]`
 
+Three further type tokens — `--text-status`, `--text-clock`, `--text-h1` — were
+designed in-house and are **not** in this table: see "In-house tokens" below.
+
 ## Spacing
 
 Halves cleanly onto a **4px scale** — no normalisation needed.
@@ -406,6 +441,50 @@ Normalised first (see the half-pixel note under "Scale"), then converted.
 > This is the same class of error as the `aspect-[a/b]` one flagged above: a
 > value read off a *component definition* rather than off its *instance in the
 > frame*.
+
+## In-house tokens — no Figma counterpart (2026-08-18)
+
+Seven tokens added by `docs/features/appearance-and-language/` for the status
+bar (`02-design.md` §8.3) and the Settings screen (§9). They are kept **in
+their own section, deliberately not merged into the extracted tables above**,
+for the same reason the dark palette lives in its own file: this document's
+value is that its tables are what Figma contains, and one section that says
+otherwise is a warning, whereas seven rows sprinkled through five tables is a
+broken record.
+
+> ⚠️ **Provenance: designed in-house, not extracted** — same standing as the
+> `--gradient-icon-active` note above, and the same consequences.
+>
+> - **Neither screen exists in Figma.** The status bar was read off
+>   [`assets/home-concept-ai.png`](assets/home-concept-ai.png), which
+>   is an **AI concept mock-up**, not a design file — it supplies composition
+>   and rough proportion, never token-accurate values. The Settings screen has
+>   no render at all; it is the feature's own design (`02-design.md` §9, which
+>   states that gap openly).
+> - **A re-import will not bring these back.** Their absence from a fresh
+>   extraction is not evidence that they are wrong.
+> - **Where an existing system rule covered a value, it was used rather than
+>   invented** — see the corroboration column.
+
+| Token | Value | Weight / line height | Used for | Corroborated by |
+|---|---|---|---|---|
+| `--size-touch-min` | `2.75rem` (44px) | — | Minimum touch target: status-bar triggers, dropdown rows, Settings option buttons | `design-sheet.md` → *Touchscreen-Regeln* (44px minimum) |
+| `--size-icon-xs` | `1.125rem` (18px) | — | Status-bar glyphs (globe, sun/moon) beside a `0.875rem` label | Sized against the label, one step below `--size-icon-sm` (24px) |
+| `--size-icon-caret` | `0.75rem` (12px) | — | The disclosure chevron after a status-bar glyph | Subordinate to the glyph it follows, so the pair reads as one control |
+| `--text-status` | `0.875rem` (14px) | 700 / 1.3 | The language trigger's short label | Reuses `--text-body`'s size at label weight |
+| `--text-clock` | `1.125rem` (18px) | 700 / 1.3 | The clock | Reuses `--text-title` / `--text-body-lg`'s size |
+| `--text-h1` | `2rem` (32px) | 800 / 1.1 | Screen title — one step below `--text-display`; first used by Settings | `design-sheet.md` → *Type Scale*, H1 32 / ExtraBold 800 / 1.1 (📋 there, built here) |
+| `--color-divider` | `color-mix(in srgb, var(--ink-900) 25%, transparent)` | — | The hairline between the appearance control and the clock | A role, not a fourth grey: mixed from the ink primitive so it stays rebrandable and survives the theme flip ([`dark-theme.md`](dark-theme.md) §3) |
+
+> **`--text-clock` is 700, not `design-sheet.md`'s "Caption 13px Medium 500"**
+> for times and meta info. Only 400, 700 and 800 are self-hosted (`global.css`),
+> so 500 would mean shipping a fourth `woff2` for one string on one screen — a
+> runtime cost the on-premise principle does not justify. **Do not "fix" this
+> by adding a font file.** Logged as a deliberate deviation, not an oversight.
+
+`--color-divider` is the only one of the seven that the theme axis overrides;
+its dark value and the reasoning are in [`dark-theme.md`](dark-theme.md) §3.
+The other six are colourless and identical in both themes.
 
 ## Breakpoints
 
@@ -524,7 +603,7 @@ shadow DOM.
   --brand-primary-deep: #cc49af;
   --brand-secondary: #8a5cf6;
   --ink-900: #2c1f4a;
-  --ink-600: #6e6486;
+  --ink-600: #5a516e; /* deviates from Figma's #6e6486 — WCAG AA, see above */
 }
 
 /* layer 2: semantic roles — the only thing components reference */
@@ -558,10 +637,36 @@ applyBranding(brand: PropertyBranding) {
   Reversible later via the Angular CLI, per project.
 - **Units in `rem`**, authored against a `16px` root; the root itself is
   viewport-proportional since 2026-08-18 (see "Units").
-- **Dark-mode trigger:** a `data-theme` attribute on `<html>`. It defaults to
-  the system preference (`prefers-color-scheme`) but an explicit user choice in
-  `Einstellungen → Darstellung` must win over it — so the attribute is authored
-  in three states: absent (follow system), `light`, `dark`.
+- **Dark-mode trigger:** a `data-theme` attribute on `<html>`, carrying an
+  **always-resolved** value — `light` or `dark`, never absent. An explicit
+  guest choice in `Einstellungen → Darstellung` wins over the property's
+  default.
+
+  > ⚠️ **Corrected 2026-08-19 — user decision #4, approved 2026-08-18.**
+  > This entry previously read: *"It defaults to the system preference
+  > (`prefers-color-scheme`) but an explicit user choice … must win over it —
+  > so the attribute is authored in three states: absent (follow system),
+  > `light`, `dark`."* Two halves of that are now wrong, and the correction is
+  > recorded rather than silently rewritten because the old sentence was the
+  > basis of an earlier plan.
+  >
+  > - **The app never writes the absent state.** The attribute is always a
+  >   resolved `light` or `dark`, so nothing ever renders in the
+  >   attribute-absent state (REQ-105). `:root`'s values *are* the light
+  >   theme; `[data-theme='light']` exists for completeness and overrides
+  >   nothing.
+  > - **The startup value is the backend-delivered default** (`light` for the
+  >   example property) — **not** `prefers-color-scheme`. The property's
+  >   configuration owns the default; the guest's stored choice, when one
+  >   exists, replaces it before the first paint.
+  > - **Three states stay *authorable*, and `system` is one of them.** A
+  >   property may configure a `system` option, and only then is
+  >   `prefers-color-scheme` consulted — as an input to the resolution, not as
+  >   the default. The example property does not configure it, so `system` is
+  >   not in the shipped option list.
+  >
+  > Full model: `docs/features/appearance-and-language/02-design.md` §6
+  > (defaults ⊕ the guest's choice ⊕ persistence).
 - **Line heights (decided 2026-08-17):** implement `1.1` for `--text-display`,
   `1.3` for titles and labels, `1.5` for body text. **These values are
   authoritative and live here, not in Figma** — every Figma text layer is left
@@ -576,10 +681,37 @@ applyBranding(brand: PropertyBranding) {
 
 ### Still blocked on design
 
-- **No dark palette exists.** Dark mode is decided and deferred — only light
-  values are designed. The dark role values in the snippet above are
-  placeholders and must be designed before the feature can ship, including
-  whether the glass surfaces stay translucent over a dark background.
+- ✅ **Resolved 2026-08-18 — ~~No dark palette exists~~.** A dark palette was
+  **designed in-house** (not in Figma) as part of
+  `docs/features/appearance-and-language/` and is documented in
+  **[`dark-theme.md`](dark-theme.md)** — sixteen dark mesh primitives,
+  two new ink primitives, three new surface primitives, and the full
+  `[data-theme='dark']` role table with measured WCAG contrast for every text
+  role.
+
+  Three things follow, and all three are deliberate:
+
+  - **No dark colour value lives in this file, and none ever should.** This
+    document records what exists in **Figma**; the dark palette does not, and
+    a re-import will not produce it. Keeping it out is what stops hand-authored
+    values from becoming indistinguishable from extracted ones. The `⚠️`
+    provenance note under `--gradient-icon-active` above is the one exception
+    this file already carries — a second, twenty-five rows long, would have
+    turned the warning into background noise.
+  - **The sub-question is answered: the glass surfaces do stay translucent.**
+    `--blur-glass` is `blur(8px)` in both themes, the panel keeps ~1.5 : 1
+    contrast against its own backdrop in both, and the dark surfaces are a
+    cool-white lightening film instead of light mode's warm-white one, at a
+    much lower alpha (the value itself is in `dark-theme.md`, not here).
+    Glassmorphism is a property of the design, not of the light palette.
+  - **If a dark variant is ever drawn in Figma, it supersedes
+    `dark-theme.md`** and this entry gains a real extraction — at which point
+    the values belong here like any other.
+
+  Still open in light mode, and **not** a dark-mode problem: `--color-text-secondary`
+  measures 3.99 : 1 on a glass panel and 3.48 : 1 on the sidebar, both below
+  WCAG AA. Recorded in `dark-theme.md` §4; unchanged here because fixing it
+  would alter the signed-off light screen.
 
 ## Open questions
 
@@ -590,10 +722,15 @@ applyBranding(brand: PropertyBranding) {
   approval-gated — see "Minimum supported width".`]`
 - `[NEEDS CLARIFICATION: explicit line-heights are missing everywhere]`
 - `[NEEDS CLARIFICATION: promote the five raw surface/gradient colors to Figma variables?]`
-- `[NEEDS CLARIFICATION: no dark-mode palette exists — is one wanted?]`
 
 ### Resolved
 
+- ✅ **A dark-mode palette was wanted, and now exists (2026-08-18).** Answers
+  the former *"no dark-mode palette exists — is one wanted?"*. Yes: designed
+  in-house, documented in **[`dark-theme.md`](dark-theme.md)**, realised in
+  `frontend/src/styles/tokens.css`. **No dark value lives in this file**, and a
+  Figma re-import will not produce any — see "Still blocked on design" above
+  for the full resolution, including that the glass surfaces stay translucent.
 - ✅ Canvas is 2x; logical viewport is 1280 × 832 (2026-08-17)
 - ✅ `Test_Primary` → `Text_Primary`, typo confirmed (2026-08-17)
 - ✅ Spacing keeps the design's literal values, normalised onto a 4px scale (2026-08-17)
