@@ -8,6 +8,7 @@ import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.RoomDto;
 import de.gxp.asset.AssetControl;
 import de.gxp.property.PropertyControl;
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -83,7 +84,28 @@ public class RoomControl {
                             .reference(String.valueOf(row[0])))
                             .toList());
         }
+        List<Object[]> activeDevices = repository.activeDevicesOf(roomId);
+        if (!activeDevices.isEmpty()) {
+            throw ApiErrors.conflict("room-has-devices",
+                    "The room still has active devices — revoke or re-pair them first",
+                    activeDevices.stream().map(row -> new ApiErrorDetail(
+                            "Device '" + row[1] + "' (id " + row[0] + ")")
+                            .reference(String.valueOf(row[0])))
+                            .toList());
+        }
+        repository.deleteRevokedDevicesOf(roomId); // revoked rows go with the room (REQ-408)
         repository.delete(room); // menu/card overrides cascade in the DB
+    }
+
+    /**
+     * Guest-read (REQ-416): the device's OWN room — code, display name,
+     * artwork and defaults. Not HTTP-mapped; the roomId comes exclusively
+     * from the authenticated device identity (REQ-411).
+     */
+    @PermitAll
+    @Transactional
+    public RoomDto guestView(long roomId) {
+        return RoomMapper.toDto(require(roomId));
     }
 
     /** Cross-feature existence check (menu config / cards on a room scope). */

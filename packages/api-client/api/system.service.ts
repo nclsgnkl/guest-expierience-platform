@@ -96,7 +96,7 @@ export class SystemService extends BaseService {
 
     /**
      * Instance metadata
-     * Returns instance metadata; instanceName is read from PostgreSQL through the full BCE stack (Flyway-seeded row).
+     * Returns instance metadata; instanceName is read from PostgreSQL through the full BCE stack (Flyway-seeded row). Restricted to authenticated callers (admin or device token) — version fingerprinting on an unpatchable box is not offered anonymously (decided 2026-08-19).
      * @endpoint get /api/system/info
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
@@ -108,6 +108,9 @@ export class SystemService extends BaseService {
     public getSystemInfo(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (bearerAuth) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
 
         const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
             'application/json'

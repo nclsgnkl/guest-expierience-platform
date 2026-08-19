@@ -25,6 +25,12 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class AuthControl {
 
+    /** The device role (REQ-410) — same bearer path, second token kind. */
+    public static final String ROLE_DEVICE = "device";
+    /** Device identity attributes — set by the auth flow, read by the guest read model (REQ-411). */
+    public static final String DEVICE_ID_ATTRIBUTE = "gxp.device.id";
+    public static final String DEVICE_ROOM_ATTRIBUTE = "gxp.device.room-id";
+
     private final AdminCredentialRepository credentials;
     private final Pbkdf2PasswordHasher hasher;
     private final TokenStore tokenStore;

@@ -10,6 +10,7 @@ import de.gxp.api.ApiErrors;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.AssetMetadataDto;
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -107,14 +108,36 @@ public class AssetControl {
         if (asset == null) {
             throw ApiErrors.notFound("unknown-asset", "No asset " + assetId);
         }
+        throw deliver(asset, ifNoneMatch, 3600);
+    }
+
+    /**
+     * Guest delivery variant (REQ-422 — the {@code @PermitAll}-on-internal
+     * precedent): the same thrown-Response binary path, with the guest cache
+     * pin — asset content per id is IMMUTABLE (a replacement is a new id),
+     * so {@code private, max-age=2592000}. Reachability is
+     * {@code GuestControl}'s check (its named 404 answers first); the
+     * unknown-id branch here is the defensive backstop with the same code.
+     */
+    @PermitAll
+    @Transactional
+    public File guestBinary(Long assetId, String ifNoneMatch) {
+        Asset asset = repository.findById(assetId);
+        if (asset == null) {
+            throw ApiErrors.notFound("asset-not-found", "No such asset");
+        }
+        throw deliver(asset, ifNoneMatch, 2592000);
+    }
+
+    private static WebApplicationException deliver(Asset asset, String ifNoneMatch, int maxAgeSeconds) {
         EntityTag etag = new EntityTag(asset.sha256);
         if (ifNoneMatch != null && asset.sha256.equals(ifNoneMatch.replace("\"", ""))) {
-            throw new WebApplicationException(Response.notModified(etag).build());
+            return new WebApplicationException(Response.notModified(etag).build());
         }
         CacheControl cacheControl = new CacheControl();
         cacheControl.setPrivate(true);
-        cacheControl.setMaxAge(3600);
-        throw new WebApplicationException(Response.ok(asset.data, asset.mimeType)
+        cacheControl.setMaxAge(maxAgeSeconds);
+        return new WebApplicationException(Response.ok(asset.data, asset.mimeType)
                 .tag(etag)
                 .cacheControl(cacheControl)
                 .build());

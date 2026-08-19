@@ -60,8 +60,9 @@ class FirstRunSeedTest {
                 .then().statusCode(200)
                 .body("findAll { it.code == '1' }", hasSize(1));
 
-        // 5. platform metadata (V1) is untouched by V2+ (REQ-302)
-        given()
+        // 5. platform metadata (V1) is untouched by V2+ (REQ-302);
+        //    authenticated since device-pairing-and-guest-api (REQ-432)
+        given().header("Authorization", "Bearer " + token)
                 .when().get("/api/system/info")
                 .then().statusCode(200)
                 .body("instanceName", equalTo("Guest Experience Platform"));

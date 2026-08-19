@@ -19,6 +19,16 @@ class StayRepository implements PanacheRepository<Stay> {
     }
 
     /**
+     * The ACTIVE stay of a room (REQ-419): BOOKED ∧ check-in ≤ now <
+     * check-out — the same derivation as everywhere; invariant 5 guarantees
+     * at most one row.
+     */
+    Stay activeOf(long roomId, Instant now) {
+        return find("roomId = ?1 and status = 'BOOKED' and checkIn <= ?2 and checkOut > ?2", roomId, now)
+                .firstResult();
+    }
+
+    /**
      * Invariant 5's range check (strict inequalities — adjacent stays pass):
      * non-cancelled stays of the room overlapping [in, out), excluding the
      * stay being updated. Race-free because the caller holds the room-row

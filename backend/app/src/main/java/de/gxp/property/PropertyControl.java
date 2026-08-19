@@ -19,6 +19,7 @@ import de.gxp.api.model.LanguageOptionDto;
 import de.gxp.api.model.PropertyDto;
 import de.gxp.asset.AssetControl;
 import de.gxp.text.TemplateControl;
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -63,6 +64,20 @@ public class PropertyControl {
                 PropertyMapper.toLanguageOptions(dto, property.id),
                 PropertyMapper.toAppearanceOptions(dto, property.id));
         return PropertyMapper.toDto(property, repository.translations(),
+                repository.languageOptions(), repository.appearanceOptions());
+    }
+
+    /**
+     * Guest-read projection (REQ-416/417 — the {@code TemplateControl}
+     * {@code @PermitAll}-on-internal precedent): the property snapshot —
+     * name, brand, defaults, offered options, RAW templates, asset ids.
+     * Read-only, not HTTP-mapped (no Boundary routes it); {@code GuestControl}
+     * composes and resolves.
+     */
+    @PermitAll
+    @Transactional
+    public PropertyDto guestView() {
+        return PropertyMapper.toDto(repository.theRow(), repository.translations(),
                 repository.languageOptions(), repository.appearanceOptions());
     }
 

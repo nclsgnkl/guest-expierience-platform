@@ -14,6 +14,10 @@ import jakarta.ws.rs.ext.Provider;
  * as {@code GXP-Token-Expires} (ISO-8601 instant) on every authenticated
  * response — the identity carries the slid expiry — and on the login response
  * itself, taken from its body. Clients use it to warn before idle-out.
+ *
+ * <p>Device identities (REQ-412) are skipped BY CONSTRUCTION: device tokens
+ * do not slide, so their identities never carry the expiry attribute and the
+ * null-check below leaves the response header-free — verified by test.
  */
 @Provider
 class TokenExpiryResponseFilter implements ContainerResponseFilter {

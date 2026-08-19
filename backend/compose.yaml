@@ -1,9 +1,13 @@
-# Guest Experience Platform — deployment unit (REQ-206): app + PostgreSQL,
-# ONE named volume, so the whole instance backs up as one pg_dump (spec §9).
+# Guest Experience Platform — deployment unit (REQ-206, REQ-431): app +
+# PostgreSQL. PRODUCTION-SHAPED since device-pairing-and-guest-api: the app
+# serves HTTPS ONLY (no plain listener, no redirect — decided 2026-08-19)
+# with an instance-generated CA + server certificate created on first start
+# by the container entrypoint (keytool, no extra tooling).
 #
-# !! DEV/PREVIEW ONLY until `device-pairing-and-guest-api` adds TLS — this
-# !! serves plain HTTP, and the local network is not trusted (constitution
-# !! principle 4). Do not deploy to a real building off this file alone.
+# Backup story (spec §9): one `pg_dump` of the database PLUS the gxp-tls
+# volume. Losing gxp-tls is survivable but expensive: the next start
+# regenerates a NEW CA, and a person must re-install it in every kiosk's
+# trust store (no re-pairing needed — device tokens live in PostgreSQL).
 #
 # Required environment variables (compose refuses to start when unset):
 #   GXP_DB_PASSWORD     — PostgreSQL password
@@ -12,6 +16,10 @@
 #                         unset/blank and no hash exists; ignored once a hash
 #                         is stored — rotate via PUT /api/manager/password
 #                         (constitution v1.5.x password lifecycle)
+#   GXP_TLS_HOST        — the ONE host name or IP kiosks use to reach this
+#                         instance; the server certificate's SAN. Changing it
+#                         re-issues the server certificate under the
+#                         unchanged CA — paired kiosks keep trusting.
 
 name: gxp
 
@@ -29,8 +37,19 @@ services:
       GXP_DB_USERNAME: gxp
       GXP_DB_PASSWORD: ${GXP_DB_PASSWORD:?set the database password (GXP_DB_PASSWORD)}
       GXP_ADMIN_PASSWORD: ${GXP_ADMIN_PASSWORD:?set the initial admin password (GXP_ADMIN_PASSWORD)}
+      GXP_TLS_HOST: ${GXP_TLS_HOST:?set the host/IP kiosks use (GXP_TLS_HOST) - the TLS certificate is issued for it}
+    volumes:
+      - gxp-tls:/tls
     ports:
-      - "8080:8080"   # HTTP only — see dev/preview warning above
+      - "443:8443"    # HTTPS only — plain HTTP is not served at all
+    healthcheck:
+      # --insecure on purpose: the probe runs INSIDE the container against
+      # localhost, which the certificate (SAN = GXP_TLS_HOST) does not name;
+      # it verifies the HTTPS listener answers, not the trust chain.
+      test: ["CMD-SHELL", "curl -fsk https://localhost:8443/api/system/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   db:
     image: postgres:17.11
@@ -48,3 +67,4 @@ services:
 
 volumes:
   gxp-pgdata:
+  gxp-tls:

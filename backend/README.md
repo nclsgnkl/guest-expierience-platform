@@ -24,12 +24,14 @@ Note: the constitution's allow-list names `quarkus-junit5`; Quarkus 3.31
 renamed that artifact to `quarkus-junit` (the old id is only a relocation
 pom). The pom uses the corrected name — same artifact, same intent.
 
-## First run (dev/preview ONLY — no TLS yet)
+## First run (production-shaped: HTTPS only)
 
-> **Warning:** this compose unit serves **plain HTTP**. Until
-> `device-pairing-and-guest-api` adds HTTPS with the instance CA, it is for
-> development/preview only — never for a real building. The local network is
-> not trusted (constitution principle 4).
+Since `device-pairing-and-guest-api` the compose unit is **production-
+shaped**: `%prod` serves **HTTPS only** — no plain listener, no redirect
+(a redirect would still invite the first password over HTTP; decided
+2026-08-19). The instance generates its **own CA** and a CA-signed server
+certificate on first start (constitution: HTTPS on the untrusted LAN with an
+instance-generated CA distributed to kiosks at pairing).
 
 Prerequisites: Docker (with the Compose plugin), Java 21 + the committed
 Maven wrapper for building.
@@ -38,11 +40,12 @@ Maven wrapper for building.
 # 1. Build the application (also regenerates contract artifacts)
 cd backend/app && ./mvnw verify
 
-# 2. Start the instance — both variables are REQUIRED; compose refuses to
-#    interpolate without them, so a missing admin password fails at once.
+# 2. Start the instance — all three variables are REQUIRED; compose refuses
+#    to interpolate without them, so a missing value fails at once.
 cd .. \
   && GXP_DB_PASSWORD='choose-a-db-password' \
      GXP_ADMIN_PASSWORD='choose-the-initial-admin-password' \
+     GXP_TLS_HOST='192.168.1.10' \
      docker compose up --build
 ```
 
@@ -53,11 +56,78 @@ cd .. \
   to start if the variable is unset or blank. Once a hash exists the variable
   is **ignored forever** — rotate the password through the API (below), not
   through the environment. The value is never logged.
-- Check the box: `curl http://localhost:8080/api/system/ready` → `{"status":"READY"}`;
-  `/api/system/health` answers whenever the process serves HTTP;
-  `/api/system/info` returns instance metadata read from the database.
-- Data lives in the **one named volume** `gxp-pgdata`; `docker compose down`
-  keeps it, `docker compose down -v` destroys it.
+- `GXP_TLS_HOST` — the **one stable host name or IP the kiosks use** to reach
+  this instance; the server certificate is issued for exactly it (SAN).
+  Required in `%prod` — the boot refuses without it (same posture as the
+  admin password).
+- Check the box: `curl -k https://<GXP_TLS_HOST>/api/system/ready` →
+  `{"status":"READY"}` (`-k` only until the CA is installed, see the pairing
+  workflow); `/api/system/health` answers whenever the process serves HTTPS.
+  `/api/system/info` requires an admin or device token (no anonymous version
+  fingerprinting).
+- Data lives in **two named volumes**: `gxp-pgdata` (database) and `gxp-tls`
+  (TLS material); `docker compose down` keeps them, `down -v` destroys both.
+
+### TLS lifecycle
+
+On first start the container entrypoint generates, with `keytool` (already
+in the JVM image — no extra dependency):
+
+| What | Parameters |
+|---|---|
+| Instance CA | EC P-256, self-signed, `CA:true`, valid **20 years** |
+| Server certificate | EC P-256, signed by the CA, SAN = `GXP_TLS_HOST`, valid **10 years** |
+
+Both live on the `gxp-tls` volume (PKCS12 keystores + a generated
+passphrase file, mode 0600); restarts reuse them. **Changing `GXP_TLS_HOST`**
+re-issues the **server certificate only**, under the unchanged CA — paired
+kiosks keep trusting without any re-install or re-pairing. Private keys
+never leave the volume and never appear in a log. Rotation before expiry is
+a documented manual path: remove the `gxp-tls` volume, restart (new CA),
+re-install the CA on every kiosk at the next visit.
+
+## Pairing a kiosk
+
+Pairing is manager-attended and needs no typing on the kiosk:
+
+1. **Install the instance CA on the kiosk (a human provisioning step).**
+   Fetch it from `GET /api/pairing/ca` (PEM, public material, also over
+   not-yet-trusted HTTPS — accept-once or out-of-band) and install it in the
+   device's OS/browser trust store. A web page cannot do this; a person does
+   it once per device.
+2. **The kiosk requests a pairing code:** `POST /api/pairing/requests`
+   (unauthenticated, rate-limited 5/min) → a short **display code** the kiosk
+   shows, a **poll secret** it keeps (never displayed — the code alone can
+   never yield a token, the screen stands in a guest-accessible room), and a
+   10-minute expiry.
+3. **The manager confirms the code to a room:**
+   `POST /api/manager/pairings/{code}/confirm` with
+   `{"roomId": …, "deviceName": "…"}` (name optional — defaults to
+   `Kiosk <room code>`).
+4. **The kiosk polls** `GET /api/pairing/requests/{code}` with the
+   `GXP-Pairing-Secret` header: `202` while pending, then **`200` with the
+   device token exactly once** (the request is atomically claimed; any later
+   poll — like any unknown/expired/wrong-secret request — is the same `404`).
+
+The device token is long-lived, stored **hashed** server-side, does not
+idle out, and is the device's identity: the kiosk's room is derived from it,
+never from any request parameter.
+
+### Device administration & revocation
+
+```bash
+curl -s https://<host>/api/manager/devices -H 'Authorization: Bearer <token>'
+curl -s -X PUT https://<host>/api/manager/devices/<id> \
+  -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' \
+  -d '{"name":"Flur-Tablet"}'
+curl -s -X POST https://<host>/api/manager/devices/<id>/revoke \
+  -H 'Authorization: Bearer <token>'
+```
+
+Revocation is **immediate**: the token is dead on the device's very next
+request (verification reads the row every time — no grace window, no cache).
+Deleting a room with active devices is a `409` naming them; revoke or
+re-pair first. No device operation ever returns token material.
 
 ## Manager auth workflow
 
@@ -66,22 +136,22 @@ shared admin password is sent to exactly one endpoint:
 
 ```bash
 # Log in — the ONLY operation that ever sees the password
-curl -s -X POST http://localhost:8080/api/manager/login \
+curl -s -X POST https://<host>/api/manager/login \
   -H 'Content-Type: application/json' \
   -d '{"password":"…"}'
 # → {"token":"…","idleTimeoutSeconds":600,"expiresAt":"…"}
 
 # Use the token (in-memory only on the client)
-curl -s http://localhost:8080/api/manager/property \
+curl -s https://<host>/api/manager/property \
   -H 'Authorization: Bearer <token>'
 
 # Log out — drops the presented token server-side immediately
-curl -s -X POST http://localhost:8080/api/manager/logout \
+curl -s -X POST https://<host>/api/manager/logout \
   -H 'Authorization: Bearer <token>'
 
 # Change the password (≥ 8 characters) — drops EVERY active token,
 # including the caller's; log in again with the new password
-curl -s -X PUT http://localhost:8080/api/manager/password \
+curl -s -X PUT https://<host>/api/manager/password \
   -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' \
   -d '{"currentPassword":"…","newPassword":"…"}'
 ```
@@ -153,16 +223,22 @@ one commit: api/openapi.yaml + backend code + packages/api-client/
 
 ## Backup & restore
 
-The entire instance state is the PostgreSQL database in the `gxp-pgdata`
-volume — **backup is one `pg_dump`**:
+Instance state is the PostgreSQL database in the `gxp-pgdata` volume —
+**backup is one `pg_dump`** — **plus the `gxp-tls` volume** (CA + server
+key material):
 
 ```bash
 # Backup
 docker compose exec db pg_dump -U gxp -d gxp --format=custom > gxp-backup.dump
+docker run --rm -v gxp_gxp-tls:/tls -v "$PWD":/backup alpine tar czf /backup/gxp-tls.tgz -C /tls .
 
 # Restore (into a fresh, running db service)
 docker compose exec -T db pg_restore -U gxp -d gxp --clean --if-exists < gxp-backup.dump
+docker run --rm -v gxp_gxp-tls:/tls -v "$PWD":/backup alpine tar xzf /backup/gxp-tls.tgz -C /tls
 ```
 
-Binary assets (logo, artwork — later features) live in the database as
-`BYTEA` precisely so this one dump stays the whole backup.
+Binary assets (logo, artwork) live in the database as `BYTEA` precisely so
+the dump stays the data backup. Losing the TLS volume is survivable but
+expensive, stated honestly: the next start generates a **new CA** and a
+person must **re-install it in every kiosk's trust store** (device tokens
+live in PostgreSQL, so no re-pairing is needed).

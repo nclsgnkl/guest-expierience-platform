@@ -25,7 +25,10 @@ class ManagerSurfaceDeniedTest {
                 "/api/manager/menu/catalogue",  // MenuResource
                 "/api/manager/action-cards",    // MenuResource (card side)
                 "/api/manager/stays",           // StayResource
-                "/api/manager/assets");         // AssetResource
+                "/api/manager/assets",          // AssetResource
+                "/api/manager/devices",         // DeviceAdminResource
+                "/api/system/info",             // SystemResource (REQ-432)
+                "/api/guest/session");          // GuestResource (device role)
     }
 
     @ParameterizedTest

@@ -36,8 +36,22 @@ class SystemResourceTest {
     }
 
     @Test
-    void infoReturnsSeededNameAndVersion() {
+    void infoRequiresAuthentication() {
+        // REQ-432 (decided 2026-08-19): no anonymous version fingerprinting
         given()
+                .when().get("/api/system/info")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
+    void infoReturnsSeededNameAndVersionForAdmin() {
+        String token = given().contentType("application/json")
+                .body(java.util.Map.of("password", "test-admin-password-1"))
+                .when().post("/api/manager/login")
+                .then().statusCode(200).extract().path("token");
+        given()
+                .header("Authorization", "Bearer " + token)
                 .when().get("/api/system/info")
                 .then()
                 .statusCode(200)

@@ -48,6 +48,20 @@ class MigrationTest {
     }
 
     @Test
+    void flywayHeadIsV4DevicePairing() {
+        // device-pairing-and-guest-api (REQ-402): V4 applied, nothing beyond
+        String head = (String) entityManager
+                .createNativeQuery("SELECT version FROM flyway_schema_history"
+                        + " WHERE success = true ORDER BY installed_rank DESC LIMIT 1")
+                .getSingleResult();
+        assertEquals("4", head, "Flyway head must be V4 (device pairing)");
+        Number devices = (Number) entityManager
+                .createNativeQuery("SELECT count(*) FROM device")
+                .getSingleResult();
+        assertEquals(0L, devices.longValue(), "V4 ships no seeds — a fresh instance has zero devices");
+    }
+
+    @Test
     void adminCredentialIsSeededByCodeNotByMigration() {
         // V3 ships the table WITHOUT a seed row; in the test profile the
         // AdminPasswordSeeder wrote exactly one on startup (REQ-330)

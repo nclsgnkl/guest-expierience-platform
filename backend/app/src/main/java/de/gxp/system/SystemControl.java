@@ -6,6 +6,7 @@ import de.gxp.api.model.SystemHealth;
 import de.gxp.api.model.SystemInfo;
 import de.gxp.api.model.SystemReadiness;
 import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.ServiceUnavailableException;
@@ -54,8 +55,14 @@ public class SystemControl {
         return new SystemReadiness().status(SystemReadiness.StatusEnum.READY);
     }
 
-    /** Instance metadata — the Flyway-seeded row through the full BCE stack (REQ-211). */
-    @PermitAll
+    /**
+     * Instance metadata — the Flyway-seeded row through the full BCE stack
+     * (REQ-211). Restricted to authenticated callers, admin OR device
+     * (REQ-432, decided 2026-08-19): version fingerprinting on an
+     * unpatchable box is not offered anonymously; health/ready above stay
+     * public for box diagnosis.
+     */
+    @RolesAllowed({ "admin", "device" })
     @Transactional
     public SystemInfo info() {
         return InstanceInfoMapper.toSystemInfo(instanceInfoRepository.theRow(), applicationVersion);

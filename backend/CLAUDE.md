@@ -37,8 +37,11 @@ is the working summary, not a replacement.
 - Workflow: edit `api/openapi.yaml` → `./mvnw verify` (regenerates both
   sides; compile fails until Resources/Controls follow) → commit contract,
   backend code and regenerated client **together**.
-- Contract tags are one `manager-*`-style tag per BCE package, so the
-  generator emits exactly one interface per Boundary.
+- Contract tags map **one tag to one Boundary** (so the generator emits
+  exactly one interface per Boundary). A package normally has one Boundary;
+  it may host a second **only** when one consistency unit spans two auth
+  surfaces (e.g. `pairing` + `manager-devices` in `de.gxp.device`) — every
+  Boundary stays a one-line adapter over the package's single public Control.
 
 ## Security & logging
 

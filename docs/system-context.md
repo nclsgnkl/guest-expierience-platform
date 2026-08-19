@@ -159,7 +159,7 @@ first real code**, same rule as above (real files, not intent):
 | Quarkus backend | `backend/app/` | Java 21, Quarkus 3.33 LTS (3.33.3.1), Maven wrapper, dependencies exactly the constitution v1.5.0 allow-list. Flyway `V1__foundation_baseline.sql` (single-row `instance_info` + seed) migrates at startup; Dev Services provisions `postgres:17.11` for dev/test; `%prod` reads the datasource from env vars. Fail-closed security (`quarkus.security.deny-unannotated-members=true`) and no-SQL/no-access logging committed for all profiles |
 | `de.gxp.system` | `backend/app/src/main/java/de/gxp/system/` | **The BCE reference package** every later feature copies (spec §4 strict): `SystemResource` (Boundary, one delegating line per method, implements generated `SystemApi`), `SystemControl` (public Control, `@Transactional` + `@PermitAll` on methods, speaks generated DTOs, throws the 503), package-private `InstanceInfo`/`InstanceInfoRepository`/`InstanceInfoMapper` (hand-written) |
 | `packages/api-client/` | repo root `packages/` | **Generated** TypeScript-Angular client — committed, never hand-edited, deterministic (no diff on unchanged contract); a diff there means the contract changed. Uses only `@angular/common/http` + `rxjs`; no npm manifest changed anywhere. Not yet consumed — that is `guest-frontend-integration`'s |
-| Compose unit | `backend/compose.yaml` | Deployment unit: `app` (JVM image) + `db` (`postgres:17.11`), **one** named volume `gxp-pgdata` (backup = one `pg_dump`), required interpolation for `GXP_DB_PASSWORD`/`GXP_ADMIN_PASSWORD` (fails fast when unset; admin password is passthrough until the auth feature). **HTTP only — dev/preview until TLS lands** with `device-pairing-and-guest-api` |
+| Compose unit | `backend/compose.yaml` | Deployment unit: `app` (JVM image) + `db` (`postgres:17.11`), named volumes `gxp-pgdata` + `gxp-tls` (backup = one `pg_dump` **plus** the TLS volume), required interpolation for `GXP_DB_PASSWORD`/`GXP_ADMIN_PASSWORD`/`GXP_TLS_HOST` (fails fast when unset). **Production-shaped since `device-pairing-and-guest-api`: HTTPS only, host 443 → container 8443, no plain listener, no redirect** |
 
 Added by `docs/features/backend-domain-config/` (2026-08-19) — the domain
 model, every spec §5 invariant server-side, and the secured manager CRUD API
@@ -177,6 +177,19 @@ model, every spec §5 invariant server-side, and the secured manager CRUD API
 | `de.gxp.asset` | `.../de/gxp/asset/` | PNG/JPEG only (content-verified by decoding), 10 MiB cap → 413, > 2560 px downscaled, sha-256 = strong ETag (304), payload-free metadata projection, delete guard naming referrers |
 | `de.gxp.api` | `.../de/gxp/api/` | Infrastructure: `ApiErrorMappers` (bean-validation + malformed JSON → the shared `ApiError` shape) and `ApiErrors` (the thrown non-2xx builders every Control uses) |
 | Flyway V2/V3 | `.../db/migration/` | `V2__domain_config.sql` (all domain tables + checks + `UNIQUE NULLS NOT DISTINCT` scopes + neutral seeds), `V3__admin_credential.sql` (single-row, seeded by code, not SQL). `V1`/`instance_info` untouched |
+
+Added by `docs/features/device-pairing-and-guest-api/` (2026-08-19) — device
+identity, the kiosk-facing guest read model, and HTTPS with the instance CA
+(same rule: real files, not intent):
+
+| Component | Location | Responsibility |
+|-----------|----------|-----------------|
+| Pairing/guest contract | `api/openapi.yaml` (tags `pairing`, `manager-devices`, `guest`) | 11 new operations: pairing create/poll/CA (unauthenticated by design), confirm/list/rename/revoke (admin), session/screens-home/asset/preferences (device). **No guest operation carries any room/stay/device/property parameter** — checkable on the contract itself (REQ-411). `pairing` + `manager-devices` are the one approved two-Boundaries-over-one-Control package (`backend/CLAUDE.md` amendment) |
+| `de.gxp.device` | `.../de/gxp/device/` | One consistency unit: `Device`/`PairingRequest` entities, the single public `DeviceControl` (pairing lifecycle incl. the claim-once transaction, device CRUD/revoke, `verifyToken` for auth), TWO Boundaries (`PairingResource` kiosk-facing, `DeviceAdminResource` admin-facing). Two-credential pairing (display code = human channel, 256-bit poll secret = machine channel); every miss is ONE indistinguishable 404; tokens/secrets stored SHA-256-hex only; create rate-limited 5/60 s |
+| `de.gxp.guest` | `.../de/gxp/guest/` | `GuestControl` — THE spec-§4 coordinating read model (`@RolesAllowed("device")` on every method, room exclusively from the identity) composing `@PermitAll` guest-reads of the owning Controls: menu via `MenuControl`'s **ceiling** implementation (never re-implemented), occupancy via `StayControl`, templates via `TemplateControl` (resolved per offered language, property timezone — no braces leave the server), `einstellungen` served as fixed chrome outside `menuItems`. Vacancy is data-sparing (no stay-derived value; `409 room-vacant` on stay-dependent ops). Asset reachability = {logo, property artwork, own-room artwork}, anything else the same 404. `GuestEtagFilter`: strong sha-256 ETag + `304` on every guest JSON response |
+| `de.gxp.auth` (extended) | `.../de/gxp/auth/` | Still ONE bearer path: `TokenIdentityProvider` resolves manager store first, then the device table by hash (role `device`, deviceId/roomId identity attributes, throttled ≥60 s `last_seen_at` touch). Revocation is effective on the very next request (row read per request — deliberate). Device identities carry no expiry attribute, so `GXP-Token-Expires` stays manager-only. `/api/system/info` now `@RolesAllowed({"admin","device"})` (decided 2026-08-19) |
+| TLS init | `backend/app/src/main/docker/entrypoint-jvm.sh` | First start: `keytool` (in the JVM image — zero new dependencies) generates the instance CA (EC P-256, 20 y) + CA-signed server cert (EC P-256, SAN = `GXP_TLS_HOST`, 10 y) onto the `gxp-tls` volume; restarts reuse; host change re-issues the server cert under the UNCHANGED CA. `%prod` = HTTPS only (`quarkus.http.insecure-requests=disabled`, TLS-registry keystore config); `%dev`/`%test` stay plain HTTP. `GET /api/pairing/ca` serves the CA PEM for kiosk provisioning (a documented human install step) |
+| Flyway V4 | `.../db/migration/V4__device_pairing.sql` | `device` (token hash UNIQUE, `revoked_at`, room FK RESTRICT) + `pairing_request` (code UNIQUE, secret hash, `confirmed_at`/`claimed_at`). No seeds — a fresh instance has zero devices |
 
 Still designed but not implemented: nothing — the Home screen's designed
 components are now all covered by the row above. The **widget column**
@@ -346,10 +359,15 @@ below.
   bearer token with a 10-minute sliding idle expiry in an in-memory store
   (`GXP-Token-Expires` on every authenticated response), fail-closed
   `@RolesAllowed("admin")` on every manager Control method, 401 + `Bearer`
-  challenge for anyone else on the LAN. Device tokens for kiosks and HTTPS
-  with the instance CA are still `device-pairing-and-guest-api`'s; until TLS
-  lands the compose unit stays dev/preview-only. Nothing auth-related exists
-  in `frontend/` yet.
+  challenge for anyone else on the LAN.
+  **Device tokens are live (2026-08-19, `device-pairing-and-guest-api`):**
+  the SAME bearer path resolves a presented token first against the manager
+  store, then against the device table by hash — role `device`, long-lived,
+  no idle expiry, revocable with next-request effect, the room derived
+  exclusively from it (principle 4's core property, proven by the
+  two-rooms scoping tests). HTTPS with the instance-generated CA is live too:
+  the compose unit is **production-shaped, no longer dev-only** — `%prod`
+  serves HTTPS only. Nothing auth-related exists in `frontend/` yet.
 - **Persistence (backend, 2026-08-19):** the domain schema is real — property
   (single row), rooms, menu catalogue/config, action cards, stays, assets
   (BYTEA) and the admin credential, all via Flyway V1–V3 with the seeds that
@@ -366,6 +384,31 @@ below.
     still serve the document), Swagger UI and Dev Services explicitly
     guarded, Dev UI dev-mode-only by construction. See the commented block
     in `backend/app/src/main/resources/application.properties`.
+- **Hand-off notes from `device-pairing-and-guest-api` (for
+  `guest-frontend-integration`):**
+  - **`ngVersion` ceiling check on first client consumption** — still open
+    from `backend-foundation`; the generated client is consumed for the first
+    time in that feature.
+  - **Kiosk-side token/CA handling is that feature's to design:** where the
+    device token persists on the device, and the (human) CA-install step in
+    the provisioning flow — the backend serves the CA at
+    `GET /api/pairing/ca` and the README documents the workflow.
+  - **Images must be fetched with the `Authorization` header — no bare
+    `<img src>`:** `GET /api/guest/assets/{id}` requires the device token.
+    Fetch as blob/object-URL (or equivalent). Responses carry the immutable
+    per-id ETag and `Cache-Control: private, max-age=2592000`.
+  - **Guest JSON polling is ETag-based:** every `/api/guest/**` JSON response
+    carries a strong ETag with `Cache-Control: no-cache`; steady-state kiosk
+    polling should send `If-None-Match` and treat `304` as "render what you
+    hold". Occupancy flips and manager edits change the ETag naturally.
+  - **The kiosk cache still holds nothing sensitive:** nothing served by the
+    v1 guest API is guest-sensitive (no codes, no passwords). The first
+    sensitive screen (WiFi, door codes) must first bring the spec §11 item 9
+    field-level sensitivity list and per-field kiosk-cache rules.
+  - **Vacancy contract:** session answers 200 with standby texts when vacant
+    (`occupancy: VACANT`, no name, no preference); `screens/home` and the
+    preference write answer the named `409 room-vacant` — the kiosk's
+    fire-and-forget write treats that as normal.
 
 ## Integration Points
 

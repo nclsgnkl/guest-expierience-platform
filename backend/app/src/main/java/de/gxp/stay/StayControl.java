@@ -1,5 +1,6 @@
 package de.gxp.stay;
 
+import java.time.Instant;
 import java.util.List;
 
 import de.gxp.api.ApiErrors;
@@ -7,6 +8,7 @@ import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.StayDto;
 import de.gxp.property.PropertyControl;
 import de.gxp.room.RoomControl;
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -71,6 +73,37 @@ public class StayControl {
     @Transactional
     public void delete(Long stayId) {
         repository.delete(require(stayId));
+    }
+
+    /**
+     * Guest-read (REQ-419, the {@code @PermitAll}-on-internal precedent): the
+     * room's ACTIVE stay — or {@code null} when vacant. The occupancy
+     * derivation lives HERE (with the repository's range query), never
+     * re-implemented; not HTTP-mapped, {@code GuestControl} composes it.
+     */
+    @PermitAll
+    @Transactional
+    public StayDto activeStayOf(long roomId) {
+        Stay stay = repository.activeOf(roomId, Instant.now());
+        return stay == null ? null : StayMapper.toDto(stay);
+    }
+
+    /**
+     * The guest preference write (REQ-424): whole-record, anchored on the
+     * ACTIVE stay — a new stay starts clean by construction. Values arrive
+     * pre-validated against the offered sets ({@code GuestControl}'s named
+     * 400); a vacant room is the named 409 — the kiosk's fire-and-forget
+     * write treats that as normal.
+     */
+    @PermitAll
+    @Transactional
+    public void writePreference(long roomId, String language, String appearance) {
+        Stay stay = repository.activeOf(roomId, Instant.now());
+        if (stay == null) {
+            throw ApiErrors.conflict("room-vacant", "The room has no active stay");
+        }
+        stay.language = language;
+        stay.appearance = appearance;
     }
 
     private Stay require(Long stayId) {

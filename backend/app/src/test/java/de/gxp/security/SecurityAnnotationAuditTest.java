@@ -40,6 +40,13 @@ class SecurityAnnotationAuditTest {
                     .toList();
         }
         assertFalse(controlClassNames.isEmpty(), "the deployment archive must contain Controls");
+        // device-pairing-and-guest-api (REQ-414): the audit must actually see
+        // the new security-critical Controls — a rename must not silently
+        // drop them out of the sweep
+        assertTrue(controlClassNames.contains("de.gxp.device.DeviceControl"),
+                "DeviceControl missing from the audit sweep");
+        assertTrue(controlClassNames.contains("de.gxp.guest.GuestControl"),
+                "GuestControl missing from the audit sweep");
 
         List<String> violations = new ArrayList<>();
         for (String className : controlClassNames) {

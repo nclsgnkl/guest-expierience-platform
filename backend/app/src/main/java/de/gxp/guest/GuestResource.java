@@ -1,0 +1,43 @@
+package de.gxp.guest;
+
+import java.io.File;
+
+import de.gxp.api.GuestApi;
+import de.gxp.api.model.GuestHomeScreen;
+import de.gxp.api.model.GuestPreferencesUpdate;
+import de.gxp.api.model.GuestSession;
+
+/**
+ * Boundary — JAX-RS adapter over the generated {@link GuestApi} (tag
+ * {@code guest}, device bearer token). Every method body is ONE delegating
+ * line (spec §4, binding). No method carries a room/stay/device parameter —
+ * checkable on the contract itself (REQ-411).
+ */
+public class GuestResource implements GuestApi {
+
+    private final GuestControl guestControl;
+
+    GuestResource(GuestControl guestControl) {
+        this.guestControl = guestControl;
+    }
+
+    @Override
+    public File getGuestAsset(Long assetId, String ifNoneMatch) {
+        return guestControl.asset(assetId, ifNoneMatch);
+    }
+
+    @Override
+    public GuestHomeScreen getGuestHomeScreen() {
+        return guestControl.homeScreen();
+    }
+
+    @Override
+    public GuestSession getGuestSession() {
+        return guestControl.session();
+    }
+
+    @Override
+    public void putGuestPreferences(GuestPreferencesUpdate guestPreferencesUpdate) {
+        guestControl.writePreferences(guestPreferencesUpdate);
+    }
+}

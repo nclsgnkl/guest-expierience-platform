@@ -40,6 +40,31 @@ tags:
     description: >-
       Binary assets (PNG/JPEG only, content-verified, 10 MiB cap, server-side
       downscaled to 2560 px longest edge), stored in PostgreSQL.
+  - name: pairing
+    description: >-
+      Kiosk-facing pairing surface — unauthenticated by design. A kiosk
+      creates a short-lived pairing request and receives a human-readable
+      display code (shown to the manager) plus a high-entropy poll secret
+      (kept by the kiosk, never displayed): the display code alone never
+      suffices to obtain a token, because the kiosk screen stands in a
+      guest-accessible room. Also serves the instance CA certificate for
+      kiosk provisioning. Second Boundary of the de.gxp.device package
+      (one consistency unit spanning two auth surfaces).
+  - name: manager-devices
+    description: >-
+      Manager-facing device administration — confirm pairing requests, list,
+      rename and revoke paired kiosk devices. No operation ever returns
+      token material. Shares the de.gxp.device package (and its single
+      Control) with the pairing tag.
+  - name: guest
+    description: >-
+      Kiosk-facing guest read model (device bearer token). The room is
+      derived EXCLUSIVELY from the authenticated device identity — no guest
+      operation accepts any room, stay, device or property identifier, in
+      path, query, header or body. Localized fields are language-keyed maps
+      over exactly the property's offered languages, so a kiosk language
+      switch fetches nothing. Every JSON response carries a strong ETag and
+      answers 304 on If-None-Match — steady-state polling is 304s.
 paths:
   /api/system/health:
     get:
@@ -79,7 +104,12 @@ paths:
       summary: Instance metadata
       description: >-
         Returns instance metadata; instanceName is read from PostgreSQL
-        through the full BCE stack (Flyway-seeded row).
+        through the full BCE stack (Flyway-seeded row). Restricted to
+        authenticated callers (admin or device token) — version
+        fingerprinting on an unpatchable box is not offered anonymously
+        (decided 2026-08-19).
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Instance metadata.
@@ -87,6 +117,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SystemInfo"
+        "401":
+          description: Missing, unknown or expired token.
   /api/manager/login:
     post:
       tags: [manager-auth]
@@ -918,14 +950,397 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /api/pairing/requests:
+    post:
+      tags: [pairing]
+      operationId: createPairingRequest
+      summary: Create a short-lived pairing request (kiosk, unauthenticated)
+      description: >-
+        Returns the display code the kiosk shows to the manager, the poll
+        secret the kiosk keeps (never displayed), and the expiry.
+        Rate-limited (pairing is a rare, manager-attended act); expired
+        requests are cleaned up opportunistically on each create.
+      responses:
+        "201":
+          description: Pairing request created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairingRequestCreated"
+        "429":
+          description: Create rate limit hit.
+          headers:
+            Retry-After:
+              description: Seconds until the next create is accepted.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/pairing/requests/{code}:
+    get:
+      tags: [pairing]
+      operationId: pollPairingRequest
+      summary: Poll a pairing request (kiosk, unauthenticated, poll secret required)
+      description: >-
+        202 while pending; 200 with the device token EXACTLY ONCE after the
+        manager confirms — the request is atomically claimed, a second poll
+        gets 404. Unknown, expired, already-claimed and wrong-secret
+        requests all answer one indistinguishable 404 (no oracle).
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: GXP-Pairing-Secret
+          in: header
+          required: true
+          description: The poll secret returned at create — never displayed on the kiosk.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: >-
+            Confirmed and claimed by THIS poll — the raw device token,
+            returned exactly once and never stored raw server-side.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PairingCompleted"
+        "202":
+          description: Pending — the manager has not confirmed yet. Empty body.
+        "404":
+          description: >-
+            Unknown, expired, claimed or wrong secret — deliberately
+            indistinguishable (status and body identical).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/pairing/ca:
+    get:
+      tags: [pairing]
+      operationId: getPairingCa
+      summary: The instance CA certificate (PEM — public material)
+      description: >-
+        For kiosk provisioning: a person installs this CA into the device's
+        OS/browser trust store during pairing (documented in the README as a
+        human step). Public material, unauthenticated.
+      responses:
+        "200":
+          description: The CA certificate, PEM-encoded.
+          content:
+            application/x-pem-file:
+              schema:
+                type: string
+        "404":
+          description: No TLS material on this instance (dev/test profiles).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/pairings/{code}/confirm:
+    post:
+      tags: [manager-devices]
+      operationId: confirmPairing
+      summary: Confirm a pairing request to a room (manager)
+      description: >-
+        Assigns the pending request to an existing room, with an optional
+        device name (default derived from the room code). The kiosk's next
+        poll then claims the token.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPairingRequest"
+      responses:
+        "204":
+          description: Confirmed.
+        "400":
+          description: Unknown room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: Unknown or expired pairing code.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: Already confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/devices:
+    get:
+      tags: [manager-devices]
+      operationId: listDevices
+      summary: List all paired devices (never any token material)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Every device — room, name, created, last seen, revoked state.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeviceDto"
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/devices/{deviceId}:
+    put:
+      tags: [manager-devices]
+      operationId: renameDevice
+      summary: Rename a device
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceUpdateRequest"
+      responses:
+        "200":
+          description: The renamed device.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceDto"
+        "400":
+          description: Blank name.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such device.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/devices/{deviceId}/revoke:
+    post:
+      tags: [manager-devices]
+      operationId: revokeDevice
+      summary: Revoke a device (soft — the token is dead on its very next request)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Revoked (idempotent — revoking twice is still 204).
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such device.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/guest/session:
+    get:
+      tags: [guest]
+      operationId: getGuestSession
+      summary: Everything route-independent for the device's room
+      description: >-
+        Property (name, brand, logo), room, occupancy, settings config with
+        resolved defaults (room override, else property default), the stay's
+        raw preference override (occupied only), the resolved menu under the
+        ceiling rule plus the fixed settings chrome, and the resolved standby
+        texts. Vacant rooms serve no stay-derived value (data-sparing) but
+        still answer 200 — the standby screen renders from this.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The session for the device's room.
+          headers:
+            ETag:
+              description: Strong ETag — SHA-256 over the response bytes.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestSession"
+        "304":
+          description: If-None-Match matched — empty body.
+        "401":
+          description: Missing, unknown or revoked device token.
+  /api/guest/screens/home:
+    get:
+      tags: [guest]
+      operationId: getGuestHomeScreen
+      summary: The home screen content for the device's room
+      description: >-
+        Headline/subtitle/paragraph and 0–4 action cards, all templates
+        RESOLVED server-side per offered language against the active stay
+        (checkout time/date in the property timezone, each language's
+        locale) — no braces ever leave the server. Artwork falls back room →
+        property.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The resolved home screen.
+          headers:
+            ETag:
+              description: Strong ETag — SHA-256 over the response bytes.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestHomeScreen"
+        "304":
+          description: If-None-Match matched — empty body.
+        "401":
+          description: Missing, unknown or revoked device token.
+        "404":
+          description: Unknown screen key, or the home item resolves disabled for this room.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The room is vacant (room-vacant) — no stay-derived content is served.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/guest/assets/{assetId}:
+    get:
+      tags: [guest]
+      operationId: getGuestAsset
+      summary: Read an asset reachable from the device's own resolved view
+      description: >-
+        Serves ONLY the property logo, the property default artwork and the
+        own room's artwork; any other id — existing or not — is the same
+        404 (no enumeration of stored assets from a guest device). Asset
+        content per id is immutable, so clients may cache long.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The stored bytes.
+          headers:
+            ETag:
+              description: Strong ETag — the SHA-256 of the stored bytes.
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: If-None-Match matched the stored SHA-256.
+        "401":
+          description: Missing, unknown or revoked device token.
+        "404":
+          description: Unknown or unreachable asset — deliberately the same answer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/guest/preferences:
+    put:
+      tags: [guest]
+      operationId: putGuestPreferences
+      summary: Write the guest's preference override (whole record, stay-anchored)
+      description: >-
+        Mirrors the kiosk's StoredPreferences gateway record — a whole-record
+        write, both fields nullable (null = follow the defaults). Lands on
+        the ACTIVE stay, so it clears at stay change by construction. The
+        kiosk treats failure as normal (fire-and-forget).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestPreferencesUpdate"
+      responses:
+        "204":
+          description: Stored on the active stay.
+        "400":
+          description: A value is outside the property's offered set (value-not-offered).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or revoked device token.
+        "409":
+          description: The room is vacant (room-vacant) — there is no stay to write on.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       description: >-
-        Opaque manager bearer token from managerLogin. Stored hashed
-        server-side, in-memory only; a restart logs everyone out.
+        One bearer authentication path, two token kinds. Manager tokens come
+        from managerLogin (stored hashed in-memory, sliding 10-minute idle
+        expiry; a restart logs everyone out). Device tokens come from the
+        pairing flow (stored hashed in PostgreSQL, long-lived, no idle
+        expiry, revocable — dead on the very next request after revocation).
+        The token is identity AND authentication; a device's room is derived
+        from it, never from a request parameter.
   parameters:
     RoomId:
       name: roomId
@@ -1258,6 +1673,259 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ApiErrorDetail"
+    PairingRequestCreated:
+      type: object
+      required: [code, pollSecret, expiresAt]
+      properties:
+        code:
+          type: string
+          description: >-
+            8-char display code (unambiguous alphabet, no 0/O/1/I) — shown on
+            the kiosk for the manager. Alone it never yields a token.
+        pollSecret:
+          type: string
+          description: >-
+            High-entropy poll secret — kept by the kiosk, never displayed,
+            presented via the GXP-Pairing-Secret header on every poll.
+            Stored hashed server-side.
+        expiresAt:
+          type: string
+          format: date-time
+    PairingCompleted:
+      type: object
+      required: [deviceToken, deviceName, roomCode]
+      properties:
+        deviceToken:
+          type: string
+          description: >-
+            The opaque device bearer token — returned exactly once, persisted
+            only as a SHA-256 hash server-side. The kiosk stores it as its
+            own credential.
+        deviceName:
+          type: string
+        roomCode:
+          type: string
+    ConfirmPairingRequest:
+      type: object
+      required: [roomId]
+      properties:
+        roomId:
+          type: integer
+          format: int64
+        deviceName:
+          type: string
+          minLength: 1
+          description: Optional; defaults to "Kiosk <room code>".
+    DeviceDto:
+      type: object
+      description: Never carries token material — not even the hash.
+      required: [id, name, roomId, roomCode, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        name:
+          type: string
+        roomId:
+          type: integer
+          format: int64
+        roomCode:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: Throttled — accurate to about a minute.
+        revokedAt:
+          type: string
+          format: date-time
+    DeviceUpdateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+    OccupancyState:
+      type: string
+      description: Derived — BOOKED and check-in ≤ now < check-out is OCCUPIED.
+      enum: [OCCUPIED, VACANT]
+    GuestBrand:
+      type: object
+      required: [primary, primaryDeep, secondary]
+      properties:
+        primary:
+          type: string
+        primaryDeep:
+          type: string
+        secondary:
+          type: string
+    GuestProperty:
+      type: object
+      required: [name, brand]
+      properties:
+        name:
+          type: string
+        brand:
+          $ref: "#/components/schemas/GuestBrand"
+        logoAssetId:
+          type: integer
+          format: int64
+          description: Fetch via getGuestAsset (with the device token — no bare img src).
+    GuestRoom:
+      type: object
+      required: [code, displayName]
+      properties:
+        code:
+          type: string
+        displayName:
+          type: string
+    GuestSettings:
+      type: object
+      description: The kiosk's settingsConfig plus resolved defaults (room override, else property).
+      required: [languages, appearances, defaultLanguage, defaultAppearance]
+      properties:
+        languages:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/LanguageOptionDto"
+        appearances:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/AppearanceOptionDto"
+        defaultLanguage:
+          $ref: "#/components/schemas/LanguageCode"
+        defaultAppearance:
+          $ref: "#/components/schemas/AppearanceMode"
+    GuestPreference:
+      type: object
+      description: >-
+        The stay's RAW preference override (default-⊕-choice model: the kiosk
+        keeps its own resolution). Fields absent = no override.
+      properties:
+        language:
+          type: string
+        appearance:
+          type: string
+    GuestMenuItem:
+      type: object
+      required: [key, label, icon, route, sortIndex]
+      properties:
+        key:
+          type: string
+        label:
+          $ref: "#/components/schemas/LocalizedText"
+        icon:
+          type: string
+        route:
+          type: string
+        sortIndex:
+          type: integer
+    GuestSettingsEntry:
+      type: object
+      description: Fixed app chrome — NOT a catalogue item, no configuration removes it.
+      required: [id, label, icon, route]
+      properties:
+        id:
+          type: string
+        label:
+          $ref: "#/components/schemas/LocalizedText"
+        icon:
+          type: string
+        route:
+          type: string
+    GuestMenu:
+      type: object
+      required: [items, settingsEntry]
+      properties:
+        items:
+          type: array
+          description: Resolved-enabled items only, ordered by resolved sort index.
+          items:
+            $ref: "#/components/schemas/GuestMenuItem"
+        settingsEntry:
+          $ref: "#/components/schemas/GuestSettingsEntry"
+    GuestStandby:
+      type: object
+      description: Standby texts, template-resolved per offered language.
+      required: [headline, message]
+      properties:
+        headline:
+          $ref: "#/components/schemas/LocalizedText"
+        message:
+          $ref: "#/components/schemas/LocalizedText"
+    GuestSession:
+      type: object
+      required: [property, room, occupancy, settings, menu, standby]
+      properties:
+        property:
+          $ref: "#/components/schemas/GuestProperty"
+        room:
+          $ref: "#/components/schemas/GuestRoom"
+        occupancy:
+          $ref: "#/components/schemas/OccupancyState"
+        guestDisplayName:
+          type: string
+          description: Occupied only — a vacant room serves no stay-derived value.
+        settings:
+          $ref: "#/components/schemas/GuestSettings"
+        preference:
+          $ref: "#/components/schemas/GuestPreference"
+        menu:
+          $ref: "#/components/schemas/GuestMenu"
+        standby:
+          $ref: "#/components/schemas/GuestStandby"
+    GuestActionCard:
+      type: object
+      required: [icon, title, description, targetKey, targetRoute]
+      properties:
+        icon:
+          type: string
+        title:
+          description: RESOLVED per offered language — never a raw template.
+          $ref: "#/components/schemas/LocalizedText"
+        description:
+          description: RESOLVED per offered language — never a raw template.
+          $ref: "#/components/schemas/LocalizedText"
+        targetKey:
+          type: string
+        targetRoute:
+          type: string
+    GuestHomeScreen:
+      type: object
+      required: [headline, subtitle, paragraph, actionCards]
+      properties:
+        headline:
+          description: RESOLVED greeting per offered language.
+          $ref: "#/components/schemas/LocalizedText"
+        subtitle:
+          $ref: "#/components/schemas/LocalizedText"
+        paragraph:
+          $ref: "#/components/schemas/LocalizedText"
+        artworkAssetId:
+          type: integer
+          format: int64
+          description: Room override, else the property default; absent when neither is set.
+        actionCards:
+          type: array
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/GuestActionCard"
+    GuestPreferencesUpdate:
+      type: object
+      description: >-
+        Whole-record write mirroring the kiosk's StoredPreferences — an
+        absent/null field means "follow the defaults".
+      properties:
+        language:
+          type: string
+        appearance:
+          type: string
     ApiErrorDetail:
       description: One offending item of a rejected request.
       type: object

@@ -9,10 +9,12 @@ import java.util.Set;
 import de.gxp.api.ApiErrors;
 import de.gxp.api.model.ActionCardDto;
 import de.gxp.api.model.ApiErrorDetail;
+import de.gxp.api.model.GuestMenuItem;
 import de.gxp.api.model.MenuItemConfigEntryDto;
 import de.gxp.api.model.MenuItemDefinitionDto;
 import de.gxp.room.RoomControl;
 import de.gxp.text.TemplateControl;
+import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -170,6 +172,104 @@ public class MenuControl {
             }
         }
         return cardDtos(roomId);
+    }
+
+    // ------------------------------------------------------------ guest reads
+
+    /**
+     * Guest-read resolution (REQ-417 — the {@code @PermitAll}-on-internal
+     * precedent): the room's resolved menu. Resolved-ENABLED items only —
+     * through {@link #enabled}, THE ceiling implementation, never
+     * re-implemented; icon/sort/label resolve per-field room → property →
+     * catalogue (labels per language, so every offered language always
+     * resolves — the catalogue carries them all); ordered by resolved sort
+     * index; the route comes from the catalogue. Not HTTP-mapped,
+     * {@code GuestControl} composes it.
+     */
+    @PermitAll
+    @Transactional
+    public List<GuestMenuItem> guestResolvedMenu(long roomId, List<String> languages) {
+        List<MenuItemConfig> propertyConfigs = repository.configsOf(null);
+        List<MenuItemConfig> roomConfigs = repository.configsOf(roomId);
+        List<MenuItemConfigTranslation> propertyLabels = repository
+                .configTranslationsOf(propertyConfigs.stream().map(c -> c.id).toList());
+        List<MenuItemConfigTranslation> roomLabels = repository
+                .configTranslationsOf(roomConfigs.stream().map(c -> c.id).toList());
+        List<MenuItemDefinitionTranslation> catalogueLabels = repository.definitionTranslations();
+        List<GuestMenuItem> items = new ArrayList<>();
+        for (MenuItemDefinition definition : repository.catalogue()) {
+            if (!enabled(roomId, definition.key)) {
+                continue;
+            }
+            MenuItemConfig roomConfig = configOf(roomConfigs, definition.key);
+            MenuItemConfig propertyConfig = configOf(propertyConfigs, definition.key);
+            Map<String, String> label = new java.util.LinkedHashMap<>();
+            for (String language : languages) {
+                String resolved = firstNonNull(
+                        configLabelOf(roomLabels, roomConfig, language),
+                        configLabelOf(propertyLabels, propertyConfig, language),
+                        catalogueLabels.stream()
+                                .filter(t -> t.key.equals(definition.key) && t.language.equals(language))
+                                .map(t -> t.label).findFirst().orElse(null));
+                if (resolved != null) {
+                    label.put(language, resolved);
+                }
+            }
+            items.add(new GuestMenuItem()
+                    .key(definition.key)
+                    .label(label)
+                    .icon(firstNonNull(roomConfig == null ? null : roomConfig.iconOverride,
+                            propertyConfig == null ? null : propertyConfig.iconOverride,
+                            definition.defaultIcon))
+                    .route(definition.route)
+                    .sortIndex(firstNonNull(roomConfig == null ? null : roomConfig.sortIndex,
+                            propertyConfig == null ? null : propertyConfig.sortIndex,
+                            definition.defaultSortIndex)));
+        }
+        items.sort(java.util.Comparator.comparing(GuestMenuItem::getSortIndex));
+        return items;
+    }
+
+    /**
+     * Guest-read (REQ-420): the card set the room RESOLVES to — its own rows
+     * WHOLESALE, else the property's (REQ-308, the settled rule). RAW
+     * templates: {@code GuestControl} resolves them per offered language
+     * against the active stay. Not HTTP-mapped.
+     */
+    @PermitAll
+    @Transactional
+    public List<ActionCardDto> guestResolvedCards(long roomId) {
+        List<ActionCardConfig> cards = repository.cardsOf(roomId);
+        if (cards.isEmpty()) {
+            cards = repository.cardsOf(null);
+        }
+        List<ActionCardConfigTranslation> translations = repository
+                .cardTranslationsOf(cards.stream().map(c -> c.id).toList());
+        return cards.stream().map(card -> MenuMapper.toDto(card, translations)).toList();
+    }
+
+    private static MenuItemConfig configOf(List<MenuItemConfig> configs, String menuItemKey) {
+        return configs.stream().filter(config -> config.menuItemKey.equals(menuItemKey)).findFirst().orElse(null);
+    }
+
+    private static String configLabelOf(List<MenuItemConfigTranslation> labels, MenuItemConfig config,
+            String language) {
+        if (config == null) {
+            return null;
+        }
+        return labels.stream()
+                .filter(t -> t.configId.equals(config.id) && t.language.equals(language))
+                .map(t -> t.label).findFirst().orElse(null);
+    }
+
+    @SafeVarargs
+    private static <T> T firstNonNull(T... values) {
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     // ------------------------------------------------------------ internals
