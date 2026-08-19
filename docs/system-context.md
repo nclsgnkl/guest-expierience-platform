@@ -3,10 +3,11 @@
 High-level map of existing components and cross-cutting concerns. Read this
 before planning a new feature to spot related or conflicting work.
 
-> **Status:** `frontend/` exists and is implemented (the `home-screen-prototype`
-> feature); everything below reflects real code, not only intent. Updated
-> 2026-08-18 with the cross-cutting conventions that came out of that feature's
-> visual-defect round.
+> **Status:** `frontend/` exists and is implemented — the
+> `home-screen-prototype` and `appearance-and-language` features; everything
+> below reflects real code, not only intent. Updated 2026-08-19 with
+> `appearance-and-language`'s components, its two runtime axes and the one
+> thing the app now persists.
 
 ## Deployment model
 
@@ -53,6 +54,20 @@ build, but they shape it.
   story and nobody else will do it.`]`
 - `[NEEDS DECISION: how do instances get updated,` and who is responsible for
   it? See the patching risk above.`]`
+- `[NEEDS DECISION: how is the guest-preference endpoint secured?`
+  **Raised 2026-08-18 by `appearance-and-language`, not answered by it.** Once
+  the preference is stored server-side (Cross-Cutting Concerns → Persistence),
+  the endpoint that stores it is the product's **first unauthenticated *write*
+  surface** on a LAN shared with guest devices and possibly neighbours.
+  *Where* the server keeps it is a separate, still-unmade and approval-gated
+  decision; this question stands whatever that answer is. The impact is nuisance
+  rather than disclosure — someone could change what the screen shows, not read
+  a door code — but it is a mutation reachable by anyone in range, and it
+  belongs to the backend feature's design. Note the same feature deliberately
+  does **not** pre-empt the authentication question above: the stored record is
+  scoped to *the screen* and carries **no identifier of any kind** (no guest,
+  stay, session or device id), so whatever that decision lands on, scoping the
+  record later is a change inside the gateway and the backend only.`]`
 
 ## Stack
 
@@ -81,6 +96,18 @@ A backend also opens the natural answer to the open authentication question
 below — access control can live server-side instead of relying on the LAN
 boundary. It does not answer it for the MVP, which has no server-side logic.
 
+**Two seams already exist for it (added 2026-08-18).** Appearance and language
+are the first two settings deliberately shaped for that backend, and they mark
+where it plugs in:
+
+| Seam | Direction | What crosses it |
+|---|---|---|
+| `PropertyContentService` → `PreferencesService.applyPropertyDefaults()` | read | The property's configuration: which options are offered and what the defaults are. Static TS today; one service changes when it comes over the wire |
+| `PreferenceGateway` (`core/preferences/`) | read **and** write | The guest's own choice. One token, one provider line, `sessionStorage` behind it today, an HTTP implementation later |
+
+Nothing else in the app is a candidate for a server call, which is what keeps
+the migration small.
+
 ## Components
 
 Introduced by `docs/features/home-screen-prototype/` (see that feature's
@@ -91,14 +118,31 @@ section-aware one:
 
 | Component | Location | Responsibility |
 |-----------|----------|-----------------|
-| `PropertyContentService` | `frontend/src/app/core/content/` | Supplies per-property/guest content via DI (constitution principle 2), including sidebar `menuItems`/`settings` and each card's `targetSectionId` → route resolution (`getSectionRoute()`); backed by static TS today, swappable for the future Quarkus backend |
+| `PropertyContentService` | `frontend/src/app/core/content/` | Supplies per-property/guest content via DI (constitution principle 2), including sidebar `menuItems`/`settings` (the Einstellungen nav entry — **not** the settings *config*, which is the separate `settingsConfig` below) and each card's `targetSectionId` → route resolution (`getSectionRoute()`); backed by static TS today, swappable for the future Quarkus backend. **Two signals:** `property()` resolves every localized field into the active language (falling back to the property's `defaultLanguage`), and `settingsConfig()` exposes the language-independent settings slice — the offered options and the property's defaults — which is what `PreferencesService.applyPropertyDefaults()` consumes. Validates the raw config at construction |
 | `ShellComponent` | `frontend/src/app/layout/shell/` | App-wide shell rendered on every route: mesh-gradient background + `SidebarComponent` + `<router-outlet>` for the routed main content |
 | `SidebarComponent` | `frontend/src/app/layout/sidebar/` | Config-driven nav — 5 `menuItems` (Home, Info, Umgebung, Smart Home, Services) + 1 structurally-fixed `settings` entry (`MenuIcons`), active state from current route |
 | `HomeContentComponent` | `frontend/src/app/features/home/` | Home's main-content region only (heading block, hero artwork, 4 action cards, reserved empty widget-column space) — composed inside `ShellComponent`'s router-outlet, not the sidebar/background |
 | `HeroArtworkComponent` | `frontend/src/app/features/home/hero-artwork/` | Renders the no-artwork fallback (no image; background now lives in `ShellComponent`) |
 | `HeadingBlockComponent` | `frontend/src/app/features/home/heading-block/` | Subtitle, headline, paragraph — from `PropertyContentService`; property-level content, not per-guest |
 | `ActionCardComponent` | `frontend/src/app/features/home/action-card/` | `GlassPanel` action card; resolves its destination from `targetSectionId` via `PropertyContentService.getSectionRoute()`, keyboard- and touch-activatable |
-| `SectionPlaceholderComponent` | `frontend/src/app/features/section-placeholder/` | Shared main-content stub, rendered inside `ShellComponent`, for the 5 sections with no design yet (Info, Umgebung, Smart Home, Services, Einstellungen) |
+| `SectionPlaceholderComponent` | `frontend/src/app/features/section-placeholder/` | Shared main-content stub, rendered inside `ShellComponent`, for the **4** sections with no design yet (Info, Umgebung, Smart Home, Services). Einstellungen left this set on 2026-08-18 — it has a real screen now |
+
+Added by `docs/features/appearance-and-language/` (2026-08-18). Same rule as
+above: these are real files under `frontend/src/`, not intent.
+
+| Component | Location | Responsibility |
+|-----------|----------|-----------------|
+| `TranslationService` | `frontend/src/app/core/i18n/` | Signal-based translation. `t(key, params?)` is an arrow-function property, so templates may hold it detached; keys are typed from the German catalogue, so a missing English string fails the build. Both catalogues are **compiled into the bundle** — nothing is fetched to render a language (constitution principle 4). Unknown key → default catalogue → the key itself |
+| `PreferencesService` | `frontend/src/app/core/preferences/` | The **policy** layer for appearance and language: the property's defaults ⊕ the guest's override. Exposes `language()`, `appearance()` and `resolvedTheme()` (`'light' \| 'dark'`, the only place `prefers-color-scheme` is ever read, and only when a property configures the `system` option); `applyPropertyDefaults()`, `hydrate()`, `setLanguage()`, `setAppearance()`, `reset()`. Policy lives here and not in the transport, which is what makes swapping the transport a no-behaviour-change operation |
+| `PreferenceGateway` (+ `SessionPreferenceGateway`) | `frontend/src/app/core/preferences/` | The **transport** contract for the guest's stored preference — `load()` / `save()` / `clear()`, all `Promise`-returning, whole-record writes, behind one injection token. `SessionPreferenceGateway` is the `sessionStorage` **stand-in** until the backend endpoint exists; it is *deleted*, not adapted, when the HTTP one lands. It is a **DI leaf**: it injects nothing, and must never reach for `PropertyContentService` |
+| `ClockService` | `frontend/src/app/core/clock/` | A `now` signal that ticks on the **minute boundary** (a `setTimeout` to the boundary, then a `setInterval`), torn down via `DestroyRef`. Zoneless change detection cannot see a bare `setInterval`, so the clock has to be a signal |
+| `StatusBarComponent` | `frontend/src/app/layout/status-bar/` | App chrome on **every** route: language trigger, appearance trigger (sun/moon by resolved theme), hairline divider, clock as `<time [attr.datetime]>`. Positioned absolutely in the content area's top-right corner rather than in the flow, so Home's measured geometry does not move. `:host { display: contents }`; deliberately **no** `role="toolbar"` — that role promises roving `tabindex` and arrow traversal, which this does not implement |
+| `StatusBarMenuComponent` | `frontend/src/app/layout/status-bar/status-bar-menu/` | One generic CDK dropdown (`CdkMenuTrigger`/`CdkMenu`/`CdkMenuItem`) used by both status-bar triggers: takes options, the selected value and the trigger content, emits a selection. Renders into the CDK **overlay container** on `document.body`, not inside the shell |
+| `SettingsComponent` | `frontend/src/app/features/settings/` | The `/einstellungen` screen (took that route from `SectionPlaceholderComponent`): screen title plus two glass panels, *Sprache* and *Darstellung*. Reads no route data |
+| `SettingChoiceComponent` | `frontend/src/app/features/settings/setting-choice/` | One setting: label, hint and a row of **all-visible** option buttons, each at least the minimum touch target. Two controls per setting is intentional — compact in the status bar, everything visible in Settings, both bound to the same signals |
+
+Full rationale for the eight rows above:
+`docs/features/appearance-and-language/02-design.md`.
 
 Still designed but not implemented: nothing — the Home screen's designed
 components are now all covered by the row above. The **widget column**
@@ -117,6 +161,43 @@ below.
   - *Appearance* (`data-theme` on `<html>`) overrides **semantic** roles.
   - *Property branding* overrides **primitives**, written at runtime from a
     per-property config. Adding a customer must never require a code change.
+  - **Why the separation is load-bearing, not tidiness:** branding primitives
+    are written **inline on `:root`** at runtime, and an inline style beats any
+    `[data-theme='dark']` stylesheet rule. So the moment the theme axis
+    touches a primitive, a *branded* property silently gets the wrong value —
+    a defect visible only to paying customers.
+  - **The mesh gradient is therefore a semantic role, not a primitive
+    (2026-08-18).** `--mesh-*` became `--color-mesh-1…16` + `--color-mesh-base`,
+    and `shell.component.css` reads only the roles. That removed the last
+    "components may read a primitive" exception, so the rule is now absolute:
+    `grep` for `var(--mesh-|--ink-|--brand-|--night-` in `frontend/src` matches
+    **only** `styles/tokens.css`.
+  - **A dark palette exists as of 2026-08-18** — designed in-house, no Figma
+    counterpart, documented in **`docs/design/dark-theme.md`** and realised in
+    `frontend/src/styles/tokens.css`. It is deliberately **not** in
+    `docs/design/tokens.md`, which records only what exists in Figma, nor in
+    `docs/design/design-sheet.md`. A Figma re-import will not reproduce it;
+    its absence from a fresh extraction is not evidence that it is wrong. It
+    changes **colour only** — same roles, same geometry, same glassmorphism
+    (the surfaces stay translucent and blurred).
+- **Appearance & language (added 2026-08-18).** Both are switchable at
+  runtime, from two places each: the status-bar dropdowns and the Settings
+  screen, all bound to the same signals. Three points bind future work:
+  - **Default ⊕ choice.** The *property* configures which options are offered
+    and what the defaults are (`settingsConfig()`); the *guest* may override
+    per setting. An override that is `null` means "still following the
+    property". A value outside the configured option list is discarded, never
+    applied — including one that arrives from storage.
+  - **`<html>` always carries a resolved value.** `data-theme` is `light` or
+    `dark`, never absent, and `lang` is always set. Exactly one place in
+    `src/` writes them: the effects in `App` (`app.component.ts`). `prefers-color-scheme` is
+    read **only** when a property configures the `system` option — it is never
+    the default.
+  - **Nothing is fetched to render either one.** Both catalogues ship in the
+    bundle and the theme is CSS custom properties, so switching is a signal
+    write and a repaint — no request, no reload, no route change. The one
+    request in the area is the *persistence* write below, which is outside the
+    render path.
 - **Icons:** Phosphor Icons via `@ng-icons/core` + `@ng-icons/phosphor-icons`.
   Figma glyph names already match the set, so icons are not exported
   individually. Note there is no Angular-specific icon set — `mat-icon` renders
@@ -155,6 +236,15 @@ below.
   The scaling **mechanism** — an uncapped viewport-proportional root font size,
   `html { font-size: min(1.25vw, 1.9231vh) }` — was **approved by the user on
   2026-08-18** and is recorded in `docs/constitution.md` v1.2.0.
+
+  **The content area's top-right corner is reserved (added 2026-08-18).**
+  `StatusBarComponent` overlays it on every route, absolutely positioned at the
+  shell's own padding offsets rather than in the flow — a header row would have
+  pushed Home's signed-off geometry down. Anything placed there in future has
+  to clear it, and the margin is not generous: at 1280 × 832 the clearance to
+  Home's card row is 48px horizontally and 20px vertically to the heading; at
+  the 1024 × 768 floor it is ~38px and 16px. Verify by measuring, not by
+  looking.
 - **Component host elements are part of the layout (added 2026-08-18).** With
   Angular's default emulated encapsulation, `<app-foo>` — not the template's
   root element — is what the parent lays out, and it is unstyled
@@ -173,10 +263,47 @@ below.
   `global.css`, keyed on a purpose-named class. Inheritable properties
   (`color` → `currentColor`) still work normally and should be preferred.
 - **Logging:** `<not yet decided>`
-- **Persistence:** none in the first step — static JSON / TS content. A Java +
-  Quarkus backend is planned after the MVP; the datastore behind it is not yet
-  chosen and is an approval-gated decision.
-- **Messaging / async:** none.
+- **Persistence:** **exactly one thing is persisted — the guest's language and
+  appearance preference.** All *content* is still static JSON / TS and is not
+  written to by anything.
+  - **It is server-owned state, by the user's decision of 2026-08-18** — not
+    UI state, and not a client-side cache. It is written when the guest
+    changes it, delivered back on load, and the server always supplies the
+    defaults (`light`, `de` for the example property).
+  - **The app reaches it through one contract**, `PreferenceGateway`
+    (`load`/`save`/`clear`, all async, whole-record writes) behind a single
+    injection token, with all policy above it in `PreferencesService`. Today
+    that token is bound to `SessionPreferenceGateway`, a **`sessionStorage`
+    stand-in**, which is *deleted* — not adapted — when the real endpoint
+    lands. Swapping it is one provider line and, by design, changes no
+    behaviour.
+  - **The record carries no identifier of any kind** — no guest, stay, session
+    or device id. It is scoped to *the screen*. This deliberately does not
+    pre-empt the open guest-authentication question above; scoping the record
+    later is a change inside the gateway and the server, nowhere else.
+  - **What is still open and approval-gated:** where the server keeps it. A
+    Java + Quarkus backend is planned after the MVP; **nothing behind it has
+    been chosen**, and this entry records a fact about the app, not that
+    choice. The endpoint's shape, its server-side validation, its security
+    (see the open question above) and what clears the record at check-out all
+    belong to that feature —
+    `docs/features/appearance-and-language/02-design.md` §6.7.
+- **Messaging / async:** two boundaries, both about the preference above and
+  nothing else. Everything else in the app is synchronous.
+  - **One bootstrap-gated read.** An app initializer applies the property
+    defaults and then `await`s the stored preference behind a **bounded
+    timeout** before the first paint, so the screen never renders light-then-
+    dark or German-then-English. The read never rejects: a failure, a timeout
+    and "nothing stored" are indistinguishable and all mean "use the
+    defaults". A late answer only fills a setting whose override is still
+    unset, so it can never overwrite a choice the guest just made.
+  - **One fire-and-forget write.** A change updates the UI optimistically and
+    schedules a write that **coalesces** (rapid changes collapse to one) and
+    retries a bounded number of times, then stops. Failure is normal, not
+    exceptional: the guest's choice stays on screen, no error UI appears, and
+    **nothing is logged** — the app has no logging convention yet and a failed
+    preference write is not the place to invent one (constitution principle 3
+    also applies: none of this may reach a log).
 - **Auth:** none in the first step.
 
 ## Integration Points

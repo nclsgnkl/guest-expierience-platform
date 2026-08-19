@@ -4,16 +4,21 @@ import { provideRouter, Routes } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { provideIcons } from '@ng-icons/core';
 import {
+  phosphorCaretDown,
   phosphorGearSix,
+  phosphorGlobe,
   phosphorHouse,
   phosphorInfo,
   phosphorLightbulbFilament,
   phosphorMapPin,
   phosphorShoppingBag,
+  phosphorSun,
 } from '@ng-icons/phosphor-icons/regular';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ShellComponent } from './shell.component';
+import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
+import { SessionPreferenceGateway } from '../../core/preferences/session-preference-gateway';
 
 @Component({ selector: 'app-test-home', template: '<p>home content</p>' })
 class TestHomeComponent {}
@@ -36,8 +41,14 @@ describe('ShellComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
+        { provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway },
         provideZonelessChangeDetection(),
         provideRouter(routes),
+        /* The Sidebar's six, plus the three the StatusBarComponent this shell
+           renders needs (globe · the light-appearance sun · the caret).
+           Leaving them out does not fail a test — it renders the bar in a
+           degraded state and prints `No icon named …` on every run
+           (06-review.md finding #4). */
         provideIcons({
           phosphorHouse,
           phosphorInfo,
@@ -45,6 +56,9 @@ describe('ShellComponent', () => {
           phosphorLightbulbFilament,
           phosphorShoppingBag,
           phosphorGearSix,
+          phosphorGlobe,
+          phosphorSun,
+          phosphorCaretDown,
         }),
       ],
     });

@@ -1,0 +1,48 @@
+/* `.status-bar` — not the host — is the positioned box (02-design.md §8.1).
+   `display: contents` removes the host's own box, which matters twice: an
+   in-flow empty host would consume one of `.shell`'s `--space-8` flex gaps,
+   and without it the *host* would be what `position: absolute` applies to.
+   Safe here because the host carries no role or landmark; the roles are on
+   the buttons and the CDK panel (frontend/CLAUDE.md -> Layout). */
+:host {
+  display: contents;
+}
+
+/* An overlay inside `.shell`'s padding box, not a row in it: a header row
+   would push Home's heading down and regress geometry that is measured and
+   signed off (home-screen-prototype REQ-014/REQ-022). `top`/`right` are the
+   shell's own padding, so the bar aligns with the content box's top-right
+   corner. `.shell` supplies the `position: relative` this resolves against. */
+.status-bar {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-7);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--size-touch-min);
+  color: var(--color-text-primary);
+}
+
+.status-bar__language-code {
+  /* The short code never wraps: it is what keeps the bar's width stable. */
+  white-space: nowrap;
+}
+
+/* A hairline — one of the two places `docs/constitution.md` keeps `px`. */
+.status-bar__divider {
+  width: 1px;
+  height: 100%;
+  background: var(--color-divider);
+}
+
+.status-bar__clock {
+  font-size: var(--text-clock);
+  font-weight: var(--text-clock-weight);
+  line-height: var(--text-clock-line-height);
+  white-space: nowrap;
+  /* Tabular figures: without them the whole bar shifts as the minute changes
+     from 11 to 22, because proportional digits differ in advance width. */
+  font-variant-numeric: tabular-nums;
+}

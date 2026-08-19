@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { HomeContentComponent } from './features/home/home-content.component';
 import { SectionPlaceholderComponent } from './features/section-placeholder/section-placeholder.component';
+import { SettingsComponent } from './features/settings/settings.component';
 import { ShellComponent } from './layout/shell/shell.component';
 
 /**
@@ -27,11 +28,11 @@ export const routes: Routes = [
         data: { sectionId: 'smart-home' },
       },
       { path: 'services', component: SectionPlaceholderComponent, data: { sectionId: 'services' } },
-      {
-        path: 'einstellungen',
-        component: SectionPlaceholderComponent,
-        data: { sectionId: 'einstellungen' },
-      },
+      /* The one section with a real screen (REQ-116). It carries no
+         `sectionId`: `SettingsComponent` reads no route data, and the other
+         four routes keep the placeholder, which is therefore still needed and
+         is not deleted. */
+      { path: 'einstellungen', component: SettingsComponent },
     ],
   },
 ];

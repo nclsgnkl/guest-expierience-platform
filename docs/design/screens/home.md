@@ -353,17 +353,44 @@ variant do double duty.
 
 Empty in Figma by decision, not oversight. The PNG's concept version suggested
 weather, host contact and nearby recommendations; the top bar suggested a
-language selector and a clock. **None of these are committed** — treat them as
-prior art, not requirements.
+language selector and a clock. **The widgets are still not committed** — treat
+them as prior art, not requirements. **The top bar is the one exception: it was
+committed on 2026-08-18 and is built** (see below).
 
 Whatever lands here needs designing in Figma first; nothing below has
 token-accurate values, because a concept render cannot supply them.
 
-- **Weather** — "Wetter heute", current temp, condition, H/L, four-slot forecast
-- **Host** — avatar, name, tagline, phone + WhatsApp actions (the only place the PNG uses `--color-brand-secondary`)
-- **Recommendations** — list rows with thumbnail, pin icon, title, travel time
-- **Top bar** — language selector, clock
-- **Tip bar** — "Tipp des Tages" (spans the content column, not the widget column)
+- **Weather** — "Wetter heute", current temp, condition, H/L, four-slot forecast — *not committed*
+- **Host** — avatar, name, tagline, phone + WhatsApp actions (the only place the PNG uses `--color-brand-secondary`) — *not committed*
+- **Recommendations** — list rows with thumbnail, pin icon, title, travel time — *not committed*
+- **Tip bar** — "Tipp des Tages" (spans the content column, not the widget column) — *not committed*
+- ~~**Top bar** — language selector, clock~~ → ✅ **committed and built, see below**
+
+> ✅ **Top bar — committed 2026-08-18, no longer a hypothesis.**
+>
+> The user committed this one, and extended it: alongside the language selector
+> and the clock it carries an **appearance (light/dark) control**. It shipped
+> as part of `docs/features/appearance-and-language/`, specified in that
+> feature's `02-design.md` §8.
+>
+> Two things about it contradict the framing above and must not be re-derived
+> from this section:
+>
+> - **It is not part of the widget column.** It is app-wide chrome, built in
+>   `layout/` as a sibling of the sidebar and `<main>`, and it appears on
+>   **every** route, not only Home. Nothing about it is Home-specific.
+> - **It does not sit in the flow.** It is absolutely positioned in the
+>   content area's top-right corner, deliberately, because a header row would
+>   push Home's heading down ~40px and silently regress the measured,
+>   signed-off geometry recorded in this document (heading ink at y = 88, card
+>   row bottom at y = 744 at 1280 × 832). **That corner is now reserved** —
+>   anything added to the widget column has to clear it. At the 1280 × 832
+>   design size the clearance to the card row is 48px horizontally and 20px
+>   vertically to the heading; at the 1024 × 768 floor it is ~38px and 16px.
+>
+> It has **no Figma design either** — the composition was read off the AI
+> concept render, so its tokens are in-house (`tokens.md` → "In-house
+> tokens"). Committing it did not make it extracted.
 
 Worth weighing when choosing: weather and recommendations both imply **external
 data sources**, which is an approval-gated infrastructure decision under

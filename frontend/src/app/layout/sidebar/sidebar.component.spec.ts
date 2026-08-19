@@ -8,14 +8,17 @@ import {
 } from '@ng-icons/phosphor-icons/regular';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { MenuItem } from '../../core/content/property.model';
+import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
+import { SessionPreferenceGateway } from '../../core/preferences/session-preference-gateway';
+
+import type { ResolvedMenuItem } from '../../core/content/property.model';
 import { SidebarComponent } from './sidebar.component';
 
-const MENU_ITEMS: MenuItem[] = [
+const MENU_ITEMS: ResolvedMenuItem[] = [
   { id: 'home', label: 'Testlabel Home', icon: 'phosphorHouse', route: '' },
   { id: 'info', label: 'Testlabel Info', icon: 'phosphorInfo', route: '/info' },
 ];
-const SETTINGS: MenuItem = {
+const SETTINGS: ResolvedMenuItem = {
   id: 'einstellungen',
   label: 'Testlabel Settings',
   icon: 'phosphorGearSix',
@@ -31,6 +34,11 @@ describe('SidebarComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideIcons({ phosphorHouse, phosphorInfo, phosphorGearSix }),
+        /* The component resolves its chrome strings through TranslationService,
+           which reaches PreferencesService and therefore the gateway token. The
+           stand-in is the stand-in here too; S39's FakePreferenceGateway replaces
+           it wherever a test asserts persistence. */
+        { provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway },
       ],
     }).compileComponents();
 

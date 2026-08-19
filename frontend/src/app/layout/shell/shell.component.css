@@ -1,6 +1,10 @@
 /* Mesh-gradient background (REQ-004, REQ-020): 16 stacked radial-gradient
    layers, edge-aligned on a 0% / 33.33% / 66.67% / 100% grid on both axes,
-   colours from --mesh-1..16 (tokens.css). Painted once here so every route
+   colours from the semantic roles --color-mesh-1..16 (tokens.css), which
+   default to the --mesh-* primitives in light and map to --night-* in dark
+   (REQ-103). The roles are what makes the theme axis able to repaint this at
+   all: it may override roles only, and this file may read no primitive.
+   Painted once here so every route
    — Home and every section placeholder — shows the identical background.
    See docs/design/tokens.md -> "Background implementation".
 
@@ -23,8 +27,9 @@
    ended at `transparent 60%`, i.e. alpha hit zero well before the next
    grid point, leaving washed-out gaps between the colour centres; extending
    to `transparent 100%` lets neighbouring blobs overlap so the blend stays
-   saturated. --mesh-6 is the base because it sits in the grid's interior
-   (row 2, col 2) and is the closest thing the palette has to its average. */
+   saturated. --color-mesh-base is the base, resolving to --mesh-6 (light) /
+   --night-6 (dark): that point sits in the grid's interior (row 2, col 2) and
+   is the closest thing either palette has to its average. */
 .shell {
   display: flex;
   flex-direction: row;
@@ -39,24 +44,36 @@
      stays met by construction rather than by `overflow: hidden`. */
   height: 100dvh;
   padding: var(--space-6) var(--space-7);
-  background-color: var(--mesh-6);
+  /* The containing block for the status-bar overlay (REQ-112). It is the
+     only thing `.shell` contributes to it: the bar positions itself against
+     this box's own padding, so the two numbers stay in one place. */
+  position: relative;
+  background-color: var(--color-mesh-base);
   background-image:
-    radial-gradient(ellipse 44rem 29rem at 0% 0%, var(--mesh-1) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 33.33% 0%, var(--mesh-2) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 66.67% 0%, var(--mesh-3) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 100% 0%, var(--mesh-4) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 0% 33.33%, var(--mesh-5) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 33.33% 33.33%, var(--mesh-6) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 66.67% 33.33%, var(--mesh-7) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 100% 33.33%, var(--mesh-8) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 0% 66.67%, var(--mesh-9) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 33.33% 66.67%, var(--mesh-10) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 66.67% 66.67%, var(--mesh-11) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 100% 66.67%, var(--mesh-12) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 0% 100%, var(--mesh-13) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 33.33% 100%, var(--mesh-14) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 66.67% 100%, var(--mesh-15) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 100% 100%, var(--mesh-16) 0%, transparent 100%);
+    radial-gradient(ellipse 44rem 29rem at 0% 0%, var(--color-mesh-1) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 0%, var(--color-mesh-2) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 0%, var(--color-mesh-3) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 0%, var(--color-mesh-4) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 33.33%, var(--color-mesh-5) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 33.33%, var(--color-mesh-6) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 33.33%, var(--color-mesh-7) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 33.33%, var(--color-mesh-8) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 66.67%, var(--color-mesh-9) 0%, transparent 100%),
+    radial-gradient(
+      ellipse 44rem 29rem at 33.33% 66.67%,
+      var(--color-mesh-10) 0%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 44rem 29rem at 66.67% 66.67%,
+      var(--color-mesh-11) 0%,
+      transparent 100%
+    ),
+    radial-gradient(ellipse 44rem 29rem at 100% 66.67%, var(--color-mesh-12) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 100%, var(--color-mesh-13) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 100%, var(--color-mesh-14) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 100%, var(--color-mesh-15) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 100%, var(--color-mesh-16) 0%, transparent 100%);
 }
 
 .shell__content {

@@ -11,17 +11,19 @@ this file only adds what it does not already say.
 - Design tokens live in `src/styles/tokens.css` (primitives → semantic roles)
   and are imported once globally; `src/styles/global.css` holds resets, fonts
   and the few genuinely global rules. Components reference semantic tokens
-  only — never a raw hex or px. One documented exception: the mesh-gradient
-  background in `shell.component.css` composes the `--mesh-1…16` primitives
-  directly, because those are gradient **layers**, not a colour role — see
-  `docs/design/tokens.md` → "Background implementation". Nothing else in `src/`
-  may *read* a primitive. **Writing** one is a different thing and is allowed
-  in exactly one place: `app.component.ts`'s `applyBranding()` sets
-  `--brand-primary`, `--brand-primary-deep` and `--brand-secondary` on `:root`
-  at startup, and `app.component.spec.ts` asserts that it did. That is the
-  per-property branding hook *defining* the primitive layer (REQ-003,
-  `docs/design/tokens.md` → Implementation), not a component consuming a raw
-  value.
+  only — never a raw hex or px. **Nothing in `src/` may *read* a primitive —
+  there is no exception.** The mesh-gradient background in
+  `shell.component.css` used to be one; since `appearance-and-language`
+  (REQ-103) it composes the semantic `--color-mesh-1…16` roles instead,
+  because the theme axis may only override roles and an inline per-property
+  primitive override would otherwise win over `[data-theme='dark']` and
+  silently show a light mesh in dark mode. **Writing** a primitive is a
+  different thing and is allowed in exactly one place: `app.component.ts`'s
+  `applyBranding()` sets `--brand-primary`, `--brand-primary-deep` and
+  `--brand-secondary` on `:root` at startup, and `app.component.spec.ts`
+  asserts that it did. That is the per-property branding hook *defining* the
+  primitive layer (REQ-003, `docs/design/tokens.md` → Implementation), not a
+  component consuming a raw value.
 - Property content is reached through `PropertyContentService` via DI. Nothing
   outside that service imports `example-property.data.ts` — except
   `property-content.service.spec.ts`, which reads it deliberately to check the
@@ -58,15 +60,48 @@ cannot style it**. Rules targeting an injected glyph go in `global.css` behind
 a purpose-named class (see `.icon-gradient-active`), not in the component's
 stylesheet and not via `::ng-deep`.
 
+## Appearance & language
+
+- **No user-visible string is written in a component or template** — not a
+  label, not an `aria-label`, not `alt` text, not an empty state. App chrome
+  resolves through `TranslationService` (`core/i18n/`); property-authored text
+  comes from `PropertyContentService` as a per-language map. If you are typing
+  German into a `.html` file, you are in the wrong file.
+- **`<html>`'s `data-theme` and `lang` are written in exactly one place**,
+  `app.component.ts`, beside `applyBranding()`. That is the only code in
+  `src/` allowed to touch `document.documentElement`.
+- **The theme axis overrides semantic roles only.** `[data-theme='dark']`
+  never redefines a primitive: primitives are the per-property branding axis
+  and are written inline on `:root` at runtime, which beats any stylesheet
+  rule. Dark raw values are *new* primitives (`--ink-050`, `--ink-300`,
+  `--night-1…16`, `--surface-*-dark-raw`), added, never overridden.
+- **The top-right corner of the content area is reserved** for
+  `StatusBarComponent` (~13rem × 2.75rem, inset by the shell's own padding).
+  It is an overlay and takes no flow space, so a new screen will not be pushed
+  out of its way — check it does not collide.
+
 ## Tests
 
 Vitest + `TestBed`, zoneless (`provideZonelessChangeDetection()` in every
 component test). Components under test get a `PropertyContentService` test
 double through DI — if a test has to import the data file to assert something,
-that is a design smell, not a test convenience. jsdom computes no layout and
-decodes no images: geometry, wrapping and asset rendering are checked in a real
-browser during review, never asserted in a unit test. The instrument for that
-is `node tools/measure.mjs` — no-scroll on every route × viewport, the
-REQ-022/REQ-014 boxes, wrapping/truncation and logo decode. It reports numbers
-and asserts nothing: `docs/constitution.md` v1.3.0 approves `playwright` as
-review-time tooling only, and the end-to-end-framework decision is still open.
+that is a design smell, not a test convenience.
+
+**A service's collaborator is a DI double built from writable signals**
+(`{ provide: PreferencesService, useValue: { language } }`), not the real
+service with a stand-in gateway underneath it. `vi.mock` does not work here —
+the Angular unit-test system rejects it for relative imports — so anything that
+needs a *broken* config tests the exported pure function instead.
+
+**A test double for an injected transport lives inside the spec that needs
+it** — never in `src/` as a shared helper, and never imported from another
+spec: `FakePreferenceGateway` sits in `preferences.persistence.spec.ts`, and
+`installMatchMedia` is copied into each spec that needs it.
+
+jsdom computes no layout and decodes no images: geometry, wrapping and asset
+rendering are checked in a real browser during review, never asserted in a unit
+test. The instrument for that is `node tools/measure.mjs` — no-scroll on every
+route × theme × language × viewport, the REQ-022/REQ-014 boxes,
+wrapping/truncation and logo decode. It reports numbers and asserts nothing:
+`docs/constitution.md` v1.3.0 approves `playwright` as review-time tooling
+only, and the end-to-end-framework decision is still open.

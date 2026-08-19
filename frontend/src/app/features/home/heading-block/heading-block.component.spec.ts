@@ -1,14 +1,14 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideIcons } from '@ng-icons/core';
 import { phosphorSparkleFill } from '@ng-icons/phosphor-icons/fill';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PropertyContentService } from '../../../core/content/property-content.service';
-import type { PropertyConfig } from '../../../core/content/property.model';
+import type { ResolvedPropertyConfig } from '../../../core/content/property.model';
 import { HeadingBlockComponent } from './heading-block.component';
 
-const TEST_PROPERTY: PropertyConfig = {
+const TEST_PROPERTY: ResolvedPropertyConfig = {
   guestName: 'Testgast',
   heroSubtitle: 'Test-Untertitel',
   headline: 'Willkommen im Airbnb von {guestName}!',
@@ -18,13 +18,17 @@ const TEST_PROPERTY: PropertyConfig = {
   branding: { primary: '#000', primaryDeep: '#000', secondary: '#000' },
   menuItems: [],
   settings: { id: 'einstellungen', label: 'Einstellungen', icon: 'phosphorGearSix', route: '/einstellungen' },
+  settingsConfig: {
+    languages: [{ code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' }],
+    defaultLanguage: 'de',
+    appearances: [{ mode: 'light', icon: 'phosphorSun' }],
+    defaultAppearance: 'light',
+  },
   cards: [],
 };
 
 class MockPropertyContentService {
-  getProperty(): PropertyConfig {
-    return TEST_PROPERTY;
-  }
+  readonly property = signal(TEST_PROPERTY).asReadonly();
   getSectionRoute(): string {
     return '/x';
   }

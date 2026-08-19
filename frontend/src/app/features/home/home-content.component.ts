@@ -21,5 +21,5 @@ import { HeroArtworkComponent } from './hero-artwork/hero-artwork.component';
 export class HomeContentComponent {
   private readonly content = inject(PropertyContentService);
 
-  protected readonly property = this.content.getProperty();
+  protected readonly property = this.content.property;
 }

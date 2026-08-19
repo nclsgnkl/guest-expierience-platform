@@ -1,0 +1,25 @@
+<div class="settings">
+  <h1 class="settings__title">{{ t('settings.title') }}</h1>
+
+  <div class="settings__panels">
+    <div class="settings__panel">
+      <app-setting-choice
+        [label]="t('settings.language.title')"
+        [hint]="t('settings.language.hint')"
+        [options]="languageOptions()"
+        [selectedValue]="language()"
+        (optionSelected)="chooseLanguage($event)"
+      />
+    </div>
+
+    <div class="settings__panel">
+      <app-setting-choice
+        [label]="t('settings.appearance.title')"
+        [hint]="t('settings.appearance.hint')"
+        [options]="appearanceOptions()"
+        [selectedValue]="appearance()"
+        (optionSelected)="chooseAppearance($event)"
+      />
+    </div>
+  </div>
+</div>

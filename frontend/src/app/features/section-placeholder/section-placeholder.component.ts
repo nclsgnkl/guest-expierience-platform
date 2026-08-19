@@ -2,7 +2,8 @@ import { Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
 import { PropertyContentService } from '../../core/content/property-content.service';
-import type { MenuItem } from '../../core/content/property.model';
+import type { ResolvedMenuItem } from '../../core/content/property.model';
+import { TranslationService } from '../../core/i18n/translation.service';
 
 /**
  * Shared stub main content for the 5 `menuItems`/`settings` destinations
@@ -19,12 +20,16 @@ import type { MenuItem } from '../../core/content/property.model';
   styleUrl: './section-placeholder.component.css',
 })
 export class SectionPlaceholderComponent {
+  /* The empty-state sentence is app chrome and comes from the catalogue; the
+     title beside it is the property's own configured label (REQ-107). */
+  protected readonly t = inject(TranslationService).t;
+
   private readonly route = inject(ActivatedRoute);
   private readonly content = inject(PropertyContentService);
 
-  protected get section(): MenuItem | undefined {
+  protected get section(): ResolvedMenuItem | undefined {
     const sectionId = this.route.snapshot.data['sectionId'] as string;
-    const property = this.content.getProperty();
+    const property = this.content.property();
     return [...property.menuItems, property.settings].find((item) => item.id === sectionId);
   }
 }

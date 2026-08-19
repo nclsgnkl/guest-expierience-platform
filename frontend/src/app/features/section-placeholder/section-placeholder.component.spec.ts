@@ -1,13 +1,16 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
+import { SessionPreferenceGateway } from '../../core/preferences/session-preference-gateway';
+
 import { PropertyContentService } from '../../core/content/property-content.service';
-import type { PropertyConfig } from '../../core/content/property.model';
+import type { ResolvedPropertyConfig } from '../../core/content/property.model';
 import { SectionPlaceholderComponent } from './section-placeholder.component';
 
-const TEST_PROPERTY: PropertyConfig = {
+const TEST_PROPERTY: ResolvedPropertyConfig = {
   guestName: 'X',
   heroSubtitle: '',
   headline: '',
@@ -20,13 +23,17 @@ const TEST_PROPERTY: PropertyConfig = {
     { id: 'umgebung', label: 'Umgebung-Label', icon: 'phosphorMapPin', route: '/umgebung' },
   ],
   settings: { id: 'einstellungen', label: 'Einstellungen-Label', icon: 'phosphorGearSix', route: '/einstellungen' },
+  settingsConfig: {
+    languages: [{ code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' }],
+    defaultLanguage: 'de',
+    appearances: [{ mode: 'light', icon: 'phosphorSun' }],
+    defaultAppearance: 'light',
+  },
   cards: [],
 };
 
 class MockPropertyContentService {
-  getProperty(): PropertyConfig {
-    return TEST_PROPERTY;
-  }
+  readonly property = signal(TEST_PROPERTY).asReadonly();
 }
 
 function renderWithSectionId(sectionId: string) {
@@ -34,6 +41,11 @@ function renderWithSectionId(sectionId: string) {
     providers: [
       provideZonelessChangeDetection(),
       { provide: PropertyContentService, useClass: MockPropertyContentService },
+      /* The component resolves its chrome strings through TranslationService,
+         which reaches PreferencesService and therefore the gateway token. The
+         stand-in is the stand-in here too; S39's FakePreferenceGateway replaces
+         it wherever a test asserts persistence. */
+      { provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway },
       {
         provide: ActivatedRoute,
         useValue: { snapshot: { data: { sectionId } } },
