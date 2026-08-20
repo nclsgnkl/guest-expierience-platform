@@ -75,3 +75,7 @@ is the working summary, not a replacement.
 - `quarkus-junit5` + `rest-assured`; every implemented behavior has a test
   (constitution principle 6). HTTP tests call the real contract paths, so
   contract drift also fails the suite.
+- Shared test fixtures live in `de.gxp.testsupport` (test scope only); tests
+  outside `de.gxp.device` seed kiosk devices via `DeviceFixtures` (hash-only
+  DB insert), never the HTTP pairing flow — the global pairing rate limit
+  must not be burned by unrelated suites.
