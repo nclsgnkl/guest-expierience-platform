@@ -18,10 +18,11 @@ import jakarta.enterprise.event.Observes;
  * <p>Reroute happens ONLY when all of (pinned in §11):
  * <ul>
  *   <li>the request is a {@code GET},</li>
- *   <li>the path starts with none of {@code /api/}, {@code /q/},
- *       {@code /manage/} (the API keeps answering exactly as today — its own
- *       401/404 JSON, never HTML; {@code /manage/} is reserved for the future
- *       manager app and must never be claimed by the guest SPA),</li>
+ *   <li>the path is neither exactly nor a descendant of {@code /api},
+ *       {@code /q}, {@code /manage} (the API keeps answering exactly as today
+ *       — its own 401/404 JSON, never HTML; {@code /manage} is reserved for
+ *       the future manager app and must never be claimed by the guest SPA —
+ *       see {@link #isReservedPath(String)}),</li>
  *   <li>the path contains no dot (file requests fall through to the static
  *       handler / a real 404),</li>
  *   <li>the request accepts {@code text/html}.</li>
@@ -68,10 +69,23 @@ public class SpaRoutingHandler {
         return getClass().getResource("/META-INF/resources/index.html") != null;
     }
 
+    /**
+     * The three prefixes the SPA fallback may never claim — <b>including
+     * their exact, trailing-slash-less form</b>. A {@code startsWith("/manage/")}
+     * test alone let {@code GET /manage} fall through to the rewrite and
+     * answered a human typing the manager URL with the guest kiosk app
+     * (review finding 🟠-1); REQ-526 reserves that path for the future
+     * manager frontend, so it must 404 here exactly as it does today.
+     */
+    private static boolean isReservedPath(String path) {
+        return path.equals("/api") || path.startsWith("/api/")
+                || path.equals("/q") || path.startsWith("/q/")
+                || path.equals("/manage") || path.startsWith("/manage/");
+    }
+
     private static void reroute(RoutingContext context) {
         String path = context.normalizedPath();
-        if (path.startsWith("/api/") || path.startsWith("/q/") || path.startsWith("/manage/")
-                || path.contains(".")) {
+        if (isReservedPath(path) || path.contains(".")) {
             context.next();
             return;
         }

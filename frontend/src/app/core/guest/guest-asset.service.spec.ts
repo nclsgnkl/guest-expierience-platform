@@ -95,4 +95,21 @@ describe('GuestAssetService', () => {
 
     expect(revoked).toEqual(['blob:test-1']);
   });
+
+  it('clear() revokes and forgets everything — the 401 wipe reaches the bytes', () => {
+    const service = TestBed.inject(GuestAssetService);
+    service.url(7);
+    http.expectOne('/api/guest/assets/7').flush(new Blob(['x'], { type: 'image/png' }));
+    expect(created).toEqual(['blob:test-1']);
+
+    service.clear();
+
+    expect(revoked).toEqual(['blob:test-1']);
+    // The memo is gone too: a re-paired device must re-fetch id 7 under its
+    // NEW token instead of re-serving the revoked device's blob (🟡-2).
+    const url = service.url(7);
+    expect(url()).toBeNull();
+    http.expectOne('/api/guest/assets/7').flush(new Blob(['y'], { type: 'image/png' }));
+    expect(url()).toBe('blob:test-2');
+  });
 });

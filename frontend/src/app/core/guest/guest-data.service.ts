@@ -11,6 +11,7 @@ import { firstValueFrom, timeout, type Observable } from 'rxjs';
 import { DeviceTokenStore } from '../api/device-token.store';
 import type { PropertyConfig } from '../content/property.model';
 import type { StoredPreferences } from '../preferences/preference-gateway';
+import { GuestAssetService } from './guest-asset.service';
 import { mapGuestContent, mapStoredPreferences } from './guest-content.mapper';
 
 /**
@@ -30,7 +31,8 @@ import { mapGuestContent, mapStoredPreferences } from './guest-content.mapper';
  *                 with 5→30 s doubling backoff — the connection screen
  *
  *   401 anywhere → token + cache wiped (REQ-509) → the pairing guard routes
- *   VACANT → home (payload + cache) cleared — data-sparing on the client too
+ *   VACANT → home (payload + cache) cleared — data-sparing on the client too,
+ *            including a `409 room-vacant` on `screens/home` (see `asVacant`)
  *
  * Zoneless-safe by construction: every state change is a signal write; the
  * timers are plain `setTimeout`s torn down via `DestroyRef` (the
@@ -67,6 +69,7 @@ interface CacheRecord<T> {
 export class GuestDataService {
   private readonly api = inject(GuestService);
   private readonly tokenStore = inject(DeviceTokenStore);
+  private readonly assets = inject(GuestAssetService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly _connection = signal<ConnectionState>('DISCONNECTED');
@@ -111,12 +114,23 @@ export class GuestDataService {
     }
     try {
       const session = await this.fetchSession();
+      let payload = session.payload;
+      let etag = session.etag;
       let home: GuestHomeScreen | null = null;
-      if (session.payload.occupancy === OccupancyState.Occupied) {
-        home = (await this.fetchHome()).payload;
-        this.homeEtag = this.pendingHomeEtag;
+      if (payload.occupancy === OccupancyState.Occupied) {
+        try {
+          home = (await this.fetchHome()).payload;
+          this.homeEtag = this.pendingHomeEtag;
+        } catch (error) {
+          if (!isStatus(error, 409)) {
+            throw error;
+          }
+          payload = asVacant(payload); // the stay ended between the two calls
+          etag = null;
+          home = null;
+        }
       }
-      this.adopt(session.payload, session.etag, home);
+      this.adopt(payload, etag, home);
       this.schedule(POLL_INTERVAL_MS);
     } catch (error) {
       if (isStatus(error, 401)) {
@@ -135,14 +149,18 @@ export class GuestDataService {
 
   /**
    * The 401 wipe (REQ-509): token and cache cleared FIRST, then every signal
-   * — a revoked device renders nothing it learned before. Also called by
-   * `HttpPreferenceGateway` when a preference write meets a 401.
+   * and every fetched image — a revoked device renders nothing it learned
+   * before. Also called by `HttpPreferenceGateway` when a preference write
+   * meets a 401.
    */
   handleUnauthorized(): void {
     this.stopTimer();
     this.tokenStore.clear();
     storage()?.removeItem(SESSION_CACHE_KEY);
     storage()?.removeItem(HOME_CACHE_KEY);
+    // The bytes, too: object URLs pin the old property's logo/artwork and the
+    // per-id memo would re-serve them after a re-pair (review 🟡-2).
+    this.assets.clear();
     this.sessionEtag = null;
     this.homeEtag = null;
     this.heldHome = null;
@@ -167,17 +185,29 @@ export class GuestDataService {
       }
       const sessionEtag = result.notModified ? this.sessionEtag : result.etag;
 
+      let held = session;
+      let heldEtag = sessionEtag;
+      let vacantNow = false;
       let home: GuestHomeScreen | null = null;
       if (session.occupancy === OccupancyState.Occupied) {
         const previousEtag = this.heldHome !== null ? this.homeEtag : null;
-        const homeResult = await this.fetchHome(previousEtag);
-        home = homeResult.notModified ? this.heldHome : homeResult.payload;
-        this.homeEtag = homeResult.notModified ? this.homeEtag : this.pendingHomeEtag;
+        try {
+          const homeResult = await this.fetchHome(previousEtag);
+          home = homeResult.notModified ? this.heldHome : homeResult.payload;
+          this.homeEtag = homeResult.notModified ? this.homeEtag : this.pendingHomeEtag;
+        } catch (error) {
+          if (!isStatus(error, 409)) {
+            throw error;
+          }
+          held = asVacant(session);
+          heldEtag = null;
+          vacantNow = true;
+        }
       }
 
       const changed =
-        !result.notModified || home !== this.heldHome || session !== this._session();
-      this.adopt(session, sessionEtag, home, changed);
+        vacantNow || !result.notModified || home !== this.heldHome || session !== this._session();
+      this.adopt(held, heldEtag, home, changed);
     } catch (error) {
       if (isStatus(error, 401)) {
         this.handleUnauthorized();
@@ -346,6 +376,26 @@ export class GuestDataService {
 
 function isStatus(error: unknown, status: number): boolean {
   return error instanceof HttpErrorResponse && error.status === status;
+}
+
+/**
+ * The session as the server would serve it for a vacant room — used when
+ * `screens/home` answers `409 room-vacant` after a session that still said
+ * OCCUPIED (the stay ended between the two calls of one poll; review finding
+ * 🟡-4). Treating that as a generic fetch failure would keep the PREVIOUS
+ * guest's home content on screen, behind an untruthful staleness pill, for up
+ * to one poll interval; the 409 is the newer, authoritative answer, so the
+ * kiosk goes to standby at once.
+ *
+ * Every stay-derived field is dropped, exactly as `GuestControl` omits them
+ * for a vacant room — vacancy data-sparing must also hold for the session the
+ * kiosk holds and caches.
+ */
+function asVacant(session: GuestSession): GuestSession {
+  const vacant: GuestSession = { ...session, occupancy: OccupancyState.Vacant };
+  delete vacant.guestDisplayName;
+  delete vacant.preference;
+  return vacant;
 }
 
 function writeCache<T>(key: string, record: CacheRecord<T>): void {

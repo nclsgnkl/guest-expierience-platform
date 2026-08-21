@@ -31,12 +31,22 @@ export class GuestAssetService {
   private readonly urls = new Map<number, ReturnType<typeof signal<string | null>>>();
 
   constructor() {
-    this.destroyRef.onDestroy(() => {
-      for (const url of this.urls.values()) {
-        revoke(url());
-      }
-      this.urls.clear();
-    });
+    this.destroyRef.onDestroy(() => this.clear());
+  }
+
+  /**
+   * Revokes every object URL and forgets the memo — the asset half of the
+   * 401 wipe (REQ-509, review finding 🟡-2). Without it a revoked device
+   * keeps the previous property's logo/artwork blobs alive in memory and,
+   * after a re-pair, would re-serve them from the memo for the same asset
+   * ids: "a revoked device renders nothing it learned before" must hold for
+   * bytes as much as for JSON. Also the destroy-time teardown.
+   */
+  clear(): void {
+    for (const url of this.urls.values()) {
+      revoke(url());
+    }
+    this.urls.clear();
   }
 
   /**

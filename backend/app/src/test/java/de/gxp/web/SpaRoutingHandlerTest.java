@@ -12,8 +12,9 @@ import io.quarkus.test.junit.QuarkusTest;
  * REQ-526 — the SPA fallback's rewrite half, against the test-classpath
  * {@code META-INF/resources/index.html} fixture (marker:
  * {@code gxp-spa-test-fixture}). The pinned rules of 02-design §11: rewrite
- * dot-less, html-accepting GETs only, and never {@code /api/}, {@code /q/}
- * or the reserved {@code /manage/}.
+ * dot-less, html-accepting GETs only, and never {@code /api}, {@code /q}
+ * or the reserved {@code /manage} — in their exact form as much as under a
+ * trailing slash (review finding 🟠-1).
  */
 @QuarkusTest
 class SpaRoutingHandlerTest {
@@ -75,6 +76,35 @@ class SpaRoutingHandlerTest {
     void reservedManagerPathIsNeverClaimedByTheGuestApp() {
         given().header("Accept", "text/html")
                 .when().get("/manage/rooms")
+                .then().statusCode(404)
+                .body(not(containsString(MARKER)));
+    }
+
+    /**
+     * Review finding 🟠-1: the prefix-only guard let the exact, trailing-slash
+     * -less forms fall through to the rewrite, so {@code GET /manage} answered
+     * a human typing the manager URL with the guest kiosk app.
+     */
+    @Test
+    void exactReservedManagerPathIsNeverClaimedByTheGuestApp() {
+        given().header("Accept", "text/html")
+                .when().get("/manage")
+                .then().statusCode(404)
+                .body(not(containsString(MARKER)));
+    }
+
+    @Test
+    void exactApiRootIsNeverRewritten() {
+        given().header("Accept", "text/html")
+                .when().get("/api")
+                .then().statusCode(404)
+                .body(not(containsString(MARKER)));
+    }
+
+    @Test
+    void exactManagementRootIsNeverRewritten() {
+        given().header("Accept", "text/html")
+                .when().get("/q")
                 .then().statusCode(404)
                 .body(not(containsString(MARKER)));
     }

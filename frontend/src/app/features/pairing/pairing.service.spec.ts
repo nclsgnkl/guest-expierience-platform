@@ -23,6 +23,19 @@ const CREATED = {
   expiresAt: new Date(Date.now() + 600_000).toISOString(),
 };
 
+/**
+ * The `Date` header every real HTTP response carries — the service reads it to
+ * count the code's lifetime on the SERVER's clock (🟡-3). `serverSkewMs`
+ * models a kiosk clock that disagrees with the server's.
+ */
+function created(serverSkewMs = 0, lifetimeMs = 600_000) {
+  const serverNow = Date.now() + serverSkewMs;
+  return {
+    body: { ...CREATED, expiresAt: new Date(serverNow + lifetimeMs).toISOString() },
+    options: { headers: { Date: new Date(serverNow).toUTCString() } },
+  };
+}
+
 describe('PairingService', () => {
   const run = vi.fn(() => Promise.resolve());
   const navigateByUrl = vi.fn(() => Promise.resolve(true));
@@ -63,7 +76,8 @@ describe('PairingService', () => {
   async function startWaiting(): Promise<void> {
     service.start();
     await settle();
-    http.expectOne('/api/pairing/requests').flush(CREATED);
+    const response = created();
+    http.expectOne('/api/pairing/requests').flush(response.body, response.options);
     await settle();
   }
 
@@ -185,9 +199,8 @@ describe('PairingService', () => {
   it('an expired code after network loss falls back to CREATING', async () => {
     service.start();
     await settle();
-    http
-      .expectOne('/api/pairing/requests')
-      .flush({ ...CREATED, expiresAt: new Date(Date.now() + 4_000).toISOString() });
+    const first = created(0, 4_000);
+    http.expectOne('/api/pairing/requests').flush(first.body, first.options);
     await settle();
 
     await vi.advanceTimersByTimeAsync(3_000);
@@ -196,7 +209,51 @@ describe('PairingService', () => {
 
     // 5 s backoff passes the 4 s expiry → a fresh code is requested.
     await vi.advanceTimersByTimeAsync(5_000);
-    http.expectOne('/api/pairing/requests').flush(CREATED);
+    const second = created();
+    http.expectOne('/api/pairing/requests').flush(second.body, second.options);
+    await settle();
+    expect(service.status()).toBe('waiting');
+  });
+
+  it('a kiosk clock running an hour ahead does not expire a fresh code (🟡-3)', async () => {
+    service.start();
+    await settle();
+    // The server says "created now, expires in 10 minutes"; this device's
+    // clock is an hour ahead, so the ABSOLUTE expiresAt is already in its
+    // past. Counting the lifetime instead keeps the code alive.
+    const response = created(-3_600_000);
+    http.expectOne('/api/pairing/requests').flush(response.body, response.options);
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(3_000);
+    // Polls the SAME code — no premature renewal (which used to loop
+    // create → 3 s → create until the rate limit answered 429).
+    http
+      .expectOne('/api/pairing/requests/ABCDEFGH')
+      .flush(null, { status: 202, statusText: 'Accepted' });
+    await settle();
+    expect(service.status()).toBe('waiting');
+    expect(service.code()).toBe('ABCDEFGH');
+  });
+
+  it('without a usable Date header no local deadline is invented — the 404 renews', async () => {
+    service.start();
+    await settle();
+    // No Date header at all: any local comparison would be a guess.
+    http
+      .expectOne('/api/pairing/requests')
+      .flush({ ...CREATED, expiresAt: new Date(Date.now() - 600_000).toISOString() });
+    await settle();
+
+    await vi.advanceTimersByTimeAsync(3_000);
+    // Still polls (no proactive renewal) — and the server's 404 is what
+    // drives the fresh code.
+    http
+      .expectOne('/api/pairing/requests/ABCDEFGH')
+      .flush(null, { status: 404, statusText: 'Not Found' });
+    await settle();
+    const renewed = created();
+    http.expectOne('/api/pairing/requests').flush(renewed.body, renewed.options);
     await settle();
     expect(service.status()).toBe('waiting');
   });

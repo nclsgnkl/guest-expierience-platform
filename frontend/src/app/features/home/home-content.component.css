@@ -20,6 +20,15 @@
   gap: var(--space-7);
   height: 100%;
   width: 100%;
+  /* Containing block AND stacking context for the hero artwork layer
+     (docs/design/screens/home.md -> "Hero artwork (2:5)": absolutely
+     positioned, above the background, below the layout). `position: relative`
+     gives the artwork its coordinate origin; `z-index: 0` makes this element
+     a stacking context, so the artwork's `z-index: -1` paints after this
+     box's own background and before its in-flow children instead of
+     disappearing behind the shell's mesh. */
+  position: relative;
+  z-index: 0;
 }
 
 .home-content__screen {

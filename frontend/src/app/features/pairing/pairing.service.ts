@@ -1,7 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { PairingService as PairingApi, type PairingCompleted } from '@gxp/api-client';
+import {
+  PairingService as PairingApi,
+  type PairingCompleted,
+  type PairingRequestCreated,
+} from '@gxp/api-client';
 import { firstValueFrom } from 'rxjs';
 
 import { DeviceTokenStore } from '../../core/api/device-token.store';
@@ -48,7 +52,13 @@ export class PairingService {
 
   /** In memory only — never displayed, never persisted, never logged. */
   private pollSecret: string | null = null;
-  private expiresAt: number | null = null;
+  /**
+   * The current code's expiry **as a local `Date.now()` value** — the server's
+   * lifetime counted on this device's clock, never the server's absolute
+   * instant compared against it (see {@link localDeadline}). `null` = no local
+   * bound is trustworthy; the server's own `404` drives renewal instead.
+   */
+  private deadline: number | null = null;
   private backoffStep = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private stopped = false;
@@ -72,10 +82,11 @@ export class PairingService {
     }
     this._status.set('renewing');
     try {
-      const created = await firstValueFrom(this.api.createPairingRequest());
+      const response = await firstValueFrom(this.api.createPairingRequest('response'));
+      const created = response.body as PairingRequestCreated;
       this._code.set(created.code);
       this.pollSecret = created.pollSecret;
-      this.expiresAt = Date.parse(created.expiresAt);
+      this.deadline = localDeadline(response.headers.get('date'), created.expiresAt);
       this.backoffStep = 0;
       this._status.set('waiting');
       this.schedule(() => void this.poll(), POLL_INTERVAL_MS);
@@ -95,7 +106,7 @@ export class PairingService {
     if (this.stopped || code === null || this.pollSecret === null) {
       return;
     }
-    if (this.expiresAt !== null && Date.now() >= this.expiresAt) {
+    if (this.deadline !== null && Date.now() >= this.deadline) {
       // Expired while waiting (e.g. through an offline stretch) — renew
       // proactively instead of provoking the 404 (§3: "until expiresAt,
       // then CREATING").
@@ -124,7 +135,7 @@ export class PairingService {
       }
       // Network loss: resume the SAME code/secret until it expires (§3).
       this._status.set('offline');
-      if (this.expiresAt !== null && Date.now() >= this.expiresAt) {
+      if (this.deadline !== null && Date.now() >= this.deadline) {
         this.pollSecret = null;
         this.schedule(() => void this.create(), this.nextBackoff());
         return;
@@ -162,6 +173,33 @@ export class PairingService {
       this.timer = undefined;
     }
   }
+}
+
+/**
+ * Turns the server's `expiresAt` into a **local** deadline (review finding
+ * 🟡-3, and the PRD's own clock-skew risk: "must use server-supplied
+ * `expiresAt` defensively"). A kiosk has no reliable clock — it may boot
+ * years off, and comparing the server's absolute instant against
+ * `Date.now()` made a device whose clock runs ahead consider every fresh code
+ * already expired: create → 3 s → renew → create …, until the global pairing
+ * rate limit answered 429 and the screen sat in `cooldown` with no usable
+ * code, forever.
+ *
+ * So the code's *lifetime* is measured entirely on the server's clock
+ * (`expiresAt` − the response's `Date` header) and only then counted down
+ * locally. When either value is missing or the arithmetic yields nothing
+ * positive, no local bound is trustworthy at all and the function returns
+ * `null`: the machine then simply waits for the server's `404`, which already
+ * drives an unattended renewal.
+ */
+function localDeadline(dateHeader: string | null, expiresAt: string): number | null {
+  const expires = Date.parse(expiresAt);
+  const serverNow = dateHeader === null ? Number.NaN : Date.parse(dateHeader);
+  if (!Number.isFinite(expires) || !Number.isFinite(serverNow)) {
+    return null;
+  }
+  const lifetime = expires - serverNow;
+  return lifetime > 0 ? Date.now() + lifetime : null;
 }
 
 /** `Retry-After` in seconds per RFC 9110; the pinned fallback when absent. */

@@ -17,6 +17,12 @@
  *               cache and the pill appears immediately.
  *   STANDBY     REQUIRES the manager API (deletes the active stay, recreates
  *               it afterwards): dev-only, needs GXP_SMOKE_ADMIN_PW.
+ *   ARTWORK     Home with a property artwork configured — the variant the dev
+ *               seed does NOT produce, which is exactly how a horizontally
+ *               scrolling Home shipped past 72/72 measure cells (review
+ *               🔴-1). Uploads a throwaway ARTWORK asset through the manager
+ *               API, points the property at it, measures, and restores both.
+ *               Also needs GXP_SMOKE_ADMIN_PW.
  *
  * The theme axis on pairing/connection is driven by writing
  * `data-theme`/`lang` directly (those screens deliberately carry no controls;
@@ -28,6 +34,8 @@
  * Usage (backend + serve must be up):
  *   GXP_SMOKE_ADMIN_PW=… node tools/measure-states.mjs [baseUrl]
  */
+import { deflateSync, crc32 } from 'node:zlib';
+
 import { chromium } from 'playwright';
 
 const baseUrl = process.argv[2] ?? 'http://localhost:4200';
@@ -114,6 +122,28 @@ function collectState() {
           buttonsOutsideStatusBar: [...document.querySelectorAll('button')].filter(
             (btn) => !btn.closest('app-status-bar'),
           ).length,
+        }
+      : null,
+    artwork: document.querySelector('.hero-artwork__img')
+      ? {
+          img: b(document.querySelector('.hero-artwork__img')),
+          content: b(document.querySelector('.home-content')),
+          heading: b(document.querySelector('.heading-block')),
+          cards: b(document.querySelector('.home-content__cards')),
+          // The rendered card, not the `display: contents` component host
+          // (which has no box of its own).
+          lastCard: b([...document.querySelectorAll('.action-card')].pop() ?? null),
+          sidebar: b(document.querySelector('app-sidebar')),
+          /* Which element the guest's finger reaches where the artwork
+             overlaps the card row: the artwork is decorative and must never
+             be it. */
+          topmostOverCards: (() => {
+            const cards = document.querySelector('.home-content__cards');
+            if (!cards) return null;
+            const r = cards.getBoundingClientRect();
+            const el = document.elementFromPoint(r.right - 8, r.top + 8);
+            return el ? el.className || el.tagName : null;
+          })(),
         }
       : null,
     pill: document.querySelector('.staleness-pill')
@@ -293,6 +323,140 @@ if (ADMIN_PW === null) {
       }),
     });
     console.log('  (stay recreated)');
+  }
+}
+
+/* --------------------------- ARTWORK ----------------------------------- */
+/**
+ * A throwaway PNG, generated here rather than committed: a diagonal gradient
+ * with a hard border, at the spec's 1550 x 999 artwork proportions, so the
+ * screenshot shows unambiguously where the layer sits and whether it is
+ * cropped. Hand-rolled because the repo has no image dependency and may not
+ * grow one (constitution -> dependency gate).
+ */
+function pngBytes(width, height) {
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  let o = 0;
+  for (let y = 0; y < height; y++) {
+    raw[o++] = 0; // filter: none
+    for (let x = 0; x < width; x++) {
+      const edge = x < 6 || y < 6 || x >= width - 6 || y >= height - 6;
+      raw[o++] = edge ? 20 : Math.round((x / width) * 255);
+      raw[o++] = edge ? 20 : Math.round((y / height) * 255);
+      raw[o++] = edge ? 20 : 160;
+    }
+  }
+  const chunk = (type, data) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, 'ascii');
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])) >>> 0, 0);
+    return Buffer.concat([head, data, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // colour type: truecolour
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/**
+ * The artwork's specified box in CSS px at the 1280 x 832 reference
+ * (docs/design/screens/home.md -> "Hero artwork (2:5)": 1550 x 999 at
+ * x793/y155 raw on the 2x canvas, so halved here). The root font size is
+ * viewport-proportional, so at 1024x768 every number scales by 1024/1280.
+ */
+const ARTWORK_SPEC = { x: 396.5, y: 77.5, w: 775, h: 499.5 };
+
+if (ADMIN_PW === null) {
+  console.log('\n######## ARTWORK skipped — set GXP_SMOKE_ADMIN_PW to configure one ########');
+} else {
+  console.log('\n######## ARTWORK (property artwork uploaded via the manager API) ########');
+  const login = await fetch(API + '/api/manager/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: ADMIN_PW }),
+  });
+  const token = (await login.json()).token;
+  const auth = { Authorization: `Bearer ${token}` };
+
+  const upload = await fetch(API + '/api/manager/assets?kind=ARTWORK', {
+    method: 'POST',
+    headers: { ...auth, 'Content-Type': 'image/png' },
+    body: pngBytes(1550, 999),
+  });
+  const asset = await upload.json();
+  const property = await (await fetch(API + '/api/manager/property', { headers: auth })).json();
+  const previousArtwork = property.artworkAssetId ?? null;
+  console.log(`  uploaded asset id=${asset.id} ${asset.width}x${asset.height} (${asset.byteSize} B)`);
+
+  const putProperty = (body) =>
+    fetch(API + '/api/manager/property', {
+      method: 'PUT',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  await putProperty({ ...property, artworkAssetId: asset.id });
+
+  try {
+    for (const [w, h] of VIEWPORTS) {
+      const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+      const page = await context.newPage();
+      await page.addInitScript((t) => localStorage.setItem('gxp.device-token', t), DEV_TOKEN);
+      await page.goto(baseUrl + '/', { waitUntil: 'load', timeout: 120000 });
+      await page.waitForSelector('.hero-artwork__img', { timeout: 60000 });
+      await page.waitForFunction(
+        () => (document.querySelector('.hero-artwork__img')?.naturalWidth ?? 0) > 0,
+        { timeout: 30000 },
+      );
+      for (const theme of THEMES) {
+        await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        await page.waitForTimeout(150);
+        const m = await page.evaluate(collectState);
+        reportScroll(m, `home+artwork ${w}x${h} ${theme}`);
+        const a = m.artwork;
+        const img = box(a.img);
+        console.log(
+          `  img ${JSON.stringify(img)} | heading.x=${box(a.heading).x} cards ${JSON.stringify(box(a.cards))} ` +
+            `| lastCard.right=${box(a.lastCard)?.right} viewport=${w} | over-cards=${a.topmostOverCards}`,
+        );
+        // The spec box, scaled the way every rem in this app scales.
+        const s = w / 1280;
+        const spec = {
+          x: Math.round(ARTWORK_SPEC.x * s),
+          y: Math.round(ARTWORK_SPEC.y * s),
+          w: Math.round(ARTWORK_SPEC.w * s),
+          h: Math.round(ARTWORK_SPEC.h * s),
+        };
+        for (const key of ['x', 'y', 'w', 'h']) {
+          if (Math.abs(img[key] - spec[key]) > 1) {
+            note('SPEC', `artwork ${key} ${img[key]} vs spec ${spec[key]} at ${w}x${h}`);
+          }
+        }
+        // The regression itself: the content column must not have moved.
+        if (box(a.heading).x !== box(a.cards).x) {
+          note('LAYOUT', `heading and cards no longer share x at ${w}x${h}`);
+        }
+        if (box(a.lastCard) && box(a.lastCard).right > w) {
+          note('CLIPPED', `last action card ends at ${box(a.lastCard).right} > viewport ${w}`);
+        }
+        if (a.topmostOverCards && String(a.topmostOverCards).includes('hero-artwork')) {
+          note('LAYER', `artwork sits ABOVE the card row at ${w}x${h}`);
+        }
+      }
+      await context.close();
+    }
+  } finally {
+    await putProperty({ ...property, artworkAssetId: previousArtwork });
+    await fetch(API + `/api/manager/assets/${asset.id}`, { method: 'DELETE', headers: auth });
+    console.log('  (property artwork restored, throwaway asset deleted)');
   }
 }
 

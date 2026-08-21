@@ -1,5 +1,9 @@
 @if (home(); as home) {
   <div class="home-content">
+    <!-- Out-of-flow artwork layer, not a flex item: it is absolutely
+         positioned behind the layout per docs/design/screens/home.md ->
+         "Hero artwork (2:5)". Kept first in source order so it reads as the
+         background it is. -->
     <app-hero-artwork [artworkAssetId]="home.artworkAssetId" />
 
     <div class="home-content__screen">

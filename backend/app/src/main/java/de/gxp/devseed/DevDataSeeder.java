@@ -99,7 +99,11 @@ public class DevDataSeeder {
         if (devDeviceExists()) {
             return; // seeded before — never touch what a developer changed since
         }
-        long roomId = defaultRoomId();
+        List<?> defaultRoom = defaultRoomIds();
+        if (defaultRoom.isEmpty()) {
+            return; // room '1' renamed or deleted via the manager API — see below
+        }
+        long roomId = ((Number) defaultRoom.get(0)).longValue();
         seedExampleContent();
         seedActiveStay(roomId);
         seedDevice(roomId);
@@ -113,11 +117,21 @@ public class DevDataSeeder {
         return count.longValue() > 0;
     }
 
-    /** The V2-seeded default room ('Zimmer 1', code '1'). */
-    private long defaultRoomId() {
-        return ((Number) entityManager
+    /**
+     * The V2-seeded default room ('Zimmer 1', code '1') — as a list, so its
+     * absence is a fact and not an exception. A developer who deletes or
+     * renames that room through the manager API would otherwise turn the next
+     * {@code quarkus:dev} start into a {@code NoResultException} thrown from a
+     * {@code StartupEvent} observer, i.e. an app that will not boot, with a
+     * stack trace pointing at seeding rather than at the cause (review finding
+     * 🟡-8). The seed is convenience and never a hard dependency: no room, no
+     * seed, boot continues.
+     */
+    private List<?> defaultRoomIds() {
+        return entityManager
                 .createNativeQuery("select id from room where code = '1'")
-                .getSingleResult()).longValue();
+                .setMaxResults(1)
+                .getResultList();
     }
 
     /**

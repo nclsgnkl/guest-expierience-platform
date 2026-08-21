@@ -7,7 +7,11 @@ import { HeroArtworkComponent } from './hero-artwork.component';
 
 /**
  * REQ-010 → REQ-513: no artwork renders nothing (the reviewed fallback);
- * artwork renders the authorized object URL — never a bare /api src.
+ * artwork renders the authorized object URL — never a bare /api src; and the
+ * host is an out-of-flow layer in BOTH variants (review 🔴-1 — as an inline
+ * flex item it pushed the content column right and scrolled Home). Geometry
+ * itself is not a jsdom question: it is measured in a real browser by
+ * `tools/measure-states.mjs` → ARTWORK.
  */
 describe('HeroArtworkComponent', () => {
   function setup(assetId: number | null, url: string | null) {
@@ -32,6 +36,12 @@ describe('HeroArtworkComponent', () => {
   it('renders no <img> while the blob has not arrived (and after a 404)', () => {
     const { fixture } = setup(12, null);
     expect((fixture.nativeElement as HTMLElement).querySelector('img')).toBeNull();
+  });
+
+  it('never participates in the content flex row (absolutely positioned layer)', () => {
+    const { fixture } = setup(12, 'blob:test-artwork');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(getComputedStyle(host).position).toBe('absolute');
   });
 
   it('renders the object URL once the authorized fetch delivered it', async () => {

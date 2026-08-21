@@ -18,6 +18,23 @@ function applyBranding(branding: PropertyBranding): void {
   root.style.setProperty('--brand-secondary', branding.secondary);
 }
 
+/**
+ * The un-apply half (REQ-509/512, review finding 🟡-1): a brand that goes
+ * away must go away on screen too. After a runtime 401 wipe the kiosk shows
+ * the deliberately brandless pairing screen — whose status dot resolves
+ * through `--color-icon-active-start` → `--brand-primary` — so leaving the
+ * revoked property's primitives inline on `<html>` would keep painting its
+ * brand until the next reload. Removing the property (rather than writing a
+ * default) hands the roles back to the token layer, which IS the design for
+ * every unbranded state.
+ */
+function clearBranding(): void {
+  const root = document.documentElement;
+  root.style.removeProperty('--brand-primary');
+  root.style.removeProperty('--brand-primary-deep');
+  root.style.removeProperty('--brand-secondary');
+}
+
 @Component({
   selector: 'app-root',
   imports: [RouterOutlet],
@@ -41,12 +58,15 @@ export class App {
        already settled before this constructor runs, so on a paired kiosk the
        first effect flush (before first paint) applies the final brand — the
        no-flash structure is unchanged. A null brand (unpaired, connection
-       screen, or a rejected invalid wire value) applies nothing: the
-       token-layer defaults ARE the design for those states. */
+       screen, or a rejected invalid wire value) removes whatever a previous
+       property wrote: the token-layer defaults ARE the design for those
+       states, and a revoked kiosk must not keep painting the old brand. */
     effect(() => {
       const branding = this.content.branding();
       if (branding !== null) {
         applyBranding(branding);
+      } else {
+        clearBranding();
       }
     });
     effect(() => {

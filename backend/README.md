@@ -241,8 +241,14 @@ gxp-dev-device-token
 
 Its safety derives from its **hash never existing in a production database**,
 never from secrecy (REQ-504): the seeder is `@IfBuildProfile("dev")` — the
-bean is removed from the container at build time, so it does not exist in the
-`%prod` (or `%test`) artifact at all. The compose smoke asserts the inverse:
+**bean** is removed from the container at build time, so no seeding code can
+run in `%prod` or `%test` (verified at review: a prod build generates no
+`DevDataSeeder_Bean`/observer class, while every other bean has one). The
+compiled class itself — and with it this literal and the seed SQL — still
+ships inside the jar and is simply never instantiated; a grep over the
+image's `META-INF/resources` therefore proves nothing about it, which is why
+the runtime assertions below are the actual proof. The compose smoke asserts
+the inverse:
 a fresh `%prod` instance has zero devices and answers this token with `401`.
 The Angular dev server picks the same literal up from
 `frontend/src/environments/environment.development.ts` — `ng serve` +

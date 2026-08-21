@@ -1,9 +1,35 @@
 # Handoff: guest-frontend-integration
 
-**Last session:** 2026-08-20 (dev — **05_implement complete**: T-01…T-29 all
+**Last session:** 2026-08-21 (reviewer — **re-review done: PASS ✅**. Every
+round-1 finding resolved and independently re-verified (🔴 0 · 🟠 0 in code ·
+🟡 0 · 🟢 5 new info items); all three flagged deviations and the
+`docs/design/screens/home.md` edit accepted. **Ready for commit — the user
+commits.** The only thing still open is the ⏸ `frontend/CLAUDE.md` gate, which
+is doc-only and no blocker. See [06-review.md](06-review.md) → *Round 2*.)
+
+**Previous session:** 2026-08-21 (dev — **fix round done**: 🔴-1, 🟠-1 and the
+whole 🟡 batch addressed; frontend **251/251**, backend **179/179**, prod build
+green, artwork-present Home re-measured NO-SCROLL at both viewports.)
+
+**Previous session:** 2026-08-21 (reviewer — **06_review done: NEEDS CHANGES
+❌**, 🔴 1 · 🟠 2 · 🟡 8 (1 fixed in-review) · 🟢 4 — see
+[06-review.md](06-review.md).)
+
+> **Repo moved.** Everything now lives at
+> `/media/external_harddrive/Niclas/Programming/Coding/gxp/guest-expierience-platform`;
+> older paths in these documents are stale. `frontend/node_modules` and the
+> gitignored `packages/node_modules -> ../frontend/node_modules` symlink had
+> to be recreated after the move — the symlink is now *demonstrably*
+> load-bearing (nothing compiled until it was back).
+>
+> **The feature is already committed** as `ea28870` "Commit to move files"
+> (103 files, +7482/−1071) — the user committed it to move filesystems, so
+> that single commit *is* the feature and the review scope was
+> `git diff a6c5a91..HEAD`.
+
+**Previous session:** 2026-08-20 (dev — **05_implement complete**: T-01…T-29 all
 ticked in [03-todo.md](03-todo.md); every suite green; dev smoke, measure
-runs and compose smoke executed with evidence below. **Ready for
-`reviewer` (06_review).** Nothing committed.)
+runs and compose smoke executed with evidence below.)
 
 ## What was built
 
@@ -181,9 +207,10 @@ runs and compose smoke executed with evidence below. **Ready for
   never persists (ephemeral DBs). Note: the seeder deliberately does NOT
   re-seed over a revoked dev device row (the UNIQUE token hash would
   collide); a dev who revokes it keeps it revoked until the DB is reset.
-- Smoke driver scripts are throwaway (`frontend/tools/.smoke-part*.mjs`,
+- Smoke driver scripts were throwaway (`frontend/tools/.smoke-part*.mjs`,
   dot-prefixed, not part of the instrument set); `measure-states.mjs` is the
-  committed instrument.
+  committed instrument. **(They were committed anyway — 🟡-7 — and the fix
+  round deleted all four.)**
 
 ## Proposed `frontend/CLAUDE.md` additions — ⏸ NOT WRITTEN, user gate
 
@@ -257,13 +284,249 @@ Exact text, for the user to approve (three entries):
 - **Final suites:** backend 176/176 (post-all-changes run); frontend
   235/235 (the final re-run's 2 timeouts at load-average 7+ passed 21/21 in
   isolation — load flakes on this shared Pi, not regressions).
-- Throwaway smoke drivers kept for the reviewer (dot-prefixed, untracked):
-  `frontend/tools/.smoke-part{1,2,3}.mjs`, `.static-serve.mjs` (serves the
-  prod `dist/` with an `/api` proxy — how the prod-bundle measurements ran).
+- Throwaway smoke drivers kept for the reviewer (dot-prefixed, believed
+  untracked — they were not): `frontend/tools/.smoke-part{1,2,3}.mjs`,
+  `.static-serve.mjs` (served the prod `dist/` with an `/api` proxy — how the
+  prod-bundle measurements ran). **All four deleted in the fix round (🟡-7).**
 
-## Next: 06_review
+## Review outcome (06_review, 2026-08-21 — reviewer)
 
-Review the changes (frontend + the two backend touches + docs). Everything
-executable was executed; evidence above. One ⏸ user gate open: the proposed
-`frontend/CLAUDE.md` additions (exact text above) — write only after
-approval.
+**NEEDS CHANGES ❌** — full findings, evidence and the REQ table are in
+[06-review.md](06-review.md). Summary:
+
+- **🔴-1 (blocking)** — `HeroArtworkComponent`'s new artwork variant is an
+  inline flex item of `.home-content`, so **Home scrolls horizontally when a
+  property has artwork configured**: measured live with
+  `property.artwork_asset_id` set, 1280×832 → `scrollWidth` 1312 > 1280 and
+  1024×768 → 1050 > 1024, with the fourth action card clipped. It escaped all
+  72/72 measure cells because the dev seed configures no artwork, and
+  `docs/design/screens/home.md` specifies an absolutely positioned bitmap
+  behind the layout, not an inline column. Fix + add an artwork-present
+  measurement cell (and consider seeding an artwork asset in `DevDataSeeder`).
+- **🟠-1** — `SpaRoutingHandler`'s exclusions are `startsWith` only, so
+  `GET /manage`, `/api`, `/q` (no trailing slash, `Accept: text/html`) return
+  the guest app shell; `/manage` is the path REQ-526 promised to leave alone.
+- **🟠-2** — `frontend/CLAUDE.md` now contradicts the code in two more places
+  (routes outside the shell; card routes from the wire). Doc-only, but
+  **user-gated** — exact text proposed in 06-review.md → *Parked*.
+- **🟡 ×8** — brand primitives never un-applied on a 401 wipe; asset memo
+  survives that wipe; pairing expiry trusts the kiosk clock; `home` 409
+  degrades to STALE instead of standby; no spec for
+  `GuestStateRoutingService`; **(fixed in-review)** the REQ-504 inertness
+  wording in `backend/README.md` + `docs/system-context.md`; the four
+  throwaway `frontend/tools/.*.mjs` drivers got committed; `DevDataSeeder`'s
+  `getSingleResult()` on room `'1'`.
+- **🟢 ×4** — deviation #3's "one line, no wrap" is wrong (it wraps to three,
+  harmlessly); static resources now carry no cache headers at all; `main.ts`'s
+  default `console.error`; a pairing-spec sentence for the brand-role dot.
+
+**Independently re-verified at the new path** (not taken from this handoff):
+frontend 235/235 and prod build; `grep dist/` token-free; backend **176/176**
+against a fresh throwaway Postgres; `git diff packages/api-client
+api/openapi.yaml` empty after a regenerating build; **no `DevDataSeeder_Bean`
+or observer in the prod build** (166 other beans are generated) while the
+class itself does ship; jar with/without the bundle; the dev seed end to end;
+`grep -rin cors backend/` empty; live SPA-fallback probes; live language
+switch (**one** request, the PUT) and preference landing on the stay; live
+vacancy flip with the home cache cleared; the stale pill's geometry
+`{y:72,right:1248,h:28}`; no-scroll on every route/state at both viewports;
+Home's baselines (heading y 88 / cards bottom 744) unchanged. Screenshots of
+Home (light/dark/artwork), Settings, Pairing, Connection, Standby
+(light/dark) and the stale pill were captured and read.
+
+**Taken from this handoff, not re-run:** the compose/TLS smoke (11/11), the
+dark-contrast table, and the full 72-cell measure grid.
+
+## ⏸ Parked user gates (unchanged + one new)
+
+1. Dev's three proposed `frontend/CLAUDE.md` additions (exact text above).
+   Reviewer's note: the `packages/node_modules` symlink entry is now
+   *demonstrably* load-bearing — it broke on the filesystem move.
+2. **NEW:** two further `frontend/CLAUDE.md` edits the shipped code already
+   requires (state routes outside the shell; action-card routes from the
+   wire) — exact text in [06-review.md](06-review.md) → *Parked user gates*.
+
+Nothing is written into `frontend/CLAUDE.md` until the user confirms.
+
+## Fix round (dev, 2026-08-21) — what changed
+
+Working-tree changes on top of `ea28870`; **nothing committed**.
+[06-review.md](06-review.md) is the reviewer's file and was not touched.
+
+### 🔴-1 — the artwork is a layer again, not a column
+
+`hero-artwork.component.ts` rendered the `<img>` as an inline
+`max-width: 18rem` flex item under `:host{display:contents}`, so it became the
+first item of `.home-content`'s row and pushed the content column right.
+`docs/design/screens/home.md` → *Hero artwork (2:5)* specifies an
+**absolutely positioned bitmap behind the layout**, and that is what it is now:
+
+- the host is `position: absolute; z-index: -1; pointer-events: none`, sized
+  and placed from the spec's raw 2x values **halved** (`1550 × 999 @
+  x793/y155` → CSS `775 × 499.5 @ x396.5/y77.5`), authored in `rem` (the root
+  is viewport-proportional, so the box scales with everything else);
+- offsets are relative to `.home-content`, which gained `position: relative;
+  z-index: 0` — the stacking context is what lets `z-index: -1` paint *after*
+  the mesh background and *before* the heading/cards, instead of vanishing
+  behind the shell's background;
+- `object-fit: contain`: a commissioned rendering with a different aspect
+  ratio is centred in the box, never cropped or distorted;
+- out of flow in **both** variants, so the no-artwork fallback can no longer
+  consume the row's gap either (defect D7 is now structurally impossible).
+
+**The spec numbers were checked, not just implemented** (the "halve the 2x
+value" trap this project has hit before): diffing
+`docs/design/assets/home.png` against `home-no-artwork.png` puts the
+artwork's differing pixels at `{x: 402.4, y: 82.4, w: 764.8, h: 491.2}` CSS px
+— the halved box inset by the rendering's own transparent margin. The raw
+values would have placed a 1550 px image at x 793 on a 1280 px viewport. That
+corroboration, and the CSS box, are now recorded in
+`docs/design/screens/home.md` as a dated as-built note. (Also noted there: the
+two reference PNGs are 1600 × 1040, not the 5120 × 3328 that file's table
+claims.)
+
+**The variant is measurable now.** `tools/measure-states.mjs` gained an
+**ARTWORK** cell: it uploads a throwaway 1550 × 999 PNG through the manager
+API (generated in the script with `node:zlib` — no image dependency, none is
+allowed), points the property at it, measures Home at both viewports × both
+themes, checks the img box against the spec box (scaled by `viewport/1280`),
+that heading and cards still share an x, that the last card ends inside the
+viewport, and that the artwork is never the element under a finger on the card
+row — then restores the property and deletes the asset.
+
+**Chosen over seeding artwork in `DevDataSeeder`** (the review's "consider"):
+that would have meant committing a binary into `backend/` for a dev-only
+convenience, and it would make the *default* dev kiosk stop exercising the
+no-artwork fallback. The instrument cell covers the variant on demand and
+restores the state it found.
+
+**Measured, artwork present** (dev backend + `ng serve`, `deviceScaleFactor: 1`):
+
+| Viewport | scroll W/H | artwork img | spec (scaled) | heading.x | cards | last card right |
+|---|---|---|---|---|---|---|
+| 1280×832 | **1280/1280 · 832/832** | `{x:397, y:78, w:775, h:500}` | `{397, 78, 775, 500}` | **172** | `{x:172, y:548, right:992, bottom:744}` | 992 |
+| 1024×768 | **1024/1024 · 768/768** | `{x:317, y:62, w:620, h:400}` | `{317, 62, 620, 400}` | 138 | `{x:138, y:541, right:794, bottom:698}` | 794 |
+
+Light and dark, 0 findings. `tools/measure.mjs --route /` in the same
+artwork-present state reports the signed-off envelope unchanged:
+**heading.y 88 / cardRow.bottom 744** at 1280×832 (baseline check printed
+`88 vs 88`, `744 vs 744`), no overlap with the status bar, 0 truncated
+strings, 0 findings — and at 1024×768 heading.y 70 / cardRow.bottom 698, also
+0 findings. Screenshots captured at both viewports (the test PNG is an opaque
+gradient rectangle, so it visibly sits *behind* heading and cards — which is
+the point).
+
+### 🟠-1 — reserved paths, exact form included
+
+`SpaRoutingHandler` grew `isReservedPath()`: `/api`, `/q`, `/manage` and their
+`/…/` descendants. Three `@QuarkusTest`s added for the exact forms
+(`SpaRoutingHandlerTest` is now 11 tests). Not re-probed against a bundled
+instance — the test-classpath `index.html` fixture makes the real Vert.x route
+active in those tests, which is the same code path the live probe exercised.
+
+### 🟡 batch — all seven applied
+
+| # | What changed | Test |
+|---|---|---|
+| 🟡-1 | `app.component.ts` gained `clearBranding()`: a null brand now `removeProperty`s all three primitives, so a revoked kiosk stops painting the old brand on the deliberately brandless pairing screen | `app.component.spec.ts` — brand → null → all three read `''` |
+| 🟡-2 | `GuestAssetService.clear()` (revoke every object URL, drop the memo), called from `handleUnauthorized()`; destroy-time teardown now uses it too | `guest-asset.service.spec.ts` (revoked + re-fetched under the new token) and a spy assertion in `guest-data.service.spec.ts` |
+| 🟡-3 | `PairingService` no longer compares the server's absolute `expiresAt` against the kiosk clock: `localDeadline()` measures the code's *lifetime* on the server's clock (`expiresAt` − the response `Date` header, hence `createPairingRequest('response')`) and counts it down locally. No usable header → **no local deadline at all**, and the server's `404` drives renewal (the review's second option, as the fallback) | two new cases: a clock an hour ahead keeps polling the same code; no `Date` header → no proactive renew, the 404 renews |
+| 🟡-4 | A `409 room-vacant` on `screens/home` is now the newer, authoritative answer: `asVacant()` adopts the session as the server would serve it for a vacant room, so the kiosk goes to **standby at once** instead of showing the previous guest's content behind an untruthful pill for ≤30 s. Deviation from the review's wording: it proposed `home = null`; that alone leaves `occupancy: OCCUPIED`, i.e. a blank Home rather than standby. `asVacant()` also **drops `guestDisplayName` and `preference`** (exactly the fields `GuestControl` omits when vacant) and adopts with a `null` ETag, so no stale guest value survives in RAM or in the cache and the next poll re-fetches unconditionally | three cases (bootstrap + refresh + the cache/RAM data-sparing assertions) |
+| 🟡-5 | New `guest-state-routing.service.spec.ts`: 8 cases over a `Router` stub — 401 → pairing, occupancy flip → standby, config loss → connection, heal → back, the `/einstellungen` restore, idempotence, and that a state route is never recorded as the restore target | — |
+| 🟡-7 | All four `frontend/tools/.*.mjs` drivers deleted, per instruction. **Judgement noted:** the reviewer called `.static-serve.mjs` "genuinely useful" (it is how a *prod* bundle gets measured) and offered keeping it as a named, documented instrument. It is gone; a future prod-bundle measurement will need it re-created (~40 lines) or `ng serve` used instead, as this round did | — |
+| 🟡-8 | `DevDataSeeder.defaultRoomId()` → `defaultRoomIds()` with `setMaxResults(1).getResultList()`; an empty result now returns without seeding instead of throwing `NoResultException` out of a `StartupEvent` observer | covered by the existing dev-profile seeder tests (both still green) |
+
+🟡-6 was already fixed in-review and was not touched.
+
+### Not touched (user-gated)
+
+🟠-2 and all five proposed `frontend/CLAUDE.md` entries (dev's three + the
+reviewer's two). **Nothing this round changes what they should say**; the
+artwork fix strengthens the *Layout* section's existing rule rather than
+adding a new one, and no new convention was established.
+
+### Results
+
+- **Frontend:** `ng test` **32 files / 251 tests / 0 failures** (235 + 16 new:
+  8 routing, 3 guest-data, 2 pairing, 1 asset, 1 branding, 1 artwork host).
+  `ng build --configuration production` green (434.88 kB main / 104.51 kB
+  transfer); `grep -rl gxp-dev-device-token dist/` → **0**.
+- **Backend:** `./mvnw clean test` **179/179, BUILD SUCCESS** (176 + 3 SPA)
+  against a fresh throwaway Postgres. `git status packages/api-client
+  api/openapi.yaml` pristine after that regenerating build (one stray
+  untracked generator marker, `openapi.yaml-null.sha256`, was removed).
+- **Measurement:** `measure-states.mjs` **24/24 cells NO-SCROLL, 0 findings**
+  (pairing, connection, stale pill, standby, and the new artwork cell) — the
+  pill still measures `{y:72, right:1248, h:28}` at 1280×832 with the status
+  bar's bottom at 68.
+- **Environment note:** the first run of *anything* against `ng serve` on this
+  external HDD times out while the dev server compiles (two spurious
+  playwright timeouts, both green on the warm re-run). Same class of noise as
+  the jsdom timeouts recorded above.
+
+## Re-review outcome (06_review round 2, 2026-08-21 — reviewer)
+
+**PASS ✅** — full record in [06-review.md](06-review.md) → *Round 2*.
+🔴 0 · 🟠 0 open in code (1 parked, user-gated) · 🟡 0 · 🟢 5 new info items.
+
+**Every round-1 finding verified as fixed**, most of them live rather than by
+reading:
+
+- **🔴-1** — artwork-present Home measured at the moved path against the prod
+  bundle: `img {x:396.5, y:77.5, w:775, h:499.5}` at 1280×832 — **the spec box
+  to the decimal** — and the same box × 0.8 at 1024×768; **no scroll** at both
+  viewports and in dark; heading x172/y**88** and cards x172/bottom **744**
+  *with artwork present*; last card ends at 992 < 1280; `elementFromPoint`
+  never returns the artwork. The **no-artwork path was re-checked too** (the
+  host changed from `display:contents` to `position:absolute`): baselines
+  byte-identical, no scroll on `/`, `/einstellungen`, `/info`.
+- **🟠-1** — re-probed **live** on a bundled instance (the gap dev flagged):
+  `/api`, `/api/`, `/q`, `/manage`, `/manage/`, `/manage/x` all **404**;
+  deep links still serve the shell. `SpaRoutingHandlerTest` 11/11 in my run.
+- **🟡-1/-2** — live 401: all three brand primitives **removed** from
+  `<html>`, `localStorage` **empty**, and `fetch(<the artwork blob URL>)`
+  **rejects** — the object URL was genuinely revoked.
+- **🟡-4** — live `409` on `screens/home` while the session said OCCUPIED:
+  straight to **`/standby`**, no guest name on screen, home cache `null`,
+  session cache carries neither `Anna` nor a `preference` key.
+- **🟡-3/-5/-8** — code + the new tests (clock-ahead and no-`Date` branches;
+  8 routing cases; `setMaxResults(1).getResultList()`).
+- **🟡-7** — all four drivers gone. See 🟢-6: bringing one back as a *named*
+  `tools/serve-dist.mjs` is recommended (measuring the **prod** bundle was
+  needed in both review rounds), but it blocks nothing.
+
+**Suites re-run by the reviewer:** `ng test` **251/251**, prod build **434.88
+kB / 104.51 kB** with a **token-free** `dist/`, `./mvnw clean test`
+**179/179 BUILD SUCCESS** on a fresh throwaway Postgres, `packages/api-client`
++ `api/openapi.yaml` **pristine** after that regenerating build.
+
+**The three flagged deviations are all accepted**, two of them as *better*
+than the review's own wording: `asVacant()` (my `home = null` would have left
+`occupancy: OCCUPIED`, i.e. a blank Home instead of standby) and the ARTWORK
+measurement cell (a seeded binary would have stopped the default dev kiosk
+from exercising the fallback).
+
+**The `docs/design/screens/home.md` note is accepted in place.** It changes no
+extracted value, follows that file's own dated-correction precedent
+(2026-08-18), and its resolution correction is a fact I verified: both Home
+renders are **1600 × 1040** while line 5 claims "all 5120 × 3328". I also
+reproduced the corroborating render diff independently — `{402.4, 82.4,
+765.6, 493.6}` CSS px against dev's `{402.4, 82.4, 764.8, 491.2}` — with a
+hand-rolled PNG decoder, so no image dependency was involved on either side.
+
+## ⏸ Still parked (user only)
+
+Five proposed `frontend/CLAUDE.md` entries — dev's three (wire-fed content
+layer / `@gxp/api-client` import rule; the `packages/node_modules` symlink;
+`tools/measure-states.mjs`) and the review's two (state routes outside the
+shell; action-card routes from the wire). Doc-only, **not a code blocker**;
+exact text in this file and in [06-review.md](06-review.md). The symlink entry
+is demonstrably load-bearing — it broke on the filesystem move.
+
+## Next: the user commits
+
+Nothing is committed. The working tree holds the fix round on top of
+`ea28870` plus the review documents; the environment used for the re-review
+was torn down (container and volumes removed, no processes left). After the
+commit, flip the registry row to Done and write the `frontend/CLAUDE.md`
+entries the user approves.

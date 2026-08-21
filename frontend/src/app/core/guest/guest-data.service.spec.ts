@@ -2,11 +2,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { GuestHomeScreen, GuestSession } from '@gxp/api-client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { environment } from '../../../environments/environment';
 import { DeviceTokenStore } from '../api/device-token.store';
 import { provideGuestApi } from '../api/provide-guest-api';
+import { GuestAssetService } from './guest-asset.service';
 import {
   GuestDataService,
   HOME_CACHE_KEY,
@@ -230,6 +231,57 @@ describe('GuestDataService', () => {
     expect(service.config()).toBeNull();
     expect(localStorage.getItem(SESSION_CACHE_KEY)).toBeNull();
     expect(localStorage.getItem(HOME_CACHE_KEY)).toBeNull();
+  });
+
+  it('refresh: 401 also revokes every fetched asset (🟡-2 — the wipe reaches the bytes)', async () => {
+    await bootOccupied();
+    const clear = vi.spyOn(TestBed.inject(GuestAssetService), 'clear');
+
+    const pending = service.refresh();
+    await tick();
+    http.expectOne('/api/guest/session').flush({}, { status: 401, statusText: 'Unauthorized' });
+    await pending;
+
+    expect(clear).toHaveBeenCalledOnce();
+  });
+
+  it('refresh: a 409 on home is vacancy NOW — standby, not the previous guest behind a pill', async () => {
+    await bootOccupied();
+
+    const pending = service.refresh();
+    await tick();
+    // The session still says OCCUPIED (it was rendered a moment earlier);
+    // the stay ended between the two calls of this very poll (🟡-4).
+    flushSession(sessionFixture(), '"s2"');
+    await tick();
+    http
+      .expectOne('/api/guest/screens/home')
+      .flush({ code: 'room-vacant' }, { status: 409, statusText: 'Conflict' });
+    await pending;
+
+    expect(service.occupancy()).toBe('VACANT');
+    expect(service.config()?.home).toBeNull();
+    expect(service.connection()).toBe('ONLINE'); // the backend answered — nothing is stale
+    expect(service.staleSince()).toBeNull();
+    expect(localStorage.getItem(HOME_CACHE_KEY)).toBeNull();
+    // Vacancy data-sparing: no stay-derived value survives, in RAM or cache.
+    expect(service.session()?.guestDisplayName).toBeUndefined();
+    expect(localStorage.getItem(SESSION_CACHE_KEY)).not.toContain('Anna & Tom');
+  });
+
+  it('bootstrap: a 409 on home adopts the vacant session instead of failing the boot', async () => {
+    const pending = service.bootstrap();
+    await tick();
+    flushSession(sessionFixture());
+    await tick();
+    http
+      .expectOne('/api/guest/screens/home')
+      .flush({ code: 'room-vacant' }, { status: 409, statusText: 'Conflict' });
+    await pending;
+
+    expect(service.occupancy()).toBe('VACANT');
+    expect(service.connection()).toBe('ONLINE');
+    expect(service.config()?.home).toBeNull();
   });
 
   it('a cache the mapper rejects is discarded, not rendered', async () => {

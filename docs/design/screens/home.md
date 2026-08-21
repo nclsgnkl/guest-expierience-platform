@@ -301,6 +301,28 @@ Bitmap `Maxresdefault 1280x720 1`, absolutely positioned `1550 × 999` at
 > the headline. The legibility requirement therefore lives in practice, not in a
 > document. Revisit only if rendering is ever delegated or outsourced.
 
+> ⚠️ **As-built note added 2026-08-21 (guest-frontend-integration fix round,
+> review finding 🔴-1).** The `1550 × 999 @ x793 / y155` above are raw values
+> on the 2x canvas like everything else in this file, so the **CSS box is
+> `775 × 499.5` at `x396.5 / y77.5`** of the 1280 × 832 frame — implemented in
+> `rem` (the root is viewport-proportional), absolutely positioned behind the
+> content and out of the flex flow.
+>
+> Corroborated by measurement rather than by reading: diffing
+> [`../assets/home.png`](../assets/home.png) against
+> [`../assets/home-no-artwork.png`](../assets/home-no-artwork.png) puts the
+> artwork's differing pixels at `{x: 402.4, y: 82.4, w: 764.8, h: 491.2}` CSS
+> px — the same box, inset by the rendering's own transparent margin. (Both
+> reference PNGs are 1600 × 1040, not the 5120 × 3328 the table at the top of
+> this file claims.)
+>
+> The first implementation made the artwork an inline `max-width: 18rem` flex
+> item instead. It pushed the content column from x 172 to x 492, clipped the
+> fourth action card and scrolled Home horizontally at both reference
+> viewports — the one thing this project's constraints forbid outright. An
+> artwork whose aspect ratio differs from the specified box is centred inside
+> it (`object-fit: contain`), never cropped or distorted.
+
 **Fallback is still required — for a business reason, not a visual one.** The
 rendering is ordered separately, so there will always be properties that do not
 have one yet: newly onboarded ones, and those that never buy the add-on. The

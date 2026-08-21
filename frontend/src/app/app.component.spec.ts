@@ -97,6 +97,20 @@ describe('App', () => {
     expect(root.style.getPropertyValue('--brand-primary')).toBe('#f45aa8');
   });
 
+  it('un-applies the primitives when the brand goes away (401 wipe — REQ-509/512)', async () => {
+    const { fixture, branding } = await setup();
+    expect(root.style.getPropertyValue('--brand-primary')).toBe('#f45aa8');
+
+    branding.set(null);
+    await fixture.whenStable();
+
+    // The pairing screen is deliberately brandless: nothing of the revoked
+    // property may survive on <html> (review finding 🟡-1).
+    expect(root.style.getPropertyValue('--brand-primary')).toBe('');
+    expect(root.style.getPropertyValue('--brand-primary-deep')).toBe('');
+    expect(root.style.getPropertyValue('--brand-secondary')).toBe('');
+  });
+
   it('writes the resolved theme and the active language to <html>', async () => {
     await setup('light', 'de');
 
