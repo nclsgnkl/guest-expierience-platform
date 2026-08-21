@@ -90,6 +90,10 @@
   --surface-glass-dark-raw: rgb(246 240 255 / 0.14);
   --surface-glass-border-dark-raw: rgb(255 255 255 / 0.14);
   --surface-menu-dark-raw: rgb(246 240 255 / 0.09);
+
+  /* Status palette (design-sheet.md 📋, first value realised 2026-08-20 —
+     docs/design/tokens.md -> In-house tokens). */
+  --status-offline-raw: #a79dba;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -111,6 +115,14 @@
      feature and adds no dependency (02-design.md §3.3/§3.5 -- its first use
      in this codebase, alongside the dark active-glyph stops). */
   --color-divider: color-mix(in srgb, var(--ink-900) 25%, transparent);
+
+  /* Offline/status indicator — DECORATIVE ONLY, never a text colour (it
+     measures ~2.2:1 on the light surfaces): the pairing screen's status dot,
+     the connection screen's WifiSlash glyph, the staleness pill's dot.
+     Theme-stable by design (docs/design/tokens.md -> In-house tokens,
+     guest-frontend-integration D1, 2026-08-20) — deliberately NOT remapped
+     by [data-theme='dark']. */
+  --color-status-offline: var(--status-offline-raw);
 
   /* Mesh background roles (REQ-103). The 16 gradient layers and the base
      colour behind them are semantic roles, not primitives, so the theme axis

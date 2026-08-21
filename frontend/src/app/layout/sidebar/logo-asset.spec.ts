@@ -1,12 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
-
-import { PropertyContentService } from '../../core/content/property-content.service';
-import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
-import { SessionPreferenceGateway } from '../../core/preferences/session-preference-gateway';
 
 /**
  * Regression guard for defect D4 (REQ-011): the shipped logo asset was valid
@@ -15,22 +10,17 @@ import { SessionPreferenceGateway } from '../../core/preferences/session-prefere
  * a `--` sequence, which XML forbids inside a comment. The `<img>` fired
  * `error` and the tile rendered the broken-image placeholder.
  *
- * The existing sidebar test only asserts the `src` came from config, which is
- * why it stayed green through the bug. jsdom computes no layout and decodes no
- * images, but it does have a real XML parser — so well-formedness is exactly
- * the part of D4 a unit test can catch, and this is it.
+ * Since guest-frontend-integration (REQ-513) the property logo is an
+ * authorized-fetch object URL and this file is the **fallback** the shell
+ * renders when no logo asset exists or has not arrived — still shipped, still
+ * parseable-or-broken, so the guard stays. The path is the shell's
+ * `LOGO_PLACEHOLDER` constant, duplicated here deliberately: if the file
+ * moves, this spec failing is the reminder that the guard must follow it.
  */
-describe('branding logo asset', () => {
-  // Through the injector, not `new`: the service resolves the active
-  // language through `PreferencesService`, which in turn needs its gateway —
-  // so this needs an injection context (the logo itself is not localised).
-  TestBed.configureTestingModule({
-    providers: [{ provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway }],
-  });
-  const logoAsset = TestBed.inject(PropertyContentService).property().logoAsset;
-  const assetPath = resolve(process.cwd(), 'src', logoAsset);
-  const source = readFileSync(assetPath, 'utf8');
+const assetPath = resolve(process.cwd(), 'src', 'assets/branding/logo-placeholder.svg');
+const source = readFileSync(assetPath, 'utf8');
 
+describe('branding logo placeholder asset', () => {
   it('is well-formed XML that an SVG parser accepts', () => {
     const doc = new DOMParser().parseFromString(source, 'image/svg+xml');
 

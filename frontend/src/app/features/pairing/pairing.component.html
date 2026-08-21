@@ -1,0 +1,21 @@
+<div class="pairing mesh-background">
+  <section class="pairing__panel">
+    <h1 class="pairing__title">{{ t('pairing.title') }}</h1>
+    <p class="pairing__instruction">{{ t('pairing.instruction') }}</p>
+
+    <!-- The hero. Fixed-height block: state changes swap the status line
+         below, never this (no-jump rule, screens-inhouse/pairing.md). -->
+    <div class="pairing__code" [class.pairing__code--renewing]="renewing()">
+      {{ groupedCode() }}
+    </div>
+
+    <p class="pairing__status">
+      <span
+        class="pairing__status-dot"
+        [class.pairing__status-dot--muted]="troubled()"
+        aria-hidden="true"
+      ></span>
+      <span class="pairing__status-text">{{ statusText() }}</span>
+    </p>
+  </section>
+</div>

@@ -1,12 +1,15 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { NgIcon } from '@ng-icons/core';
 
 import { PropertyContentService } from '../../../core/content/property-content.service';
 
 /**
- * Subtitle+Sparkle row, headline (guest name interpolated) and paragraph
- * (docs/design/screens/home.md -> Heading block). Property-level content,
- * not per-guest/per-stay personalisation (REQ-008; PRD -> Assumptions).
+ * Subtitle+Sparkle row, headline and paragraph
+ * (docs/design/screens/home.md -> Heading block). Since
+ * guest-frontend-integration (REQ-511) every string arrives
+ * **server-resolved** (templates, `{stay.displayName}`, `|time`/`|date` —
+ * already per language) and is rendered verbatim: the client's own
+ * `{guestName}` interpolation is gone.
  */
 @Component({
   selector: 'app-heading-block',
@@ -17,10 +20,7 @@ import { PropertyContentService } from '../../../core/content/property-content.s
 export class HeadingBlockComponent {
   private readonly content = inject(PropertyContentService);
 
-  protected readonly property = this.content.property;
-
-  protected get headline(): string {
-    const property = this.property();
-    return property.headline.replace('{guestName}', property.guestName);
-  }
+  /** Non-null by construction: `HomeContentComponent` renders this component
+      only while home content is held (occupied room, payload arrived). */
+  protected readonly home = computed(() => this.content.property().home!);
 }

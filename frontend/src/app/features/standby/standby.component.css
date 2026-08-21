@@ -1,0 +1,48 @@
+/* docs/design/screens-inhouse/standby.md — atmosphere, not interface: text
+   directly on the mesh (the Home heading block's panel-free treatment), one
+   centered column, the status bar in its reserved overlay corner. */
+:host {
+  display: contents;
+}
+
+.standby {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The containing block for the status-bar overlay — same inset convention
+     as .shell (the bar positions against this padding box). */
+  position: relative;
+  padding: var(--space-6) var(--space-7);
+}
+
+.standby__block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  max-width: min(36rem, 80vw);
+}
+
+.standby__logo {
+  height: var(--size-icon-tile);
+  width: auto;
+}
+
+.standby__headline {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: var(--text-display-weight);
+  line-height: var(--text-display-line-height);
+  color: var(--color-text-primary);
+}
+
+.standby__message {
+  margin: 0;
+  max-width: 28rem;
+  font-size: var(--text-body-lg);
+  font-weight: var(--text-body-lg-weight);
+  line-height: var(--text-body-lg-line-height);
+  color: var(--color-text-secondary);
+}

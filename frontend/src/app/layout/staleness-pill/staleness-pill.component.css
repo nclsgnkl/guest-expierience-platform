@@ -1,0 +1,38 @@
+/* Overlay chrome like the status bar itself: `display: contents` so the host
+   contributes no flex item to `.shell` (frontend/CLAUDE.md -> Layout), and
+   the pill positions against `.shell`'s padding box — right-aligned to the
+   status-bar cluster, offset --space-1 below its reserved 2.75rem row
+   (docs/design/screens-inhouse/connection.md -> "The staleness pill"). */
+:host {
+  display: contents;
+}
+
+.staleness-pill {
+  position: absolute;
+  top: calc(var(--space-6) + var(--size-touch-min) + var(--space-1));
+  right: var(--space-7);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: 999px; /* the design sheet's chip radius (spec, verbatim) */
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+
+.staleness-pill__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-status-offline); /* decorative — the text carries the information */
+}
+
+.staleness-pill__label {
+  font-size: var(--text-status);
+  font-weight: var(--text-status-weight);
+  line-height: var(--text-status-line-height);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}

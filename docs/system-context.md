@@ -14,6 +14,13 @@ before planning a new feature to spot related or conflicting work.
 > and ratified as constitution **v1.4.0**. Sections below marked *(decided
 > 2026-08-19)* describe that decided-but-being-built state; the component
 > tables still list only real code.
+>
+> **Updated 2026-08-20: the kiosk is wire-fed** (`guest-frontend-integration`).
+> The static-content stage is over — `example-property.data.ts` and the
+> `sessionStorage` preference stand-in are deleted, the guest app renders from
+> `GET /api/guest/**`, pairs itself, degrades offline, and ships inside the
+> backend jar (served at `/`, D7). References below to "static TS today" are
+> kept as the historical record of those decisions.
 
 ## Deployment model
 
@@ -114,6 +121,13 @@ where it plugs in:
 Nothing else in the app is a candidate for a server call, which is what keeps
 the migration small.
 
+**Both seams are CLOSED as of 2026-08-20** (`guest-frontend-integration`):
+the first is fed by `GuestDataService` (session fetch + ETag poll), the
+second by `HttpPreferenceGateway` (`PUT /api/guest/preferences`; the stored
+value arrives inside the session payload — no separate read). The principle-2
+bet held: components changed only where the content's *shape* changed
+(variable menu/card counts, server-resolved strings, object-URL images).
+
 ## Components
 
 Introduced by `docs/features/home-screen-prototype/` (see that feature's
@@ -190,6 +204,30 @@ identity, the kiosk-facing guest read model, and HTTPS with the instance CA
 | `de.gxp.auth` (extended) | `.../de/gxp/auth/` | Still ONE bearer path: `TokenIdentityProvider` resolves manager store first, then the device table by hash (role `device`, deviceId/roomId identity attributes, throttled ≥60 s `last_seen_at` touch). Revocation is effective on the very next request (row read per request — deliberate). Device identities carry no expiry attribute, so `GXP-Token-Expires` stays manager-only. `/api/system/info` now `@RolesAllowed({"admin","device"})` (decided 2026-08-19) |
 | TLS init | `backend/app/src/main/docker/entrypoint-jvm.sh` | First start: `keytool` (in the JVM image — zero new dependencies) generates the instance CA (EC P-256, 20 y) + CA-signed server cert (EC P-256, SAN = `GXP_TLS_HOST`, 10 y) onto the `gxp-tls` volume; restarts reuse; host change re-issues the server cert under the UNCHANGED CA. `%prod` = HTTPS only (`quarkus.http.insecure-requests=disabled`, TLS-registry keystore config); `%dev`/`%test` stay plain HTTP. `GET /api/pairing/ca` serves the CA PEM for kiosk provisioning (a documented human install step) |
 | Flyway V4 | `.../db/migration/V4__device_pairing.sql` | `device` (token hash UNIQUE, `revoked_at`, room FK RESTRICT) + `pairing_request` (code UNIQUE, secret hash, `confirmed_at`/`claimed_at`). No seeds — a fresh instance has zero devices |
+
+Added by `docs/features/guest-frontend-integration/` (2026-08-20) — the kiosk
+consumes the guest API end to end, the three state screens exist, and the
+production jar serves the app itself (same rule: real files, not intent).
+**The two backend seams above are now CLOSED**: `PropertyContentService` is
+wire-fed and `PreferenceGateway`'s stand-in was deleted for the HTTP
+implementation, exactly as their designs promised.
+
+| Component | Location | Responsibility |
+|-----------|----------|-----------------|
+| `DeviceTokenStore` | `frontend/src/app/core/api/` | The kiosk's own credential: the opaque device bearer in `localStorage` (`gxp.device-token`, D4) as a signal. Set exactly once per pairing claim, wiped on any guest-call 401 (REQ-509). Read by exactly one consumer — the `Configuration.bearerAuth` credential fn in `provide-guest-api.ts` (resolved per request). The dev fallback (`environment.development.ts`, D3) is consulted only when storage is empty and is grep-provably absent from a production bundle |
+| `provideGuestApi()` | `frontend/src/app/core/api/` | Wires `provideHttpClient()` + the generated client's `Configuration` (`basePath: ''` — same-origin in prod, the `ng serve` proxy in dev; **CORS never exists on the backend**). First consumption of `packages/api-client/` — by path, via the `@gxp/api-client` tsconfig alias + the `packages/node_modules` symlink; the `ngVersion` ceiling question is closed (compiles green under Angular 22 strict) |
+| `GuestDataService` | `frontend/src/app/core/guest/` | Owns ALL content wire I/O: bootstrap fetch (4 s bound), 30 s ETag revalidation loop (`If-None-Match` via the generated service's public `defaultHeaders`; 304 = no-op), the ONLINE/STALE/DISCONNECTED state machine, occupancy signal, the last-known-good `localStorage` cache (`gxp.cache.session`/`gxp.cache.home` — written after successful mapping only, cleared on 401, home cleared on VACANT), DISCONNECTED retry with 5→30 s backoff. Zoneless-safe: signals + `DestroyRef`-torn timers |
+| `guest-content.mapper.ts` | `frontend/src/app/core/guest/` | The one wire boundary: generated models → the internal `PropertyConfig` shape, with validation (brand hex rejected → token defaults stay; unknown icon → neutral fallback glyph; localized maps must carry the default language; 0–5 items / 0–4 cards). A rejected payload counts as a failed fetch — never a crash, never rendered, never cached |
+| `GuestAssetService` | `frontend/src/app/core/guest/` | Authorized blob fetch per asset id (`Authorization` header — never a bare `<img src>`) → memoized object-URL signals, revoke-on-replace/destroy, 404 → `null` (components render their existing fallbacks) |
+| `GuestBootstrapService` | `frontend/src/app/core/guest/` | The app initializer's body (and the pairing claim's re-entry): token check → content bootstrap → defaults ⊕ stored-preference hydration before first paint — the REQ-126 no-flash structure, wire edition. Re-syncs defaults/preference on every poll-adopted session under the existing never-overwrite-a-fresh-choice rule |
+| State guards + `GuestStateRoutingService` | `frontend/src/app/core/guest/` | `/pairing`, `/standby`, `/connection` live OUTSIDE the shell; guards arbitrate initial/deep-link URLs, the routing effect moves the kiosk at runtime (poll-driven occupancy flips, 401 wipe, healing) — both read the same signals, precedence: unpaired → pairing, nothing-to-render → connection, vacant → standby. Returning to the app restores the previous route |
+| `PairingComponent` + `PairingService` | `frontend/src/app/features/pairing/` | The unattended kiosk half of pairing (spec: `docs/design/screens-inhouse/pairing.md`): create → show grouped code → 3 s poll (secret in a component-scoped service field, never stored/rendered/logged) → claim-once → store token → boot in place, no reload. 404 renews unattended, 429 honors `Retry-After`, network loss resumes the same code until expiry, then renews. Brandless by design |
+| `StandbyComponent` | `frontend/src/app/features/standby/` | The vacant room (spec: `standby.md`): server-resolved standby texts, optional logo, the functional status bar — and no navigation surface at all (client-side data-sparing). Poll-driven in and out |
+| `ConnectionComponent` | `frontend/src/app/features/connection/` | The last resort (spec: `connection.md`): paired, unreachable, nothing cached. Honest copy, `WifiSlash` glyph in the in-house `--color-status-offline` role, no button, no status bar; heals unaided |
+| `StalenessPillComponent` | `frontend/src/app/layout/staleness-pill/` | The constitution's "discreet staleness hint": a glass pill under the status-bar cluster, `Stand HH:MM`/`As of HH:MM` from the cache's `storedAt`, visible in STALE only, `role="status"` set once per episode |
+| `HttpPreferenceGateway` | `frontend/src/app/core/preferences/` | The real preference transport (D8): `save()` = whole-record `PUT /api/guest/preferences` (400/`409 room-vacant` silent-normal, 401 → kiosk-wide wipe, 5xx → the service's bounded retry); `load()` = handed over from the session payload, **no second GET**; `clear()` = client no-op (stay-anchored server-side). `SessionPreferenceGateway` and `example-property.data.ts` are **deleted** (D6) — no fake-content fallback exists anywhere |
+| `DevDataSeeder` | `backend/app/src/main/java/de/gxp/devseed/` | `%dev`-only convenience (D2): example content, an active stay, one device (`sha256("gxp-dev-device-token")`, hash-only). `@IfBuildProfile("dev")` = **build-time** prod inertness — the bean does not exist in the `%prod`/`%test` artifact; idempotent per the dev device row. The token literal is documented as public/dev-only in `backend/README.md` |
+| Guest-app serving | `backend/app/pom.xml` (profile `bundle-guest-app`) + `de.gxp.web.SpaRoutingHandler` | **The serving/path layout (D7, decided 2026-08-20):** `/` + hashed assets = the guest kiosk app (plain Maven copy of the prebuilt Angular bundle into `META-INF/resources`, auto-activated on the dist's existence — backend-only builds stay Node-free); `/api/**` and `/q/**` untouched; **`/manage/**` reserved for `manager-frontend`** (own `index.html` under `META-INF/resources/manage/`, base-href `/manage/` — the guest SPA fallback already excludes it, zero rework needed). The fallback reroutes dot-less, html-accepting GETs to `/index.html`, is inert without a bundle, and static-resource cache headers are disabled so `/` always serves the deployed app |
 
 Still designed but not implemented: nothing — the Home screen's designed
 components are now all covered by the row above. The **widget column**
@@ -310,9 +348,24 @@ below.
   `global.css`, keyed on a purpose-named class. Inheritable properties
   (`color` → `currentColor`) still work normally and should be preferred.
 - **Logging:** `<not yet decided>`
-- **Persistence:** **exactly one thing is persisted — the guest's language and
-  appearance preference.** All *content* is still static JSON / TS and is not
-  written to by anything.
+- **Persistence:** ~~exactly one thing is persisted~~ — **revised 2026-08-20
+  (`guest-frontend-integration`): the kiosk browser now persists exactly
+  three things**, all in `localStorage`, all non-sensitive by the guest-API
+  v1 pin:
+  - `gxp.device-token` — the device's own credential (by the 4xx PRD's
+    classification not guest data; kiosk lockdown remains the operational
+    control),
+  - `gxp.cache.session` / `gxp.cache.home` — the last-known-good guest
+    payloads (+ ETag + `storedAt`), the constitution's kiosk-cache clause
+    realised: rendered with the staleness pill when the backend is
+    unreachable, cleared on 401, home cleared on VACANT. **This boundary must
+    be re-checked whenever a new field is cached** — the first sensitive
+    screen needs the spec §11 item 9 field-level rules first.
+  - The guest's language/appearance preference is **server-owned** (the
+    stay row) and no longer stored client-side at all.
+
+  The original decision record (kept for history): all *content* was static
+  JSON / TS and nothing else was written.
   - **It is server-owned state, by the user's decision of 2026-08-18** — not
     UI state, and not a client-side cache. It is written when the guest
     changes it, delivered back on load, and the server always supplies the
@@ -367,7 +420,14 @@ below.
   exclusively from it (principle 4's core property, proven by the
   two-rooms scoping tests). HTTPS with the instance-generated CA is live too:
   the compose unit is **production-shaped, no longer dev-only** — `%prod`
-  serves HTTPS only. Nothing auth-related exists in `frontend/` yet.
+  serves HTTPS only.
+  **The kiosk side is live (2026-08-20, `guest-frontend-integration`):** the
+  device token persists in `localStorage` (D4 — reboot ≠ re-pair; revocation
+  is server-side, next-request effective), travels only as the bearer of
+  same-origin `/api/**` calls via the generated client's credential fn, and
+  any 401 wipes token **and** content cache before the kiosk drops to the
+  pairing screen. The poll secret exists only in a component-scoped service
+  field while the pairing screen is on.
 - **Persistence (backend, 2026-08-19):** the domain schema is real — property
   (single row), rooms, menu catalogue/config, action cards, stays, assets
   (BYTEA) and the admin credential, all via Flyway V1–V3 with the seeds that
@@ -409,6 +469,22 @@ below.
     (`occupancy: VACANT`, no name, no preference); `screens/home` and the
     preference write answer the named `409 room-vacant` — the kiosk's
     fire-and-forget write treats that as normal.
+- **Hand-off notes from `guest-frontend-integration` (2026-08-20, for
+  `manager-frontend` and operations):**
+  - **`/manage/**` is reserved** for the manager app: its own `index.html`
+    under `META-INF/resources/manage/`, Angular `base-href /manage/`. The
+    guest SPA fallback (`de.gxp.web.SpaRoutingHandler`) already excludes the
+    prefix — the manager app slots in with zero rework of the serving layout.
+  - **Manager-side pairing/device UI is still curl-only:** pairing confirm,
+    device list/rename/revoke exist as API operations; `manager-frontend`
+    builds their UI.
+  - **Kiosk CA install is now the ONLY missing link** between a fresh box and
+    a rendering production kiosk: the app is served at `/`, pairing is
+    self-service on the kiosk — a human still installs the instance CA
+    (`GET /api/pairing/ca`) into the device's trust store once per device.
+  - **The pairing code's group-of-four presentation** (`XXXX XXXX`) is the
+    kiosk spec's own call; if the manager UI renders codes differently, align
+    both then (`docs/design/screens-inhouse/pairing.md`).
 
 ## Integration Points
 

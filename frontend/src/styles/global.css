@@ -102,3 +102,33 @@ body {
 .icon-gradient-active svg {
   fill: url('#icon-gradient-active') currentColor;
 }
+
+/* Mesh-gradient background (REQ-004 -> guest-frontend-integration REQ-521):
+   one shared class, because the composition now paints four surfaces — the
+   shell and the three full-screen states (pairing, standby, connection),
+   which render OUTSIDE the shell (no sidebar, no chrome) but on the very same
+   background. Moved verbatim from shell.component.css (its 2026-08-18 fix
+   history lives on there in the layout comments); a per-screen copy of a
+   16-layer gradient is exactly the drift this file exists to prevent. Roles
+   only (--color-mesh-1..16 + base), so the theme axis repaints it and no
+   component reads a primitive. */
+.mesh-background {
+  background-color: var(--color-mesh-base);
+  background-image:
+    radial-gradient(ellipse 44rem 29rem at 0% 0%, var(--color-mesh-1) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 0%, var(--color-mesh-2) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 0%, var(--color-mesh-3) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 0%, var(--color-mesh-4) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 33.33%, var(--color-mesh-5) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 33.33%, var(--color-mesh-6) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 33.33%, var(--color-mesh-7) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 33.33%, var(--color-mesh-8) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 66.67%, var(--color-mesh-9) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 66.67%, var(--color-mesh-10) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 66.67%, var(--color-mesh-11) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 66.67%, var(--color-mesh-12) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 0% 100%, var(--color-mesh-13) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 33.33% 100%, var(--color-mesh-14) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 66.67% 100%, var(--color-mesh-15) 0%, transparent 100%),
+    radial-gradient(ellipse 44rem 29rem at 100% 100%, var(--color-mesh-16) 0%, transparent 100%);
+}

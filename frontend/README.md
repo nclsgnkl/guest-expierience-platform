@@ -2,15 +2,55 @@
 
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.4.
 
-## Development server
+Working conventions live in `CLAUDE.md` (binding); design specs under
+`docs/design/`.
 
-To start a local development server, run:
+## Development server (with the real backend)
+
+Since `guest-frontend-integration` (2026-08-20) the app renders **entirely
+from the guest API** — there is no static content fallback. The dev loop is
+two processes:
 
 ```bash
-ng serve
+# 1. the backend — Dev Services provisions PostgreSQL (Docker required)
+cd backend/app && ./mvnw quarkus:dev
+
+# 2. the frontend — proxies /api to localhost:8080 (proxy.conf.json)
+cd frontend && ng serve
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+`http://localhost:4200/` then shows a **paired, occupied kiosk with the
+example content, no manual pairing**: the `%dev` backend seeds a device for
+the public dev-only token `gxp-dev-device-token`
+(`backend/README.md` → "The dev seed"), and the development build's
+`environment.development.ts` supplies the same literal as a fallback whenever
+`localStorage` holds no token. A production build contains no token
+(`fileReplacements`; verifiable via `grep -r gxp-dev-device-token dist/`).
+
+Useful dev states:
+- **Pairing screen:** revoke the seeded device via the manager API (or set an
+  invalid `gxp.device-token` in localStorage) — the next poll's 401 wipes the
+  kiosk to `/pairing`; confirm the shown code via
+  `POST /api/manager/pairings/{code}/confirm`.
+- **Standby:** delete the active stay via `DELETE /api/manager/stays/{id}`.
+- **Staleness pill / connection screen:** stop the backend; with a cache the
+  kiosk renders stale, without one it shows the connection screen — both heal
+  unaided when the backend returns.
+
+**CORS is never enabled on the backend** — same-origin in production (the
+app ships inside the backend jar, served at `/`; see `backend/README.md` →
+"Serving the guest app"), the proxy in development.
+
+## Measurement instruments (review-time)
+
+```bash
+node tools/measure.mjs http://localhost:4200          # the standard route grid
+GXP_SMOKE_ADMIN_PW=… node tools/measure-states.mjs    # pairing/standby/connection + pill
+```
+
+Both report and assert nothing (`docs/constitution.md` v1.3.0: playwright is
+verification tooling only). `measure-states.mjs` drives backend state via the
+manager API (dev instance only) and restores it.
 
 ## Code scaffolding
 

@@ -436,3 +436,9 @@ FodyWeavers.xsd
 # top-level packages/ (generated, committed TypeScript API client) must be tracked.
 !/packages/
 !/packages/**
+
+# guest-frontend-integration (REQ-501): the client is consumed by path from
+# frontend/; this LOCAL symlink (packages/node_modules -> ../frontend/
+# node_modules) lets its bare @angular/rxjs imports resolve by node-walk.
+# Recreate after a fresh clone: ln -s ../frontend/node_modules packages/node_modules
+/packages/node_modules

@@ -23,8 +23,10 @@ import { phosphorSparkleFill } from '@ng-icons/phosphor-icons/fill';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { routes } from '../../app.routes';
+import { DeviceTokenStore } from '../../core/api/device-token.store';
 import { PropertyContentService } from '../../core/content/property-content.service';
-import type { PropertySettingsConfig } from '../../core/content/property.model';
+import type { PropertyConfig, PropertySettingsConfig } from '../../core/content/property.model';
+import { GuestDataService } from '../../core/guest/guest-data.service';
 import {
   PREFERENCE_GATEWAY,
   type PreferenceGateway,
@@ -200,12 +202,63 @@ describe('SettingsComponent', () => {
  * is observable rather than argued.
  */
 describe('Settings routing', () => {
+  /** Wire-shaped full config: what GuestDataService holds after bootstrap. */
+  const FULL_CONFIG: PropertyConfig = {
+    propertyName: 'Testhaus',
+    logoAssetId: null,
+    branding: null,
+    menuItems: [
+      { id: 'home', label: { de: 'Home', en: 'Home' }, icon: 'phosphorHouse', route: '' },
+      { id: 'info', label: { de: 'Info', en: 'Info' }, icon: 'phosphorInfo', route: '/info' },
+      {
+        id: 'umgebung',
+        label: { de: 'Umgebung-L', en: 'Nearby-L' },
+        icon: 'phosphorMapPin',
+        route: '/umgebung',
+      },
+      {
+        id: 'smart-home',
+        label: { de: 'Smart Home', en: 'Smart Home' },
+        icon: 'phosphorLightbulbFilament',
+        route: '/smart-home',
+      },
+      {
+        id: 'services',
+        label: { de: 'Services', en: 'Services' },
+        icon: 'phosphorShoppingBag',
+        route: '/services',
+      },
+    ],
+    settings: {
+      id: 'einstellungen',
+      label: { de: 'Einstellungen', en: 'Settings' },
+      icon: 'phosphorGearSix',
+      route: '/einstellungen',
+    },
+    settingsConfig: TEST_CONFIG,
+    standbyHeadline: { de: 'Testhaus', en: 'Testhaus' },
+    standbyMessage: { de: 'Standby-Test', en: 'Standby test' },
+    home: null,
+  };
+
   function setup(): void {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter(routes),
         { provide: PREFERENCE_GATEWAY, useValue: SILENT_GATEWAY },
+        /* The real routes carry the state guards (REQ-506/517/520): a paired,
+           occupied, loaded kiosk is the state under test here. */
+        { provide: DeviceTokenStore, useValue: { token: () => 'a-device-token' } },
+        {
+          provide: GuestDataService,
+          useValue: {
+            config: signal<PropertyConfig | null>(FULL_CONFIG),
+            occupancy: signal('OCCUPIED'),
+            connection: signal('ONLINE'),
+            staleSince: signal<number | null>(null),
+          },
+        },
         provideIcons({
           phosphorArrowRight,
           phosphorCaretDown,

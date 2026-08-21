@@ -185,6 +185,36 @@ no multipart) and are strictly checked server-side:
 No manual database setup, ever: Flyway migrations under
 `app/src/main/resources/db/migration/` run at startup.
 
+## Serving the guest app (production)
+
+The Angular kiosk app ships **inside the backend jar** (guest-frontend-
+integration D7, decided 2026-08-20): the `bundle-guest-app` Maven profile —
+auto-activated by the existence of `frontend/dist/frontend/browser/index.html`
+— copies the **prebuilt** production bundle into `META-INF/resources`, so
+kiosks load the app at `/` on the same HTTPS origin as `/api`. The
+shippable-artifact workflow is therefore:
+
+```bash
+cd frontend && npx ng build          # 1. Angular production build
+cd ../backend/app && ./mvnw clean package   # 2. picks the bundle up automatically
+cd .. && docker compose up --build   # 3. unchanged image/compose
+```
+
+- **`clean` matters** when toggling the bundle: `process-resources` copies
+  into `target/classes`, and a previously copied app survives an unclean
+  rebuild.
+- Without a frontend build the profile stays inactive: backend-only
+  `./mvnw test`/`package` remain Node-free and green and simply serve no app.
+- A guest deep link (e.g. a reload on `/einstellungen`) is served
+  `index.html` by `de.gxp.web.SpaRoutingHandler` — which **never** rewrites
+  `/api/**`, `/q/**` or the reserved future manager path `/manage/**`, and is
+  inert when no bundle is packaged.
+- Static-resource cache headers are disabled
+  (`quarkus.http.static-resources.caching-enabled=false`): the default
+  `immutable, max-age=86400` would pin a stale `index.html` for a day after
+  an update; on a LAN appliance re-downloading ~100 KB on a (rare) kiosk
+  reload is the better trade.
+
 ## Development
 
 ```bash
@@ -197,6 +227,28 @@ Dev/test deliberately configure **no datasource URL** — Quarkus Dev Services
 provisions PostgreSQL. Production reads `GXP_DB_JDBC_URL` /
 `GXP_DB_USERNAME` / `GXP_DB_PASSWORD` from the environment (supplied by
 `compose.yaml`).
+
+### The dev seed (`%dev` only)
+
+A fresh `quarkus:dev` database is seeded by `de.gxp.devseed.DevDataSeeder`
+(guest-frontend-integration REQ-503) with the example-property content, an
+active stay on room `1` and one paired device whose bearer token is the
+**public, dev-only** literal:
+
+```
+gxp-dev-device-token
+```
+
+Its safety derives from its **hash never existing in a production database**,
+never from secrecy (REQ-504): the seeder is `@IfBuildProfile("dev")` — the
+bean is removed from the container at build time, so it does not exist in the
+`%prod` (or `%test`) artifact at all. The compose smoke asserts the inverse:
+a fresh `%prod` instance has zero devices and answers this token with `401`.
+The Angular dev server picks the same literal up from
+`frontend/src/environments/environment.development.ts` — `ng serve` +
+`quarkus:dev` render a paired, occupied kiosk with zero manual pairing.
+Re-seeding is idempotent (keyed on the dev device row), so nothing you edit
+via the manager API is ever overwritten by a restart.
 
 ## Changing the API contract
 

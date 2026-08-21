@@ -9,7 +9,6 @@ import {
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
-import { SessionPreferenceGateway } from '../../core/preferences/session-preference-gateway';
 
 import type { ResolvedMenuItem } from '../../core/content/property.model';
 import { SidebarComponent } from './sidebar.component';
@@ -35,10 +34,17 @@ describe('SidebarComponent', () => {
         provideZonelessChangeDetection(),
         provideIcons({ phosphorHouse, phosphorInfo, phosphorGearSix }),
         /* The component resolves its chrome strings through TranslationService,
-           which reaches PreferencesService and therefore the gateway token. The
-           stand-in is the stand-in here too; S39's FakePreferenceGateway replaces
-           it wherever a test asserts persistence. */
-        { provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway },
+           which reaches PreferencesService and therefore the gateway token —
+           an inert per-spec double (frontend/CLAUDE.md: transport doubles
+           live in the spec that needs them). */
+        {
+          provide: PREFERENCE_GATEWAY,
+          useValue: {
+            load: () => Promise.resolve(null),
+            save: () => Promise.resolve(),
+            clear: () => Promise.resolve(),
+          },
+        },
       ],
     }).compileComponents();
 

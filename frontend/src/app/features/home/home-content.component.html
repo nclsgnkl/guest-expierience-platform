@@ -1,19 +1,21 @@
-<div class="home-content">
-  <app-hero-artwork />
+@if (home(); as home) {
+  <div class="home-content">
+    <app-hero-artwork [artworkAssetId]="home.artworkAssetId" />
 
-  <div class="home-content__screen">
-    <app-heading-block />
+    <div class="home-content__screen">
+      <app-heading-block />
 
-    <div class="home-content__cards">
-      @for (card of property().cards; track card.id) {
-        <app-action-card [card]="card" />
-      }
+      <div class="home-content__cards">
+        @for (card of home.cards; track card.id) {
+          <app-action-card [card]="card" />
+        }
+      </div>
     </div>
-  </div>
 
-  <!-- Reserved widget-column space (REQ-014): no content built yet, but the
-       space is present (empty, flex: 1) so the layout's proportions match
-       the designed composition -- see 02-design.md -> "Home content layout
-       & the widget-column reservation". -->
-  <div class="home-content__widgets" aria-hidden="true"></div>
-</div>
+    <!-- Reserved widget-column space (REQ-014): no content built yet, but the
+         space is present (empty, flex: 1) so the layout's proportions match
+         the designed composition -- see 02-design.md -> "Home content layout
+         & the widget-column reservation". -->
+    <div class="home-content__widgets" aria-hidden="true"></div>
+  </div>
+}

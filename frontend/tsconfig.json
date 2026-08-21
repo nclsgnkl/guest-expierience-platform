@@ -13,7 +13,19 @@
     "experimentalDecorators": true,
     "importHelpers": true,
     "target": "ES2022",
-    "module": "preserve"
+    "module": "preserve",
+    /* The generated client is consumed BY PATH (guest-frontend-integration
+       REQ-501) — the recorded intent of the no-npm-manifest generation setup.
+       The alias keeps every import greppable; a relative `../packages/…`
+       import would be the smell that generated code is being deep-linked. */
+    "paths": {
+      /* The client's own bare imports (@angular/core, @angular/common/http,
+         rxjs) resolve through the committed `packages/node_modules` symlink
+         into frontend/node_modules — subpath exports like
+         `@angular/common/http` have no physical folder, so tsconfig path
+         mapping cannot reach them; node-walk resolution can. */
+      "@gxp/api-client": ["../packages/api-client/index.ts"]
+    }
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

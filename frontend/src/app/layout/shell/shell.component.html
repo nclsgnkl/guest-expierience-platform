@@ -15,11 +15,11 @@
   </defs>
 </svg>
 
-<div class="shell">
+<div class="shell mesh-background">
   <app-sidebar
     [menuItems]="property().menuItems"
     [settings]="property().settings"
-    [logoAsset]="property().logoAsset"
+    [logoAsset]="logoAsset()"
     [activeRoute]="activeRoute()"
   />
 
@@ -32,4 +32,9 @@
        top-right padding box and takes no flow space, so adding it moves
        nothing (REQ-112, 02-design.md §8.1). -->
   <app-status-bar />
+
+  <!-- The staleness pill (REQ-519): overlay chrome directly below the
+       status-bar cluster, rendered only in the STALE state — see
+       docs/design/screens-inhouse/connection.md -> "The staleness pill". -->
+  <app-staleness-pill />
 </div>

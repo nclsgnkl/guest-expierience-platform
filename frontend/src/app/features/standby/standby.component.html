@@ -1,0 +1,14 @@
+<div class="standby mesh-background">
+  <div class="standby__block">
+    @if (logoUrl(); as logoUrl) {
+      <!-- Decorative: the headline names the property (spec: alt=""). -->
+      <img class="standby__logo" [src]="logoUrl" alt="" />
+    }
+    <h1 class="standby__headline">{{ property().standbyHeadline }}</h1>
+    <p class="standby__message">{{ property().standbyMessage }}</p>
+  </div>
+
+  <!-- The status bar stays, in its reserved corner, fully functional. -->
+  <app-status-bar />
+  <app-staleness-pill />
+</div>

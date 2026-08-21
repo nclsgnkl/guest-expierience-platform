@@ -3,11 +3,12 @@ import { RouterOutlet } from '@angular/router';
 
 import { PropertyContentService } from './core/content/property-content.service';
 import type { PropertyBranding } from './core/content/property.model';
+import { GuestStateRoutingService } from './core/guest/guest-state-routing.service';
 import { PreferencesService } from './core/preferences/preferences.service';
 
 /**
- * Runtime branding hook (REQ-003): applied once, at app start, overriding
- * only primitives (never semantic roles) -- see
+ * Runtime branding hook (REQ-003 → REQ-512): applied whenever a (validated)
+ * brand is held, overriding only primitives (never semantic roles) — see
  * docs/design/tokens.md -> Implementation.
  */
 function applyBranding(branding: PropertyBranding): void {
@@ -26,20 +27,28 @@ function applyBranding(branding: PropertyBranding): void {
 export class App {
   private readonly content = inject(PropertyContentService);
   private readonly preferences = inject(PreferencesService);
+  /* Instantiates the state→route effect for the app's lifetime (REQ-517/520):
+     injecting it here is what turns the providedIn-root class on. */
+  private readonly stateRouting = inject(GuestStateRoutingService);
 
   constructor() {
-    applyBranding(this.content.property().branding);
-
     /* The only code in `src/` that touches document.documentElement
-       (frontend/CLAUDE.md), so the three writes live side by side rather than
-       scattered (REQ-110).
+       (frontend/CLAUDE.md), so all writes live side by side (REQ-110).
 
-       `applyPropertyDefaults()` is deliberately NOT here: it moved to the app
-       initializer, because the defaults must be settled *and* the stored
-       preference hydrated before the first effect run, or the screen paints
-       the default and corrects itself a frame later (02-design.md §6.4).
-       `applyBranding()` did not move — it needs no await and the constructor
-       still runs before the first paint. */
+       Branding became an effect (guest-frontend-integration REQ-512): the
+       brand now ARRIVES with the session — possibly only after a pairing
+       claim, possibly re-arriving changed on a poll. The app initializer has
+       already settled before this constructor runs, so on a paired kiosk the
+       first effect flush (before first paint) applies the final brand — the
+       no-flash structure is unchanged. A null brand (unpaired, connection
+       screen, or a rejected invalid wire value) applies nothing: the
+       token-layer defaults ARE the design for those states. */
+    effect(() => {
+      const branding = this.content.branding();
+      if (branding !== null) {
+        applyBranding(branding);
+      }
+    });
     effect(() => {
       // Always a resolved value, never `system` and never absent (REQ-105).
       document.documentElement.dataset['theme'] = this.preferences.resolvedTheme();

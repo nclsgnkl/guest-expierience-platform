@@ -1,23 +1,46 @@
-import { Component } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
+
+import { GuestAssetService } from '../../../core/guest/guest-asset.service';
 
 /**
- * Renders only the no-artwork fallback (REQ-010): no `<img>`, no scrim, and
- * (since the 2026-08-18 revision) no background of its own either — the
- * mesh-gradient background it used to paint now lives in `ShellComponent`
- * (REQ-004/REQ-020), so this component's absence simply lets that shared
- * background show through underneath it. Kept as its own component so a
- * future artwork-present variant has a clear seam to slot into
- * (docs/design/screens/home.md -> Hero artwork).
+ * Hero artwork (REQ-010 → REQ-513). Two variants:
+ *
+ *   - **no artwork** (id `null`, a 404, or bytes not yet arrived): renders
+ *     nothing and occupies nothing — the shell's mesh shows through, exactly
+ *     the reviewed no-artwork fallback. The host is `display: contents`, so
+ *     an empty template contributes no flex item and consumes no gap
+ *     (frontend/CLAUDE.md -> Layout; defect D7's lesson preserved).
+ *   - **artwork present**: the blob arrives through the authorized fetch
+ *     (`GuestAssetService`, REQ-513 — never a bare `<img src>`) and renders
+ *     as an object URL. Decorative (`alt=""`): the heading block carries the
+ *     content.
  */
 @Component({
   selector: 'app-hero-artwork',
-  template: '',
-  /* The no-artwork variant renders nothing, so it must also occupy nothing:
-     an empty host is still a flex item of `.home-content` and still consumes
-     that row's gap, which pushed the whole content column 32px right (defect
-     D7, REQ-010). `display: none` takes it out of the flex formatting context
-     entirely while keeping the component as the seam a future artwork variant
-     slots into. */
-  styles: ':host { display: none; }',
+  template: `
+    @if (url(); as url) {
+      <img class="hero-artwork__img" [src]="url" alt="" />
+    }
+  `,
+  styles: `
+    :host {
+      display: contents;
+    }
+    .hero-artwork__img {
+      align-self: stretch;
+      max-width: 18rem;
+      object-fit: cover;
+      border-radius: var(--radius-2xl);
+    }
+  `,
 })
-export class HeroArtworkComponent {}
+export class HeroArtworkComponent {
+  artworkAssetId = input.required<number | null>();
+
+  private readonly assets = inject(GuestAssetService);
+
+  protected readonly url = computed(() => {
+    const assetId = this.artworkAssetId();
+    return assetId === null ? null : this.assets.url(assetId)();
+  });
+}

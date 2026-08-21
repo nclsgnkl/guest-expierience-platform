@@ -1,4 +1,4 @@
-import { ApplicationInitStatus, provideZonelessChangeDetection } from '@angular/core';
+import { ApplicationInitStatus, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../app.component';
 import { appConfig } from '../../app.config';
 import { ShellComponent } from '../../layout/shell/shell.component';
-import type { PropertySettingsConfig } from '../content/property.model';
+import { DeviceTokenStore } from '../api/device-token.store';
+import { GuestDataService } from '../guest/guest-data.service';
+import type { PropertyConfig, PropertySettingsConfig } from '../content/property.model';
 import {
   PREFERENCE_GATEWAY,
   PREFERENCE_LOAD_TIMEOUT_MS,
@@ -460,11 +462,68 @@ describe('PreferencesService — the write path', () => {
 });
 
 /**
- * The bootstrap contract (REQ-126 a–d), through the **real** `app.config.ts`
- * providers — the app initializer, its ordering and `App`'s two effects are
- * exactly what is under test, so none of them is stubbed. Only the transport
- * is swapped, which is the whole claim of REQ-122.
+ * The bootstrap contract (REQ-126 a–d → REQ-518, wire edition), through the
+ * **real** `app.config.ts` providers — the app initializer
+ * (`GuestBootstrapService.run()`), its ordering and `App`'s effects are
+ * exactly what is under test, so none of them is stubbed. Two seams are
+ * doubled: the preference transport (the whole claim of REQ-122) and
+ * `GuestDataService` (a fake whose `bootstrap()` delivers a config
+ * asynchronously, like the wire — the wire itself is `guest-data.service.
+ * spec.ts`'s job). The no-flash guarantee is therefore proven end to end:
+ * token check → content fetch → defaults → hydration → first paint.
  */
+const BOOT_CONFIG: PropertyConfig = {
+  propertyName: 'Testhaus',
+  logoAssetId: null,
+  branding: null,
+  menuItems: [
+    { id: 'home', label: { de: 'Home', en: 'Home' }, icon: 'phosphorHouse', route: '' },
+  ],
+  settings: {
+    id: 'einstellungen',
+    label: { de: 'Einstellungen', en: 'Settings' },
+    icon: 'phosphorGearSix',
+    route: '/einstellungen',
+  },
+  settingsConfig: {
+    languages: [
+      { code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' },
+      { code: 'en', shortLabel: 'EN', label: 'English', locale: 'en-GB' },
+    ],
+    defaultLanguage: 'de',
+    appearances: [
+      { mode: 'light', icon: 'phosphorSun' },
+      { mode: 'dark', icon: 'phosphorMoon' },
+    ],
+    defaultAppearance: 'light',
+  },
+  standbyHeadline: { de: 'Testhaus', en: 'Testhaus' },
+  standbyMessage: { de: 'Standby', en: 'Standby' },
+  home: null,
+};
+
+/** A successful wire bootstrap, delivered asynchronously like the real one. */
+class FakeGuestDataService {
+  readonly config = signal<PropertyConfig | null>(null);
+  readonly session = signal<null>(null);
+  readonly occupancy = signal<'OCCUPIED' | 'VACANT' | null>(null);
+  readonly connection = signal<'ONLINE' | 'STALE' | 'DISCONNECTED'>('DISCONNECTED');
+  readonly staleSince = signal<number | null>(null);
+
+  async bootstrap(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    this.config.set(BOOT_CONFIG);
+    this.occupancy.set('OCCUPIED');
+    this.connection.set('ONLINE');
+  }
+
+  sessionPreference(): null {
+    return null;
+  }
+
+  handleUnauthorized(): void {}
+}
+
 describe('Bootstrap with a stored preference', () => {
   const root = document.documentElement;
   let gateway: FakePreferenceGateway;
@@ -505,6 +564,8 @@ describe('Bootstrap with a stored preference', () => {
         ...appConfig.providers,
         provideZonelessChangeDetection(),
         { provide: PREFERENCE_GATEWAY, useValue: gateway },
+        { provide: DeviceTokenStore, useValue: { token: () => 'a-device-token' } },
+        { provide: GuestDataService, useClass: FakeGuestDataService },
       ],
     });
 
@@ -600,6 +661,8 @@ describe('Bootstrap with a stored preference', () => {
         ...appConfig.providers,
         provideZonelessChangeDetection(),
         { provide: PREFERENCE_GATEWAY, useValue: gateway },
+        { provide: DeviceTokenStore, useValue: { token: () => 'a-device-token' } },
+        { provide: GuestDataService, useClass: FakeGuestDataService },
       ],
     });
     await TestBed.inject(ApplicationInitStatus).donePromise;

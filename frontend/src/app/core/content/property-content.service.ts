@@ -1,11 +1,11 @@
-import { Injectable, computed, inject, signal, type Signal } from '@angular/core';
+import { Injectable, computed, inject, type Signal } from '@angular/core';
 
-import { TRANSLATION_CATALOGS } from '../i18n/catalog';
+import { GuestDataService } from '../guest/guest-data.service';
 import type { LanguageCode } from '../i18n/translation.model';
 import { PreferencesService } from '../preferences/preferences.service';
-import { EXAMPLE_PROPERTY } from './example-property.data';
 import type {
   Localized,
+  PropertyBranding,
   PropertyConfig,
   PropertySettingsConfig,
   ResolvedPropertyConfig,
@@ -13,59 +13,62 @@ import type {
 
 /**
  * Supplies per-property/guest content via Angular DI (constitution
- * principle 2). Components inject this service and never import
- * `example-property.data.ts` directly — this is what keeps a future
- * Quarkus-backed implementation a one-file change.
+ * principle 2). Since guest-frontend-integration (REQ-510) the raw config is
+ * **fed by `GuestDataService`** — mapped and boundary-validated wire payloads
+ * — instead of a static import; the component-facing surface keeps its
+ * semantics, which is exactly the one-file swap principle 2 promised.
  *
- * Two signals, one method (02-design.md §5.2):
+ * Surface (unchanged in meaning):
  *
- *   - `settingsConfig` — language-independent, so it is safely readable
- *     before any language is known. Named `settingsConfig`, not `settings`,
- *     because `PropertyConfig.settings` is the sidebar's Einstellungen menu
- *     item and `content.settings()` vs `content.property().settings` is a
- *     trap.
- *   - `property` — the same config with the active language resolved per
- *     field (REQ-108). A language switch therefore propagates without a
- *     single subscription: the computed changes, and every template reading
- *     it re-renders.
+ *   - `settingsConfig` — language-independent options + defaults.
+ *   - `property` — the config with the active language resolved per field
+ *     (REQ-108/514): a language switch re-renders from data already held and
+ *     fetches nothing.
+ *   - `getSectionRoute()` — targetSectionId → route, unknown id throws.
+ *
+ * New, wire-era surface:
+ *
+ *   - `loaded` — whether any config is held at all; the route guards keep
+ *     every consumer of the throwing signals behind this.
+ *   - `branding` — nullable (an invalid wire brand was rejected at the
+ *     boundary, REQ-512); `App` applies it only when present.
+ *
+ * `settingsConfig()`/`property()` **throw when nothing is loaded**: every
+ * route that renders them sits behind the guards (pairing/connection screens
+ * deliberately read no property data), so a throw here is a routing bug
+ * surfacing loudly, not a state to design around.
  */
 @Injectable({ providedIn: 'root' })
 export class PropertyContentService {
   private readonly preferences = inject(PreferencesService);
+  private readonly guestData = inject(GuestDataService);
 
-  /** Static today; a signal so an HTTP-backed version only changes here. */
-  private readonly raw = signal<PropertyConfig>(EXAMPLE_PROPERTY).asReadonly();
+  private readonly raw = this.guestData.config;
+
+  readonly loaded: Signal<boolean> = computed(() => this.raw() !== null);
+
+  readonly branding: Signal<PropertyBranding | null> = computed(
+    () => this.raw()?.branding ?? null,
+  );
 
   readonly settingsConfig: Signal<PropertySettingsConfig> = computed(
-    () => this.raw().settingsConfig,
+    () => requireConfig(this.raw()).settingsConfig,
   );
 
   readonly property: Signal<ResolvedPropertyConfig> = computed(() =>
-    resolveProperty(this.raw(), this.preferences.language()),
+    resolveProperty(requireConfig(this.raw()), this.preferences.language()),
   );
-
-  constructor() {
-    /* Eagerly, once, at construction — deliberately not inside the computed
-       above. A throw from a computed surfaces during rendering, at whatever
-       moment the guest happens to switch language; a throw here fails the app
-       at boot and fails every test immediately. This config is the boundary
-       that becomes an HTTP response later, which is exactly when unvalidated
-       shapes start arriving (constitution -> "Input validated at every system
-       boundary"). */
-    validateConfig(this.raw());
-  }
 
   /**
    * Resolves a `targetSectionId` (e.g. an `ActionCard`'s) to the route the
-   * matching `menuItems`/`settings` entry carries — the single place
-   * REQ-019's "must resolve to a real id" invariant is enforced. Routes are
-   * not localised, so this reads the authored config directly and its
-   * signature is unchanged. Throws on an unknown id: a dangling reference is
-   * a content-authoring bug that should fail loudly in tests, not silently do
-   * nothing for a guest on a touch kiosk.
+   * matching `menuItems`/`settings` entry carries. Routes are not localised,
+   * so this reads the raw config directly and its signature is unchanged.
+   * Throws on an unknown id: a dangling reference should fail loudly in
+   * tests, not silently do nothing for a guest on a touch kiosk. (Cards
+   * additionally carry the server-resolved `route` directly — REQ-511.)
    */
   getSectionRoute(targetSectionId: string): string {
-    const property = this.raw();
+    const property = requireConfig(this.raw());
     const match = [...property.menuItems, property.settings].find(
       (item) => item.id === targetSectionId,
     );
@@ -78,33 +81,19 @@ export class PropertyContentService {
   }
 }
 
-/**
- * Every localised field in the config, as `[path, value]`. One list, used by
- * both the validation and the resolution, so neither can forget a field.
- */
-function localizedFields(config: PropertyConfig): [string, Localized<string>][] {
-  return [
-    ['heroSubtitle', config.heroSubtitle],
-    ['headline', config.headline],
-    ['paragraph', config.paragraph],
-    ...config.menuItems.map((item): [string, Localized<string>] => [
-      `menuItems[${item.id}].label`,
-      item.label,
-    ]),
-    ['settings.label', config.settings.label],
-    ...config.cards.flatMap((card): [string, Localized<string>][] => [
-      [`cards[${card.id}].header`, card.header],
-      [`cards[${card.id}].description`, card.description],
-    ]),
-  ];
+function requireConfig(config: PropertyConfig | null): PropertyConfig {
+  if (config === null) {
+    throw new Error('PropertyContentService: no content loaded — a guard let a route through early.');
+  }
+  return config;
 }
 
 /**
  * Per field: the active language, else the **property's own** default
  * language — not the app's idea of a default, and not the first key in the
- * object — else throw (REQ-108). A config whose default-language entry is
- * missing is a content-authoring bug, and the alternative on a touch kiosk is
- * a guest staring at a blank headline.
+ * object — else throw (REQ-108). The mapper guarantees the default-language
+ * entry exists, so the throw is unreachable for wire-fed configs; it stays
+ * for the same loud-failure reason as `getSectionRoute`'s.
  */
 function resolveText(
   value: Localized<string>,
@@ -128,13 +117,11 @@ function resolveText(
 }
 
 /**
- * Exported for its own unit test (S29). The raw config is a module import,
- * and the Angular unit-test system refuses `vi.mock` on relative imports
- * ("Please use Angular TestBed for mocking dependencies"), so the per-field
- * fallback and the three validation failures are only reachable by calling
- * these two pure functions with a config double. Nothing outside this module
- * and its spec may use them: content is reached through the service
- * (frontend/CLAUDE.md).
+ * Exported for its own unit test: the per-field fallback rules are only
+ * reachable by calling this pure function with a config double
+ * (`vi.mock` on relative imports is rejected by the Angular test system).
+ * Nothing outside this module and its spec may use it: content is reached
+ * through the service (frontend/CLAUDE.md).
  */
 export function resolveProperty(
   config: PropertyConfig,
@@ -144,11 +131,9 @@ export function resolveProperty(
   const text = (value: Localized<string>, field: string) =>
     resolveText(value, language, defaultLanguage, field);
 
+  const home = config.home;
   return {
     ...config,
-    heroSubtitle: text(config.heroSubtitle, 'heroSubtitle'),
-    headline: text(config.headline, 'headline'),
-    paragraph: text(config.paragraph, 'paragraph'),
     menuItems: config.menuItems.map((item) => ({
       ...item,
       label: text(item.label, `menuItems[${item.id}].label`),
@@ -157,48 +142,21 @@ export function resolveProperty(
       ...config.settings,
       label: text(config.settings.label, 'settings.label'),
     },
-    cards: config.cards.map((card) => ({
-      ...card,
-      header: text(card.header, `cards[${card.id}].header`),
-      description: text(card.description, `cards[${card.id}].description`),
-    })),
+    standbyHeadline: text(config.standbyHeadline, 'standbyHeadline'),
+    standbyMessage: text(config.standbyMessage, 'standbyMessage'),
+    home:
+      home === null
+        ? null
+        : {
+            ...home,
+            heroSubtitle: text(home.heroSubtitle, 'home.heroSubtitle'),
+            headline: text(home.headline, 'home.headline'),
+            paragraph: text(home.paragraph, 'home.paragraph'),
+            cards: home.cards.map((card) => ({
+              ...card,
+              header: text(card.header, `cards[${card.id}].header`),
+              description: text(card.description, `cards[${card.id}].description`),
+            })),
+          },
   };
-}
-
-/** The four checks of 02-design.md §5.2, run once at construction. Exported for the same reason as `resolveProperty` above. */
-export function validateConfig(config: PropertyConfig): void {
-  const { languages, defaultLanguage, appearances, defaultAppearance } = config.settingsConfig;
-
-  if (!languages.some((option) => option.code === defaultLanguage)) {
-    throw new Error(
-      `Property config: defaultLanguage "${defaultLanguage}" is not one of the configured languages.`,
-    );
-  }
-
-  /* Symmetric with the language check above, and not cosmetic: a
-     `defaultAppearance` outside `appearances` (e.g. 'system' beside light and
-     dark) is accepted by the type system, and leaves the Settings screen with
-     no option marked selected until the guest taps one. */
-  if (!appearances.some((option) => option.mode === defaultAppearance)) {
-    throw new Error(
-      `Property config: defaultAppearance "${defaultAppearance}" is not one of the configured appearances.`,
-    );
-  }
-
-  for (const option of languages) {
-    if (!TRANSLATION_CATALOGS.has(option.code)) {
-      throw new Error(
-        `Property config: configured language "${option.code}" has no registered translation catalogue.`,
-      );
-    }
-  }
-
-  for (const [field, value] of localizedFields(config)) {
-    const entry = value[defaultLanguage];
-    if (entry === undefined || entry.trim() === '') {
-      throw new Error(
-        `Property config: "${field}" has no entry for the property's default language "${defaultLanguage}".`,
-      );
-    }
-  }
 }

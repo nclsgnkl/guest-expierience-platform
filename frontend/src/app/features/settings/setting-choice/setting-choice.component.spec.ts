@@ -5,7 +5,6 @@ import { phosphorCheck, phosphorMoon, phosphorSun } from '@ng-icons/phosphor-ico
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PREFERENCE_GATEWAY } from '../../../core/preferences/preference-gateway';
-import { SessionPreferenceGateway } from '../../../core/preferences/session-preference-gateway';
 import { SettingChoiceComponent, type SettingChoiceOption } from './setting-choice.component';
 
 /**
@@ -34,7 +33,14 @@ describe('SettingChoiceComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideIcons({ phosphorCheck, phosphorMoon, phosphorSun }),
-        { provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway },
+        {
+          provide: PREFERENCE_GATEWAY,
+          useValue: {
+            load: () => Promise.resolve(null),
+            save: () => Promise.resolve(),
+            clear: () => Promise.resolve(),
+          },
+        },
       ],
     }).compileComponents();
 

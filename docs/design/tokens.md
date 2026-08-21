@@ -442,14 +442,17 @@ Normalised first (see the half-pixel note under "Scale"), then converted.
 > value read off a *component definition* rather than off its *instance in the
 > frame*.
 
-## In-house tokens — no Figma counterpart (2026-08-18)
+## In-house tokens — no Figma counterpart (2026-08-18, extended 2026-08-20)
 
 Seven tokens added by `docs/features/appearance-and-language/` for the status
-bar (`02-design.md` §8.3) and the Settings screen (§9). They are kept **in
+bar (`02-design.md` §8.3) and the Settings screen (§9), plus one added by
+`docs/features/guest-frontend-integration/` (2026-08-20, the D1 convention —
+in-repo screen designs live in [`screens-inhouse/`](screens-inhouse/), new
+tokens they need land here). They are kept **in
 their own section, deliberately not merged into the extracted tables above**,
 for the same reason the dark palette lives in its own file: this document's
 value is that its tables are what Figma contains, and one section that says
-otherwise is a warning, whereas seven rows sprinkled through five tables is a
+otherwise is a warning, whereas eight rows sprinkled through five tables is a
 broken record.
 
 > ⚠️ **Provenance: designed in-house, not extracted** — same standing as the
@@ -475,6 +478,7 @@ broken record.
 | `--text-clock` | `1.125rem` (18px) | 700 / 1.3 | The clock | Reuses `--text-title` / `--text-body-lg`'s size |
 | `--text-h1` | `2rem` (32px) | 800 / 1.1 | Screen title — one step below `--text-display`; first used by Settings | `design-sheet.md` → *Type Scale*, H1 32 / ExtraBold 800 / 1.1 (📋 there, built here) |
 | `--color-divider` | `color-mix(in srgb, var(--ink-900) 25%, transparent)` | — | The hairline between the appearance control and the clock | A role, not a fourth grey: mixed from the ink primitive so it stays rebrandable and survives the theme flip ([`dark-theme.md`](dark-theme.md) §3) |
+| `--color-status-offline` | `#A79DBA` | — | **Decorative status indicators only, never text**: the pairing screen's offline dot, the connection screen's `WifiSlash` glyph, the staleness pill's dot ([`screens-inhouse/`](screens-inhouse/), 2026-08-20) | `design-sheet.md` → *Status* 📋 palette, first value of it realised. Theme-stable (same value in both themes); as a text colour it would fail AA on the light surfaces (~2.2 : 1) — information always rides an adjacent standard text role |
 
 > **`--text-clock` is 700, not `design-sheet.md`'s "Caption 13px Medium 500"**
 > for times and meta info. Only 400, 700 and 800 are self-hosted (`global.css`),
@@ -482,9 +486,10 @@ broken record.
 > runtime cost the on-premise principle does not justify. **Do not "fix" this
 > by adding a font file.** Logged as a deliberate deviation, not an oversight.
 
-`--color-divider` is the only one of the seven that the theme axis overrides;
+`--color-divider` is the only one of the eight that the theme axis overrides;
 its dark value and the reasoning are in [`dark-theme.md`](dark-theme.md) §3.
-The other six are colourless and identical in both themes.
+The other six are colourless and identical in both themes, and
+`--color-status-offline` is deliberately theme-stable (see its row).
 
 ## Breakpoints
 

@@ -48,32 +48,9 @@
      only thing `.shell` contributes to it: the bar positions itself against
      this box's own padding, so the two numbers stay in one place. */
   position: relative;
-  background-color: var(--color-mesh-base);
-  background-image:
-    radial-gradient(ellipse 44rem 29rem at 0% 0%, var(--color-mesh-1) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 33.33% 0%, var(--color-mesh-2) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 66.67% 0%, var(--color-mesh-3) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 100% 0%, var(--color-mesh-4) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 0% 33.33%, var(--color-mesh-5) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 33.33% 33.33%, var(--color-mesh-6) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 66.67% 33.33%, var(--color-mesh-7) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 100% 33.33%, var(--color-mesh-8) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 0% 66.67%, var(--color-mesh-9) 0%, transparent 100%),
-    radial-gradient(
-      ellipse 44rem 29rem at 33.33% 66.67%,
-      var(--color-mesh-10) 0%,
-      transparent 100%
-    ),
-    radial-gradient(
-      ellipse 44rem 29rem at 66.67% 66.67%,
-      var(--color-mesh-11) 0%,
-      transparent 100%
-    ),
-    radial-gradient(ellipse 44rem 29rem at 100% 66.67%, var(--color-mesh-12) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 0% 100%, var(--color-mesh-13) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 33.33% 100%, var(--color-mesh-14) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 66.67% 100%, var(--color-mesh-15) 0%, transparent 100%),
-    radial-gradient(ellipse 44rem 29rem at 100% 100%, var(--color-mesh-16) 0%, transparent 100%);
+  /* The 16-layer gradient itself moved to global.css -> .mesh-background
+     (guest-frontend-integration: pairing/standby/connection paint the same
+     mesh outside the shell). The template adds that class beside .shell. */
 }
 
 .shell__content {

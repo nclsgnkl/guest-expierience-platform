@@ -27,4 +27,19 @@ export const de = {
   'settings.appearance.title': 'Darstellung',
   'settings.appearance.hint': 'Helle oder dunkle Darstellung, abends oft angenehmer.',
   'settings.selected.aria': 'Ausgewählt',
+  /* guest-frontend-integration (REQ-523): the three new screens + the
+     staleness pill. Copy verbatim from the in-repo specs
+     (docs/design/screens-inhouse/): pairing addresses the MANAGER
+     (imperative-neutral, no ihr/euch), connection copy is guest-facing. */
+  'pairing.title': 'Gerät koppeln',
+  'pairing.instruction':
+    'Diesen Code im Verwaltungsbereich bestätigen, um das Gerät einem Zimmer zuzuweisen.',
+  'pairing.waiting': 'Warten auf Bestätigung …',
+  'pairing.renewing': 'Neuer Code wird erstellt …',
+  'pairing.cooldown': 'Zu viele Versuche — kurze Pause …',
+  'pairing.offline': 'Keine Verbindung zum Server. Verbindet automatisch neu.',
+  'connection.title': 'Keine Verbindung',
+  'connection.body':
+    'Die Anzeige verbindet sich automatisch neu, sobald der Server erreichbar ist.',
+  'stale.asOf': 'Stand {time}',
 } as const;

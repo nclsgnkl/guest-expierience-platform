@@ -10,7 +10,6 @@ import {
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PREFERENCE_GATEWAY } from '../../../core/preferences/preference-gateway';
-import { SessionPreferenceGateway } from '../../../core/preferences/session-preference-gateway';
 import { StatusBarMenuComponent, type StatusBarMenuOption } from './status-bar-menu.component';
 
 /**
@@ -56,7 +55,14 @@ describe('StatusBarMenuComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideIcons({ phosphorCaretDown, phosphorCheck, phosphorMoon, phosphorSun }),
-        { provide: PREFERENCE_GATEWAY, useClass: SessionPreferenceGateway },
+        {
+          provide: PREFERENCE_GATEWAY,
+          useValue: {
+            load: () => Promise.resolve(null),
+            save: () => Promise.resolve(),
+            clear: () => Promise.resolve(),
+          },
+        },
       ],
     }).compileComponents();
 

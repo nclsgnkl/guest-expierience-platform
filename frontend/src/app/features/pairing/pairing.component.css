@@ -1,0 +1,108 @@
+/* docs/design/screens-inhouse/pairing.md — brandless pre-app state: the
+   token-layer default mesh, one centered glass panel, no chrome. */
+:host {
+  display: contents;
+}
+
+.pairing {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pairing__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  width: min(30rem, 80vw);
+  padding: var(--space-6) var(--space-7);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: var(--radius-2xl);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  box-shadow: var(--shadow-panel);
+}
+
+.pairing__title {
+  margin: 0;
+  font-size: var(--text-h1);
+  font-weight: var(--text-h1-weight);
+  line-height: var(--text-h1-line-height);
+  color: var(--color-text-primary);
+}
+
+.pairing__instruction {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-line-height);
+  color: var(--color-text-secondary);
+}
+
+/* The hero (spec: --text-display ExtraBold, 0.15em tracking, tabular).
+   min-height reserves the line before the first code arrives and while a
+   replacement is fetched — the block never collapses (no-jump rule). */
+.pairing__code {
+  margin: var(--space-5) 0;
+  min-height: calc(var(--text-display) * var(--text-display-line-height));
+  font-size: var(--text-display);
+  font-weight: var(--text-display-weight);
+  line-height: var(--text-display-line-height);
+  letter-spacing: 0.15em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.pairing__code--renewing {
+  opacity: 0.4;
+}
+
+.pairing__status {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-body);
+  line-height: var(--text-body-line-height);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* Decorative (the text carries the information). Waiting states pulse on the
+   brand-derived role — the spec's `--color-brand-primary` names no existing
+   token; `--color-icon-active-start` IS the semantic role that resolves to
+   the brand primary (recorded deviation, see the feature handoff). */
+.pairing__status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-icon-active-start);
+  animation: pairing-pulse 1.8s ease-in-out infinite;
+}
+
+.pairing__status-dot--muted {
+  background: var(--color-status-offline);
+  animation: none;
+}
+
+/* A calm heartbeat, not a spinner (spec: 1.8 s, opacity 0.4 ↔ 1.0). */
+@keyframes pairing-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pairing__status-dot {
+    animation: none;
+  }
+}

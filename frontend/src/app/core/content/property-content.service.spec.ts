@@ -1,84 +1,114 @@
-import { signal, type WritableSignal } from '@angular/core';
+import { provideZonelessChangeDetection, signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 
+import { GuestDataService } from '../guest/guest-data.service';
 import type { LanguageCode } from '../i18n/translation.model';
 import { PreferencesService } from '../preferences/preferences.service';
-import { EXAMPLE_PROPERTY } from './example-property.data';
-import {
-  PropertyContentService,
-  resolveProperty,
-  validateConfig,
-} from './property-content.service';
+import { PropertyContentService, resolveProperty } from './property-content.service';
 import type { PropertyConfig } from './property.model';
 
 /**
- * S29 — `PropertyContentService` (REQ-124, REQ-108, REQ-119).
+ * S29, wire edition — `PropertyContentService` (REQ-510/514/515).
  *
- * Two layers, for one concrete reason. The service is checked against the
- * **real shipped config** (`frontend/CLAUDE.md` sanctions this one file for
- * that), because that is the config a guest actually gets. The per-field
- * fallback and the three validation failures need a *broken* config, and the
- * raw config is a module import that the Angular unit-test system refuses to
- * let `vi.mock` replace — so those cases call the two exported pure functions
- * with a config double instead.
- *
- * `PreferencesService` is a DI double: the service reads nothing from it but
- * `language()`, and a double removes the `SessionPreferenceGateway` stand-in
- * this spec used to need only to satisfy the DI chain.
+ * The raw config now arrives from `GuestDataService` (a DI double built from
+ * a writable signal — the static data file was deleted per D6, and the
+ * boundary strictness moved to `guest-content.mapper.spec.ts`). What this
+ * spec owns: the component-facing semantics — per-field language resolution
+ * over server maps, the settings entry in `getSectionRoute()`, the loud
+ * throws on unknown ids and on reads before any config is held.
  */
+const CONFIG: PropertyConfig = {
+  propertyName: 'Testhaus',
+  logoAssetId: 7,
+  branding: { primary: '#f45aa8', primaryDeep: '#cc49af', secondary: '#8a5cf6' },
+  menuItems: [
+    { id: 'home', label: { de: 'Startseite', en: 'Home' }, icon: 'phosphorHouse', route: '' },
+    { id: 'info', label: { de: 'Info', en: 'Info' }, icon: 'phosphorInfo', route: '/info' },
+  ],
+  settings: {
+    id: 'einstellungen',
+    label: { de: 'Einstellungen', en: 'Settings' },
+    icon: 'phosphorGearSix',
+    route: '/einstellungen',
+  },
+  settingsConfig: {
+    languages: [
+      { code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' },
+      { code: 'en', shortLabel: 'EN', label: 'English', locale: 'en-GB' },
+    ],
+    defaultLanguage: 'de',
+    appearances: [{ mode: 'light', icon: 'phosphorSun' }],
+    defaultAppearance: 'light',
+  },
+  standbyHeadline: { de: 'Testhaus', en: 'Testhaus' },
+  standbyMessage: { de: 'Herzlich willkommen', en: 'Welcome' },
+  home: {
+    heroSubtitle: { de: 'Schön, dass ihr da seid', en: 'Great to have you here' },
+    headline: { de: 'Willkommen, Anna & Tom!', en: 'Welcome, Anna & Tom!' },
+    paragraph: { de: 'Entspannt euch.', en: 'Relax.' },
+    artworkAssetId: null,
+    cards: [
+      {
+        id: 'info-0',
+        icon: 'phosphorKey',
+        header: { de: 'Check-Out', en: 'Check-out' },
+        description: { de: 'Bis 11:00', en: 'By 11:00' },
+        targetSectionId: 'info',
+        route: '/info',
+      },
+    ],
+  },
+};
+
 describe('PropertyContentService', () => {
-  function setup(initialLanguage: LanguageCode = 'de'): {
+  function setup(
+    initialLanguage: LanguageCode = 'de',
+    initialConfig: PropertyConfig | null = CONFIG,
+  ): {
     service: PropertyContentService;
     language: WritableSignal<LanguageCode>;
+    config: WritableSignal<PropertyConfig | null>;
   } {
     const language = signal<LanguageCode>(initialLanguage);
+    const config = signal<PropertyConfig | null>(initialConfig);
     TestBed.configureTestingModule({
-      providers: [{ provide: PreferencesService, useValue: { language } }],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: PreferencesService, useValue: { language } },
+        { provide: GuestDataService, useValue: { config: config.asReadonly() } },
+      ],
     });
-    return { service: TestBed.inject(PropertyContentService), language };
+    return { service: TestBed.inject(PropertyContentService), language, config };
   }
 
-  it('property() returns the example property config resolved for the active language', () => {
-    const { service } = setup();
+  it('property() resolves every localized field for the active language', () => {
+    const { service } = setup('de');
     const property = service.property();
 
-    expect(property.guestName).toBe('Lisa');
-    expect(property.headline).toContain('{guestName}');
-    expect(property.menuItems).toHaveLength(5);
-    expect(property.settings.id).toBe('einstellungen');
-    expect(property.cards).toHaveLength(4);
+    expect(property.menuItems[0]?.label).toBe('Startseite');
+    expect(property.settings.label).toBe('Einstellungen');
+    expect(property.standbyMessage).toBe('Herzlich willkommen');
+    expect(property.home?.headline).toBe('Willkommen, Anna & Tom!');
+    expect(property.home?.cards[0]?.header).toBe('Check-Out');
   });
 
-  it('property() re-resolves every localised field when the language changes', () => {
+  it('a language switch re-resolves from data already held — no fetch, no service call (REQ-514)', () => {
     const { service, language } = setup('de');
-
-    expect(service.property().headline).toBe(EXAMPLE_PROPERTY.headline['de']);
-    expect(service.property().heroSubtitle).toBe(EXAMPLE_PROPERTY.heroSubtitle['de']);
-    expect(service.property().menuItems[0].label).toBe(EXAMPLE_PROPERTY.menuItems[0].label['de']);
-    expect(service.property().cards[0].header).toBe(EXAMPLE_PROPERTY.cards[0].header['de']);
-    expect(service.property().settings.label).toBe(EXAMPLE_PROPERTY.settings.label['de']);
+    expect(service.property().menuItems[0]?.label).toBe('Startseite');
 
     language.set('en');
 
-    expect(service.property().headline).toBe(EXAMPLE_PROPERTY.headline['en']);
-    expect(service.property().heroSubtitle).toBe(EXAMPLE_PROPERTY.heroSubtitle['en']);
-    expect(service.property().menuItems[0].label).toBe(EXAMPLE_PROPERTY.menuItems[0].label['en']);
-    expect(service.property().cards[0].header).toBe(EXAMPLE_PROPERTY.cards[0].header['en']);
-    expect(service.property().settings.label).toBe(EXAMPLE_PROPERTY.settings.label['en']);
+    expect(service.property().menuItems[0]?.label).toBe('Home');
+    expect(service.property().standbyMessage).toBe('Welcome');
+    expect(service.property().home?.cards[0]?.description).toBe('By 11:00');
   });
 
-  it('property() leaves non-localised fields alone in every language', () => {
+  it('an unknown active language falls back to the property default per field', () => {
     const { service, language } = setup('de');
-    language.set('en');
-    const property = service.property();
+    language.set('fr');
 
-    expect(property.guestName).toBe(EXAMPLE_PROPERTY.guestName);
-    expect(property.logoAsset).toBe(EXAMPLE_PROPERTY.logoAsset);
-    expect(property.branding).toEqual(EXAMPLE_PROPERTY.branding);
-    expect(property.menuItems.map((item) => item.route)).toEqual(
-      EXAMPLE_PROPERTY.menuItems.map((item) => item.route),
-    );
+    expect(service.property().menuItems[0]?.label).toBe('Startseite');
   });
 
   it('settingsConfig() is language-independent', () => {
@@ -89,190 +119,56 @@ describe('PropertyContentService', () => {
 
     expect(service.settingsConfig()).toBe(before);
     expect(before.defaultLanguage).toBe('de');
-    expect(before.languages.map((option) => option.code)).toEqual(['de', 'en']);
   });
 
-  it('getSectionRoute() resolves every example card targetSectionId to a real route', () => {
+  it('branding() and loaded() reflect the held config', () => {
     const { service } = setup();
-    const property = service.property();
-
-    for (const card of property.cards) {
-      const route = service.getSectionRoute(card.targetSectionId);
-      const expected = [...property.menuItems, property.settings].find(
-        (item) => item.id === card.targetSectionId,
-      );
-      expect(route).toBe(expected?.route);
-    }
+    expect(service.loaded()).toBe(true);
+    expect(service.branding()?.primary).toBe('#f45aa8');
   });
 
-  it('getSectionRoute() resolves both cards sharing targetSectionId "info" to the identical route', () => {
+  it('a rejected wire brand reads as null — the defaults stay in force (REQ-512)', () => {
+    const { service } = setup('de', { ...CONFIG, branding: null });
+    expect(service.branding()).toBeNull();
+  });
+
+  it('getSectionRoute() resolves menu items AND the settings entry', () => {
     const { service } = setup();
-    const checkOut = EXAMPLE_PROPERTY.cards.find((c) => c.id === 'check-out')!;
-    const wichtigeInfos = EXAMPLE_PROPERTY.cards.find((c) => c.id === 'wichtige-infos')!;
-
-    expect(checkOut.targetSectionId).toBe('info');
-    expect(wichtigeInfos.targetSectionId).toBe('info');
-    expect(service.getSectionRoute(checkOut.targetSectionId)).toBe(
-      service.getSectionRoute(wichtigeInfos.targetSectionId),
-    );
+    expect(service.getSectionRoute('info')).toBe('/info');
+    expect(service.getSectionRoute('home')).toBe('');
+    expect(service.getSectionRoute('einstellungen')).toBe('/einstellungen');
   });
 
-  it('getSectionRoute() throws for an unknown id', () => {
+  it('getSectionRoute() throws for an unknown id — loudly, in tests, not silently on a kiosk', () => {
     const { service } = setup();
-    expect(() => service.getSectionRoute('not-a-real-section')).toThrow();
+    expect(() => service.getSectionRoute('does-not-exist')).toThrowError(/does-not-exist/);
   });
 
-  it('validates the shipped config at construction, not at render', () => {
-    // The shipped config passes; the failure cases below prove the same
-    // function rejects a broken one before any template reads it.
-    expect(() => setup()).not.toThrow();
-    expect(() => validateConfig(EXAMPLE_PROPERTY)).not.toThrow();
+  it('reading content before anything is loaded throws — a guard let a route through early', () => {
+    const { service } = setup('de', null);
+    expect(service.loaded()).toBe(false);
+    expect(() => service.property()).toThrowError(/no content loaded/);
+    expect(() => service.settingsConfig()).toThrowError(/no content loaded/);
+  });
+
+  it('config updates propagate (poll 200 → re-render)', () => {
+    const { service, config } = setup();
+    config.set({ ...CONFIG, propertyName: 'Neues Haus' });
+    expect(service.property().propertyName).toBe('Neues Haus');
   });
 });
 
-/** A minimal, valid authored config — the double the failure cases mutate. */
-function makeConfig(overrides: Partial<PropertyConfig> = {}): PropertyConfig {
-  return {
-    guestName: 'Testgast',
-    heroSubtitle: { de: 'Untertitel', en: 'Subtitle' },
-    headline: { de: 'Überschrift', en: 'Headline' },
-    paragraph: { de: 'Absatz', en: 'Paragraph' },
-    logoAsset: 'assets/branding/logo-placeholder.svg',
-    hasArtwork: false,
-    branding: { primary: '#111111', primaryDeep: '#222222', secondary: '#333333' },
-    menuItems: [
-      { id: 'home', label: { de: 'Start', en: 'Home' }, icon: 'phosphorHouse', route: '' },
-    ],
-    settings: {
-      id: 'einstellungen',
-      label: { de: 'Einstellungen', en: 'Settings' },
-      icon: 'phosphorGear',
-      route: '/einstellungen',
-    },
-    settingsConfig: {
-      languages: [
-        { code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' },
-        { code: 'en', shortLabel: 'EN', label: 'English', locale: 'en-GB' },
-      ],
-      defaultLanguage: 'de',
-      appearances: [
-        { mode: 'light', icon: 'phosphorSun' },
-        { mode: 'dark', icon: 'phosphorMoon' },
-      ],
-      defaultAppearance: 'light',
-    },
-    cards: [
-      {
-        id: 'card',
-        icon: 'phosphorKey',
-        header: { de: 'Titel', en: 'Title' },
-        description: { de: 'Beschreibung', en: 'Description' },
-        targetSectionId: 'home',
-      },
-    ],
-    ...overrides,
-  };
-}
-
-describe('resolveProperty() — the per-field fallback rule (REQ-108)', () => {
-  it('takes the active language when it is present', () => {
-    const resolved = resolveProperty(makeConfig(), 'en');
-
-    expect(resolved.headline).toBe('Headline');
-    expect(resolved.menuItems[0].label).toBe('Home');
-    expect(resolved.cards[0].description).toBe('Description');
-    expect(resolved.settings.label).toBe('Settings');
+describe('resolveProperty (pure)', () => {
+  it('resolves a null home to null and a present home per field', () => {
+    expect(resolveProperty({ ...CONFIG, home: null }, 'de').home).toBeNull();
+    expect(resolveProperty(CONFIG, 'en').home?.paragraph).toBe('Relax.');
   });
 
-  it("falls back per field to the property's own defaultLanguage", () => {
-    const config = makeConfig({
-      paragraph: { de: 'Absatz' }, // no English entry authored
-      headline: { de: 'Überschrift', en: 'Headline' },
-    });
-
-    const resolved = resolveProperty(config, 'en');
-
-    expect(resolved.paragraph).toBe('Absatz');
-    expect(resolved.headline).toBe('Headline'); // the other field is unaffected
-  });
-
-  it('treats an empty or whitespace-only entry as absent', () => {
-    const config = makeConfig({ paragraph: { de: 'Absatz', en: '   ' } });
-
-    expect(resolveProperty(config, 'en').paragraph).toBe('Absatz');
-  });
-
-  it('falls back for a language that is not authored at all', () => {
-    expect(resolveProperty(makeConfig(), 'fr').headline).toBe('Überschrift');
-  });
-
-  it("throws when neither the active nor the property's default language has an entry", () => {
-    // 'en' is authored but 'de' — the property's default — is not, so a guest
-    // reading in any third language has nothing to fall back to.
-    const config = makeConfig({ paragraph: { en: 'Paragraph' } });
-
-    expect(() => resolveProperty(config, 'fr')).toThrow(/paragraph/);
-    expect(() => resolveProperty(config, 'fr')).toThrow(/default language "de"/);
-  });
-});
-
-describe('validateConfig() — the four constructor-time checks (02-design.md §5.2)', () => {
-  it('throws when a localised field has no default-language entry, naming the field', () => {
-    const config = makeConfig({
-      cards: [
-        {
-          id: 'card',
-          icon: 'phosphorKey',
-          header: { en: 'Title' },
-          description: { de: 'Beschreibung', en: 'Description' },
-          targetSectionId: 'home',
-        },
-      ],
-    });
-
-    expect(() => validateConfig(config)).toThrow(/cards\[card\]\.header/);
-  });
-
-  it('throws when a default-language entry is present but empty', () => {
-    expect(() => validateConfig(makeConfig({ headline: { de: '', en: 'Headline' } }))).toThrow(
-      /headline/,
-    );
-  });
-
-  it('throws when defaultLanguage is not one of the configured languages', () => {
-    const base = makeConfig();
-    const config = makeConfig({
-      settingsConfig: { ...base.settingsConfig, defaultLanguage: 'en-US' },
-    });
-
-    expect(() => validateConfig(config)).toThrow(/defaultLanguage "en-US"/);
-  });
-
-  it('throws when defaultAppearance is not one of the configured appearances', () => {
-    const base = makeConfig();
-    const config = makeConfig({
-      settingsConfig: { ...base.settingsConfig, defaultAppearance: 'system' },
-    });
-
-    expect(() => validateConfig(config)).toThrow(/defaultAppearance "system"/);
-  });
-
-  it('throws when a configured language has no registered translation catalogue', () => {
-    const base = makeConfig();
-    const config = makeConfig({
-      settingsConfig: {
-        ...base.settingsConfig,
-        languages: [
-          ...base.settingsConfig.languages,
-          { code: 'fr', shortLabel: 'FR', label: 'Français', locale: 'fr-FR' },
-        ],
-      },
-    });
-
-    expect(() => validateConfig(config)).toThrow(/"fr" has no registered translation catalogue/);
-  });
-
-  it('accepts a config whose every localised field carries the default language', () => {
-    expect(() => validateConfig(makeConfig({ paragraph: { de: 'Absatz' } }))).not.toThrow();
+  it('throws when a field lacks the default-language entry (defensive; the mapper prevents it)', () => {
+    const broken: PropertyConfig = {
+      ...CONFIG,
+      standbyMessage: { en: 'Welcome' }, // default language is de
+    };
+    expect(() => resolveProperty(broken, 'de')).toThrowError(/standbyMessage/);
   });
 });

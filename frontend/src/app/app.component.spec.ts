@@ -4,47 +4,62 @@ import { provideRouter } from '@angular/router';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { App } from './app.component';
+import { PropertyContentService } from './core/content/property-content.service';
+import type { PropertyBranding } from './core/content/property.model';
+import { GuestStateRoutingService } from './core/guest/guest-state-routing.service';
 import type { LanguageCode } from './core/i18n/translation.model';
 import { PreferencesService } from './core/preferences/preferences.service';
 
 /**
- * S30 — `App` (REQ-124, REQ-110).
+ * S30 — `App` (REQ-124, REQ-110 → REQ-512).
  *
  * `App` is the only code in `src/` allowed to touch `document.documentElement`
  * (`frontend/CLAUDE.md`), so this spec owns the proof that it does: branding
- * primitives once, `data-theme` and `lang` on every change.
+ * primitives whenever a validated brand is held, `data-theme` and `lang` on
+ * every change — and that a `null` brand (unpaired / rejected wire value)
+ * writes nothing, leaving the token-layer defaults in force.
  *
- * `applyPropertyDefaults()` is deliberately **not** asserted here — it moved to
- * the app initializer (S38) so the defaults are settled and the stored
- * preference hydrated before the first effect run, and it is asserted in S39.
- *
- * `PreferencesService` is a DI double holding the two signals `App` reads.
- * That is also what makes "and both update on change" assertable at all: the
- * real service would need a configured property and a gateway to move.
+ * `PreferencesService` and `PropertyContentService` are DI doubles holding
+ * the signals `App` reads; `GuestStateRoutingService` is stubbed empty (its
+ * routing effect has its own spec surface via the guards).
  */
 describe('App', () => {
   const root = document.documentElement;
 
+  const BRAND: PropertyBranding = {
+    primary: '#f45aa8',
+    primaryDeep: '#cc49af',
+    secondary: '#8a5cf6',
+  };
+
   afterEach(() => {
     root.removeAttribute('data-theme');
     root.removeAttribute('lang');
+    root.style.removeProperty('--brand-primary');
+    root.style.removeProperty('--brand-primary-deep');
+    root.style.removeProperty('--brand-secondary');
   });
 
   async function setup(
     theme: 'light' | 'dark' = 'light',
     initialLanguage: LanguageCode = 'de',
+    initialBranding: PropertyBranding | null = BRAND,
   ): Promise<{
     fixture: ComponentFixture<App>;
     resolvedTheme: WritableSignal<'light' | 'dark'>;
     language: WritableSignal<LanguageCode>;
+    branding: WritableSignal<PropertyBranding | null>;
   }> {
     const resolvedTheme = signal<'light' | 'dark'>(theme);
     const language = signal<LanguageCode>(initialLanguage);
+    const branding = signal<PropertyBranding | null>(initialBranding);
 
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
         { provide: PreferencesService, useValue: { resolvedTheme, language } },
+        { provide: PropertyContentService, useValue: { branding } },
+        { provide: GuestStateRoutingService, useValue: {} },
         provideZonelessChangeDetection(),
         provideRouter([]),
       ],
@@ -52,7 +67,7 @@ describe('App', () => {
 
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
-    return { fixture, resolvedTheme, language };
+    return { fixture, resolvedTheme, language, branding };
   }
 
   it('should create the app', async () => {
@@ -60,11 +75,26 @@ describe('App', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('applies the property branding primitives to the document root at start', async () => {
+  it('applies the held branding primitives to the document root before first paint', async () => {
     await setup();
     expect(root.style.getPropertyValue('--brand-primary')).toBe('#f45aa8');
-    expect(root.style.getPropertyValue('--brand-primary-deep')).toBeTruthy();
-    expect(root.style.getPropertyValue('--brand-secondary')).toBeTruthy();
+    expect(root.style.getPropertyValue('--brand-primary-deep')).toBe('#cc49af');
+    expect(root.style.getPropertyValue('--brand-secondary')).toBe('#8a5cf6');
+  });
+
+  it('a null brand writes nothing — the token-layer defaults stay (REQ-512)', async () => {
+    await setup('light', 'de', null);
+    expect(root.style.getPropertyValue('--brand-primary')).toBe('');
+    expect(root.style.getPropertyValue('--brand-secondary')).toBe('');
+  });
+
+  it('applies branding when it ARRIVES (pairing claim / poll re-brand)', async () => {
+    const { fixture, branding } = await setup('light', 'de', null);
+
+    branding.set(BRAND);
+    await fixture.whenStable();
+
+    expect(root.style.getPropertyValue('--brand-primary')).toBe('#f45aa8');
   });
 
   it('writes the resolved theme and the active language to <html>', async () => {

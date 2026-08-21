@@ -103,6 +103,23 @@ const oneTheme = flag('--theme');
 const oneLang = flag('--lang');
 const verbose = has('--verbose');
 
+/** PRODUCTION-build measurement (guest-frontend-integration): a prod bundle
+    carries no dev token fallback (REQ-505 — that is the point), so an empty
+    profile boots to /pairing and the grid cannot run. Seeding the public
+    dev-only token per context reproduces what the dev build does implicitly.
+    Usage: GXP_MEASURE_DEVICE_TOKEN=gxp-dev-device-token node tools/measure.mjs … */
+const seedToken = process.env.GXP_MEASURE_DEVICE_TOKEN ?? null;
+const seedContext = async (context) => {
+  if (seedToken) {
+    await context.addInitScript((token) => {
+      if (!localStorage.getItem('gxp.device-token')) {
+        localStorage.setItem('gxp.device-token', token);
+      }
+    }, seedToken);
+  }
+  return context;
+};
+
 const round = (n, places = 2) => {
   const f = 10 ** places;
   return n === null || n === undefined ? null : Math.round(n * f) / f;
@@ -366,13 +383,17 @@ function collect() {
 
 /**
  * Sets appearance and language by clicking the Settings screen's own option
- * buttons — the real write path, not a seeded `sessionStorage` record. The
- * stand-in gateway then persists the choice, so it survives the `goto()`s of
- * the route loop inside the same browser context.
+ * buttons — the real write path. Since `guest-frontend-integration` the
+ * choice persists SERVER-side (the stay's preference record), so surviving
+ * the route loop's `goto()`s needs the fire-and-forget `PUT` to have landed
+ * before the next reload hydrates from the session — the second wait below
+ * polls the session until the server holds the chosen values (the old
+ * sessionStorage stand-in was synchronous and needed no such wait; without
+ * it, a reload can race the write and re-render the previous preference).
  */
 async function applyPreferences(page, theme, language) {
   await page.goto(baseUrl + '/einstellungen', { waitUntil: 'load' });
-  await page.waitForSelector('.setting-choice');
+  await page.waitForSelector('.setting-choice', { timeout: 60000 });
   const groups = page.locator('.setting-choice');
   await groups.nth(0).locator('.setting-choice__option').nth(LANGUAGE_INDEX[language]).click();
   await groups.nth(1).locator('.setting-choice__option').nth(APPEARANCE_INDEX[theme]).click();
@@ -383,6 +404,24 @@ async function applyPreferences(page, theme, language) {
     [theme, language],
     { timeout: 5000 },
   );
+  try {
+    await page.waitForFunction(
+      async ([t, l]) => {
+        const token = localStorage.getItem('gxp.device-token');
+        if (!token) return true; // unpaired — nothing to persist against
+        const res = await fetch('/api/guest/session', {
+          headers: { Authorization: 'Bearer ' + token },
+        });
+        if (!res.ok) return true; // offline states measure what they render
+        const session = await res.json();
+        return session.preference?.appearance === t && session.preference?.language === l;
+      },
+      [theme, language],
+      { timeout: 10000, polling: 500 },
+    );
+  } catch {
+    note('PREFERENCE WRITE NOT CONFIRMED', `${theme}/${language} — reloads may show stale values`);
+  }
 }
 
 /** Opens one of the status bar's dropdowns and waits for the overlay panel. */
@@ -510,10 +549,10 @@ console.log(
 console.log('\n############ PASS 1 — no-scroll grid, status-bar box, wrapping ############');
 
 for (const [w, h] of viewports) {
-  const context = await browser.newContext({
+  const context = await seedContext(await browser.newContext({
     viewport: { width: w, height: h },
     deviceScaleFactor: 1,
-  });
+  }));
   const page = await context.newPage();
   for (const theme of themes) {
     for (const language of languages) {
@@ -606,10 +645,10 @@ console.log(
 for (const [w, h] of viewports.filter(([vw]) => vw === 1024 || vw === 1280)) {
   for (const theme of themes) {
     for (const language of languages) {
-      const context = await browser.newContext({
+      const context = await seedContext(await browser.newContext({
         viewport: { width: w, height: h },
         deviceScaleFactor: 1,
-      });
+      }));
       const page = await context.newPage();
       await applyPreferences(page, theme, language);
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
@@ -656,10 +695,10 @@ console.log('\n############ PASS 3 — open dropdown overlay (REQ-115, REQ-123) 
 for (const [w, h] of viewports) {
   for (const theme of themes) {
     for (const language of languages) {
-      const context = await browser.newContext({
+      const context = await seedContext(await browser.newContext({
         viewport: { width: w, height: h },
         deviceScaleFactor: 1,
-      });
+      }));
       const page = await context.newPage();
       await applyPreferences(page, theme, language);
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
@@ -711,10 +750,10 @@ console.log('\n############ PASS 4 — composites vs. 02-design.md §3.4 #######
 
 for (const theme of themes) {
   const [w, h] = [1280, 832];
-  const context = await browser.newContext({
+  const context = await seedContext(await browser.newContext({
     viewport: { width: w, height: h },
     deviceScaleFactor: 1,
-  });
+  }));
   const page = await context.newPage();
   await applyPreferences(page, theme, 'de');
   await page.goto(baseUrl + '/', { waitUntil: 'load' });

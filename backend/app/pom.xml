@@ -196,6 +196,48 @@
 
     <profiles>
         <profile>
+            <!-- guest-frontend-integration D7 (REQ-526/527, constitution v1.5.0
+                 mechanism mirrored): the PREBUILT Angular production bundle is
+                 copied into META-INF/resources so it rides target/quarkus-app
+                 into the unchanged Dockerfile.jvm and is served at `/` on the
+                 same HTTPS origin as /api. Auto-activated ONLY when a frontend
+                 build exists — a backend-only `./mvnw test`/`package` stays
+                 Node-free, green, and simply ships no app. Workflow (README):
+                 `ng build` -> `./mvnw package` -> image build.
+                 maven-resources-plugin is an already-bound core plugin: this is
+                 build configuration, NOT a dependency addition. -->
+            <id>bundle-guest-app</id>
+            <activation>
+                <file>
+                    <exists>../../frontend/dist/frontend/browser/index.html</exists>
+                </file>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>copy-guest-app</id>
+                                <phase>process-resources</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.outputDirectory}/META-INF/resources</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>../../frontend/dist/frontend/browser</directory>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
             <id>native</id>
             <activation>
                 <property>

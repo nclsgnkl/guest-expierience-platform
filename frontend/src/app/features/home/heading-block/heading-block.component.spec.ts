@@ -8,30 +8,39 @@ import { PropertyContentService } from '../../../core/content/property-content.s
 import type { ResolvedPropertyConfig } from '../../../core/content/property.model';
 import { HeadingBlockComponent } from './heading-block.component';
 
-const TEST_PROPERTY: ResolvedPropertyConfig = {
-  guestName: 'Testgast',
-  heroSubtitle: 'Test-Untertitel',
-  headline: 'Willkommen im Airbnb von {guestName}!',
-  paragraph: 'Test-Absatz.',
-  logoAsset: 'assets/branding/test-logo.svg',
-  hasArtwork: false,
-  branding: { primary: '#000', primaryDeep: '#000', secondary: '#000' },
+const TEST_PROPERTY = {
+  propertyName: 'Testhaus',
+  logoAssetId: null,
+  branding: null,
   menuItems: [],
-  settings: { id: 'einstellungen', label: 'Einstellungen', icon: 'phosphorGearSix', route: '/einstellungen' },
+  settings: {
+    id: 'einstellungen',
+    label: 'Einstellungen-Test',
+    icon: 'phosphorGearSix',
+    route: '/einstellungen',
+  },
   settingsConfig: {
     languages: [{ code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' }],
     defaultLanguage: 'de',
     appearances: [{ mode: 'light', icon: 'phosphorSun' }],
     defaultAppearance: 'light',
   },
-  cards: [],
-};
+  standbyHeadline: 'Testhaus',
+  standbyMessage: 'Test-Standby',
+  home: {
+    heroSubtitle: 'Test-Untertitel',
+    /* Braces deliberately IN the fixture: a server-resolved string is
+       rendered verbatim (REQ-511) — if any client interpolation survived,
+       the assertion below would catch it replacing/normalising this. */
+    headline: 'Willkommen, Testgast! {nicht.ersetzen}',
+    paragraph: 'Test-Absatz.',
+    artworkAssetId: null,
+    cards: [],
+  },
+} satisfies ResolvedPropertyConfig;
 
 class MockPropertyContentService {
-  readonly property = signal(TEST_PROPERTY).asReadonly();
-  getSectionRoute(): string {
-    return '/x';
-  }
+  readonly property = signal<ResolvedPropertyConfig>(TEST_PROPERTY).asReadonly();
 }
 
 describe('HeadingBlockComponent', () => {
@@ -45,15 +54,14 @@ describe('HeadingBlockComponent', () => {
     });
   });
 
-  it('renders subtitle, interpolated headline, and paragraph from the injected content service', () => {
+  it('renders subtitle, headline and paragraph VERBATIM from the server strings (REQ-511)', () => {
     const fixture = TestBed.createComponent(HeadingBlockComponent);
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent as string;
 
     expect(text).toContain('Test-Untertitel');
-    expect(text).toContain('Willkommen im Airbnb von Testgast!');
+    expect(text).toContain('Willkommen, Testgast! {nicht.ersetzen}');
     expect(text).toContain('Test-Absatz.');
-    expect(text).not.toContain('{guestName}');
   });
 
   it('paints the sparkle with the shared gradient paint server, in the filled weight', () => {

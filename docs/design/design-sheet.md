@@ -400,6 +400,18 @@ Vollständige Spezifikation:
 `docs/features/appearance-and-language/02-design.md` §8 (Statusleiste) und
 §9 (Einstellungen).
 
+**Ergänzt 2026-08-20** (`guest-frontend-integration`, Konvention D1 vom
+Nutzer genehmigt): In-Repo entworfene *Screens* erhalten eigene Spezifikationen
+unter [`screens-inhouse/`](screens-inhouse/) — bewusst **nicht** unter
+`screens/`, das ausschließlich den Figma-Bestand dokumentiert. Jede Datei
+trägt ein Provenienz-Banner; ein Figma-Re-Import bringt nichts davon zurück.
+
+| Screen | Kurzfassung | Spezifikation |
+|---|---|---|
+| **Pairing** 📋 | Markenneutral (vor der Session gibt es kein Branding): ein Glas-Panel, Kopplungs-Code als Held in `--text-display`, Status-Zeile mit Punkt, keinerlei Bedienelemente — der Ablauf ist kiosk-seitig unbeaufsichtigt | [`screens-inhouse/pairing.md`](screens-inhouse/pairing.md) |
+| **Standby** 📋 | Leeres Zimmer (`VACANT`): Mesh, zentrierter Block aus Logo + server-aufgelösten Standby-Texten, Statusleiste bleibt funktional, keine Navigation (Datensparsamkeit bis in die UI) | [`screens-inhouse/standby.md`](screens-inhouse/standby.md) |
+| **Connection lost** 📋 | Gepaart, Server unerreichbar, kein Cache: ein Glas-Panel, `WifiSlash` in `--color-status-offline` (erste Verwendung der Status-Palette, dekorativ), selbstheilend ohne Button; spezifiziert dort auch die **Stale-Pille** (Chrome) | [`screens-inhouse/connection.md`](screens-inhouse/connection.md) |
+
 ---
 
 ## Homescreen

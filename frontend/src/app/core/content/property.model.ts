@@ -4,21 +4,37 @@ import type { AppearanceMode } from '../preferences/preference-gateway';
 /**
  * Content-service contract (docs/features/home-screen-prototype/02-design.md
  * -> "Content service contract"; extended by appearance-and-language
- * 02-design.md §5.1). Property-level configuration only — no guest/stay data
- * model exists (constitution principle 1; PRD -> Assumptions).
+ * 02-design.md §5.1; reshaped by guest-frontend-integration REQ-510…515: the
+ * config is now fed from `GET /api/guest/session` + `…/screens/home` through
+ * `guest-content.mapper.ts` instead of a static import).
  *
  * Two shapes of the same config live here, deliberately:
  *
  *   - the **authored** one (`PropertyConfig`, `MenuItem`, `ActionCard`) —
- *     guest-facing prose is a per-language map, which is what a property
- *     actually writes down and what the future backend will serve;
+ *     guest-facing prose is a per-language map, exactly what the wire
+ *     delivers (server-resolved templates, one entry per offered language);
  *   - the **resolved** one (`ResolvedPropertyConfig`, …) — the same shape with
  *     one language already chosen, which is all any component ever sees
- *     (REQ-108).
+ *     (REQ-108). A language switch re-resolves from data already held and
+ *     fetches nothing (REQ-514).
  *
  * They share one generic shape each, so the two cannot drift apart when a
  * field is added. `PropertyContentService.property` is the only thing that
  * turns the first into the second.
+ *
+ * Changes for the wire era (02-design.md §8):
+ *   - `guestName` + the `{guestName}` interpolation are GONE — the server
+ *     resolves every template (REQ-511); the client renders verbatim.
+ *   - `home` is nullable: a vacant room's `screens/home` is never fetched
+ *     (REQ-517), and menu/settings/standby must render without it.
+ *   - assets are ids (`logoAssetId`, `artworkAssetId`) fetched with the
+ *     device token via `GuestAssetService` — never a bare `<img src>`
+ *     (REQ-513).
+ *   - `menuItems` is 0–5 and `home.cards` 0–4, server-resolved and
+ *     server-ordered (REQ-511/515) — the old "exactly 5 / exactly 4" arms
+ *     are gone.
+ *   - `branding` is nullable: an invalid brand hex is rejected at the
+ *     boundary and the token-layer defaults stay in force (REQ-512).
  */
 
 export type { LanguageCode, AppearanceMode };
@@ -60,40 +76,50 @@ export interface PropertyBranding {
 }
 
 interface MenuItemShape<TText> {
-  id: string; // e.g. 'home' | 'info' | 'umgebung' | 'smart-home' | 'services' | 'einstellungen'
+  id: string; // the server's menu item key, e.g. 'home' | 'info' | … | 'einstellungen'
   label: TText;
-  icon: string; // Phosphor glyph name
+  icon: string; // Phosphor glyph name (validated against the registered set at the boundary)
   route: string; // e.g. '' for Home, '/info', '/umgebung', …
 }
 
 interface ActionCardShape<TText> {
-  id: string;
-  icon: string; // Phosphor glyph name, e.g. 'Key'
+  id: string; // client-derived, stable per payload — @for track only
+  icon: string; // Phosphor glyph name
   header: TText;
   description: TText;
-  targetSectionId: string; // must resolve to a MenuItem.id in menuItems or settings.id — REQ-019
+  targetSectionId: string; // the server's targetKey — kept for getSectionRoute() parity
+  route: string; // the server-resolved targetRoute, used directly (REQ-511)
+}
+
+/** The home-screen half — present only while the room is OCCUPIED. */
+interface HomeContentShape<TText> {
+  heroSubtitle: TText;
+  headline: TText; // server-resolved; rendered verbatim, no client interpolation
+  paragraph: TText;
+  artworkAssetId: number | null; // absent → the existing no-artwork fallback
+  cards: ActionCardShape<TText>[]; // 0–4, server-ordered
 }
 
 interface PropertyConfigShape<TText> {
-  guestName: string; // a person's name — never translated
-  heroSubtitle: TText; // "Schön, dass ihr da seid"
-  headline: TText; // "Willkommen im Airbnb von {guestName}!" — {guestName} interpolated at render time, in every language
-  paragraph: TText;
-  logoAsset: string; // path under assets/branding/
-  hasArtwork: boolean; // false for the example property → no-artwork fallback
-  branding: PropertyBranding;
-  menuItems: MenuItemShape<TText>[]; // exactly 5, in order: Home, Info, Umgebung, Smart Home, Services — REQ-017
-  settings: MenuItemShape<TText>; // exactly 1 — the sidebar's Einstellungen entry (REQ-018). NOT the settings *config* below
-  settingsConfig: PropertySettingsConfig; // available languages/appearances and their defaults — REQ-119
-  cards: ActionCardShape<TText>[]; // exactly 4
+  propertyName: string; // never translated (a name)
+  logoAssetId: number | null; // absent → the bundled placeholder
+  branding: PropertyBranding | null; // null = invalid/rejected → token-layer defaults stay
+  menuItems: MenuItemShape<TText>[]; // 0–5, resolved-enabled, server-ordered — REQ-515
+  settings: MenuItemShape<TText>; // the fixed Einstellungen chrome (server settingsEntry) — unremovable
+  settingsConfig: PropertySettingsConfig; // offered options + resolved defaults — REQ-119
+  standbyHeadline: TText; // server-resolved standby texts — REQ-517
+  standbyMessage: TText;
+  home: HomeContentShape<TText> | null; // null while VACANT (or not yet fetched)
 }
 
-/** As authored by the property: every guest-facing string per language. */
+/** As delivered by the wire: every guest-facing string per offered language. */
 export type MenuItem = MenuItemShape<Localized<string>>;
 export type ActionCard = ActionCardShape<Localized<string>>;
+export type HomeContent = HomeContentShape<Localized<string>>;
 export type PropertyConfig = PropertyConfigShape<Localized<string>>;
 
 /** As components see it: one language already chosen (02-design.md §5.2). */
 export type ResolvedMenuItem = MenuItemShape<string>;
 export type ResolvedActionCard = ActionCardShape<string>;
+export type ResolvedHomeContent = HomeContentShape<string>;
 export type ResolvedPropertyConfig = PropertyConfigShape<string>;
