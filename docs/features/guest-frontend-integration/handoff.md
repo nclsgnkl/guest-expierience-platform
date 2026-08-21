@@ -530,3 +530,31 @@ Nothing is committed. The working tree holds the fix round on top of
 was torn down (container and volumes removed, no processes left). After the
 commit, flip the registry row to Done and write the `frontend/CLAUDE.md`
 entries the user approves.
+
+## ⏸ gate CLOSED — 2026-08-21 (user decision)
+
+The user approved **four** of the five proposed `frontend/CLAUDE.md` entries,
+written verbatim on 2026-08-21:
+
+1. Structure — wire-fed content layer, `@gxp/api-client` import confined to
+   `core/guest/` and `core/api/`, no static content fallback (dev's #1).
+2. Structure — action-card routes come server-resolved from the wire, while
+   menu-shaped routes still use `getSectionRoute(id)` (review 🟠-2).
+3. Structure — the three kiosk state screens render outside `ShellComponent`
+   as the deliberate exception (review 🟠-2).
+4. Tests — `tools/measure-states.mjs` as the review instrument (dev's #3).
+
+**Declined:** dev's #2, the `packages/node_modules → ../frontend/node_modules`
+symlink entry ("you dont need to write anything about the node modules"). The
+symlink itself remains required and gitignored — it is recreated by hand after
+a fresh clone or a filesystem move, as happened on 2026-08-21.
+
+REQ-525 is therefore ✅ and the feature carries no open gate.
+
+**Noticed while writing, NOT changed** (no approval to alter it): the Tests
+section still says "if a test has to import the data file to assert
+something" — `example-property.data.ts` was deleted in this feature, so that
+clause now points at nothing. It is a stale reference rather than a wrong
+convention; the newly-written entry 1 already states the replacement rule
+("a spec that needs content builds a config double"). Worth folding into a
+later doc pass.

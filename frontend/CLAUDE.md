@@ -24,15 +24,21 @@ this file only adds what it does not already say.
   asserts that it did. That is the per-property branding hook *defining* the
   primitive layer (REQ-003, `docs/design/tokens.md` → Implementation), not a
   component consuming a raw value.
-- Property content is reached through `PropertyContentService` via DI. Nothing
-  outside that service imports `example-property.data.ts` — except
-  `property-content.service.spec.ts`, which reads it deliberately to check the
-  service against the real shipped config. A component that does this is a bug;
-  any other spec that does it is the design smell the Tests section describes.
-  A component that needs a route for a card resolves it with
-  `getSectionRoute(targetSectionId)` instead of carrying a route of its own.
-- Every route renders inside `ShellComponent`; a section without a real design
-  yet gets `SectionPlaceholderComponent`, never a standalone stub page.
+- Property content arrives from the guest API: `core/guest/` owns all content
+  wire I/O (`GuestDataService`), and only `core/guest/` and `core/api/` may
+  import `@gxp/api-client` models — components keep reading
+  `PropertyContentService`. There is no static content fallback; a spec that
+  needs content builds a config double.
+- Routes for menu-shaped things are resolved with
+  `PropertyContentService.getSectionRoute(id)`. Action cards are not
+  menu-shaped any more: they navigate the server-resolved `route` the wire
+  delivers, because enablement/ceiling resolution lives on the server.
+- Every in-app route renders inside `ShellComponent`; a section without a real
+  design yet gets `SectionPlaceholderComponent`, never a standalone stub page.
+  The three kiosk **state** screens — `/pairing`, `/standby`, `/connection` —
+  are the deliberate exception: they render outside the shell (no sidebar, no
+  chrome), are entered only by the state guards in `core/guest/`, and read no
+  property content that the guards have not already guaranteed.
 
 ## Layout
 
@@ -86,6 +92,10 @@ Vitest + `TestBed`, zoneless (`provideZonelessChangeDetection()` in every
 component test). Components under test get a `PropertyContentService` test
 double through DI — if a test has to import the data file to assert something,
 that is a design smell, not a test convenience.
+
+`tools/measure-states.mjs` is the review instrument for the three full-screen
+states and the staleness pill; it needs the dev backend and drives its state
+via the manager API (and restores it).
 
 **A service's collaborator is a DI double built from writable signals**
 (`{ provide: PreferencesService, useValue: { language } }`), not the real
