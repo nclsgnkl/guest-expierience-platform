@@ -25,18 +25,25 @@ is the working summary, not a replacement.
   and non-Control types in `.control` are `public` only because Java has no
   sub-package visibility — referencing them from outside `de.gxp.<feature>` is
   a violation, caught by the architecture tests, not by the compiler.
-  **Entities never leave their feature.** The three guards live in
+  **Entities never leave their feature.** The four guards live in
   `de.gxp.architecture`: `FeatureInternalsImportTest` (cross-feature
   references into `.entity`/`.control`/`.boundary`, wildcard imports, layout
   present), `EntityExposureTest` (entity types in public signatures, including
-  generics, supertypes and interfaces) and `ControlPackageVisibilityTest`
-  (only `*Control` public in `.control`, only `*Resource` in `.boundary`).
+  generics, supertypes and interfaces), `ControlPackageVisibilityTest`
+  (only `*Control` public in `.control`, only `*Resource` in `.boundary`) and
+  `PersistenceAccessTest` (who may reach the database — see below).
   They derive the feature list from disk, so a new feature is covered the day
   its directory exists.
 - Controls accept and return **generated API DTOs** and call the hand-written
   Mapper themselves. No mapping framework, no Lombok.
 - Data access uses Panache **repositories**; entities carry no persistence
-  methods.
+  methods. Enforced by `PersistenceAccessTest` over `src/main/java`: only a
+  class in `.entity` (`jakarta.persistence` only — an entity must not extend
+  `PanacheEntity`) and a `*Repository` in `.control` (plus Panache) may
+  reference JPA/Panache/Hibernate/JDBC. No Control and no Boundary may.
+  `de.gxp.devseed.DevDataSeeder` is the one named exemption (dev-profile
+  fixture, native SQL across features); test sources are out of scope, since
+  reaching past the layering to arrange state is their job.
 - A Boundary method carries **exactly one** of `@PermitAll` /
   `@RolesAllowed(...)` (method-level, or inherited from a single class-level
   annotation), and may additionally carry `@ResponseStatus` for a non-default
