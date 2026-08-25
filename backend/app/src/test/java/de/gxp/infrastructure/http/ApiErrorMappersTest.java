@@ -1,4 +1,4 @@
-package de.gxp.api;
+package de.gxp.infrastructure.http;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;

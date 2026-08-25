@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import de.gxp.api.ApiErrors;
+import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.AppearanceMode;
 import de.gxp.api.model.AppearanceOptionDto;

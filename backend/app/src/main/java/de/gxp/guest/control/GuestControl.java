@@ -10,7 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import de.gxp.api.ApiErrors;
+import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ActionCardDto;
 import de.gxp.api.model.GuestActionCard;
 import de.gxp.api.model.GuestBrand;

@@ -27,7 +27,7 @@ import jakarta.ws.rs.Path;
  * pins is a generator upgrade that starts emitting them from the contract's
  * {@code bearerAuth}. That would be invisible in a fixture with only one place
  * to look, and it is not hypothetical for annotations in general:
- * {@code de.gxp.api.ResponseStatusFilter} exists precisely because
+ * {@code de.gxp.infrastructure.http.ResponseStatusFilter} exists precisely because
  * {@code @ResponseStatus} on an overriding method IS invisible to the
  * build-time scanner. The security path resolves the other way round, and that
  * difference is what {@link BoundarySecuritySemanticsTest} claim 2 asserts.

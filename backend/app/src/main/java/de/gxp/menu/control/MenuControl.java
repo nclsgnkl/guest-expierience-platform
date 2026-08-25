@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import de.gxp.api.ApiErrors;
+import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ActionCardDto;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.GuestMenuItem;

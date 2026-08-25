@@ -30,12 +30,25 @@ import java.util.stream.Stream;
 final class FeaturePackages {
 
     /**
-     * Not features, by name and not by accident ({@code backend/CLAUDE.md}):
-     * {@code api} is generated + shared HTTP plumbing, {@code web} is the SPA
-     * route handler, {@code devseed} is a dev-profile-only seeder, and
-     * {@code testsupport} exists only under {@code src/test/java}.
+     * Not a feature, by name and not by accident ({@code backend/CLAUDE.md}):
+     * everything that is not business capability lives under the single
+     * package {@code de.gxp.infrastructure} — {@code http} (the hand-written
+     * {@code ApiErrors}/mappers/filter), {@code web} (the SPA route handler),
+     * {@code devseed} (a dev-profile-only seeder) and {@code testsupport}
+     * (test scope only).
+     *
+     * <p>One entry, not four, since 2026-08-25. {@code de.gxp.api} used to be
+     * on this list; it no longer needs to be, because nothing hand-written
+     * lives there any more — it is purely the OpenAPI generator's output
+     * package under {@code target/}, and this scan only ever listed
+     * directories under {@code src/main/java}. That is strictly better than
+     * an exemption: should a hand-written class reappear in
+     * {@code de.gxp.api}, the directory shows up here, is treated as a
+     * feature, and {@code everyFeatureActuallyCarriesTheSubPackageLayout}
+     * fails loudly — which is the correct answer, because hand-written code
+     * does not belong in the generator's package.
      */
-    static final List<String> NON_FEATURE_PACKAGES = List.of("api", "web", "devseed", "testsupport");
+    static final List<String> NON_FEATURE_PACKAGES = List.of("infrastructure");
 
     /**
      * Feature packages that legitimately have NO {@code .entity} package.

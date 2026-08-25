@@ -1,4 +1,4 @@
-package de.gxp.web;
+package de.gxp.infrastructure.web;
 
 import io.quarkus.vertx.http.runtime.RouteConstants;
 import io.vertx.core.http.HttpHeaders;

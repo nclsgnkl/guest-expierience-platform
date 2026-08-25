@@ -11,9 +11,15 @@ is the working summary, not a replacement.
   else), `control` (the public `*Control` plus every package-private
   collaborator that is not a JPA type — `*Repository`, hashers, code
   generators, auth SPI adapters, filters, seeders), `entity` (the
-  `@Entity` types and their `*Mapper`). Not feature packages, and excluded
-  from the scheme: `de.gxp.api`, `de.gxp.web`, `de.gxp.devseed`,
-  `de.gxp.testsupport`.
+  `@Entity` types and their `*Mapper`). Everything that is not a business
+  capability lives under the single package **`de.gxp.infrastructure`** —
+  `http` (hand-written `ApiErrors`, the exception mappers, the response
+  filter), `web` (SPA fallback), `devseed` (dev-profile seeder),
+  `testsupport` (test scope). `de.gxp.api` is the OpenAPI generator's output
+  package and holds no hand-written source, so it exists only under
+  `target/` and needs no exclusion.
+  A package is a **feature** when it owns state (a table) and/or a contract
+  surface; `de.gxp.auth` qualifies on both counts and stays one.
 - **A Boundary method is one delegating line** — take the generated DTO, call
   one Control method, return the result. No `if`, no `try`, no loop, no
   mapping, no second call — not even for plain CRUD. Anything more belongs in
@@ -41,7 +47,7 @@ is the working summary, not a replacement.
   class in `.entity` (`jakarta.persistence` only — an entity must not extend
   `PanacheEntity`) and a `*Repository` in `.control` (plus Panache) may
   reference JPA/Panache/Hibernate/JDBC. No Control and no Boundary may.
-  `de.gxp.devseed.DevDataSeeder` is the one named exemption (dev-profile
+  `de.gxp.infrastructure.devseed.DevDataSeeder` is the one named exemption (dev-profile
   fixture, native SQL across features); test sources are out of scope, since
   reaching past the layering to arrange state is their job.
 - A Boundary method carries **exactly one** of `@PermitAll` /
@@ -51,7 +57,7 @@ is the working summary, not a replacement.
   the **implementing** method: Quarkus resolves the endpoint implementation
   first and the generated interface only as a fallback (verified against
   3.33.3.1).
-- Controls build thrown non-2xx outcomes via `de.gxp.api.ApiErrors`, never
+- Controls build thrown non-2xx outcomes via `de.gxp.infrastructure.http.ApiErrors`, never
   ad-hoc `Response` construction — and **never a bare `jakarta.ws.rs`
   exception subclass** (`ServiceUnavailableException`, `NotFoundException`, …).
   Those carry no entity: their `String` constructor sets the Java message, not
@@ -120,7 +126,7 @@ is the working summary, not a replacement.
 - `quarkus-junit5` + `rest-assured`; every implemented behavior has a test
   (constitution principle 6). HTTP tests call the real contract paths, so
   contract drift also fails the suite.
-- Shared test fixtures live in `de.gxp.testsupport` (test scope only); tests
+- Shared test fixtures live in `de.gxp.infrastructure.testsupport` (test scope only); tests
   outside `de.gxp.device` seed kiosk devices via `DeviceFixtures` (hash-only
   DB insert), never the HTTP pairing flow — seeding a device is a
   fixture concern, and driving the real flow would couple unrelated suites to

@@ -3,7 +3,7 @@ package de.gxp.stay.control;
 import java.time.Instant;
 import java.util.List;
 
-import de.gxp.api.ApiErrors;
+import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.StayDto;
 import de.gxp.property.control.PropertyControl;

@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import de.gxp.api.ApiErrors;
+import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ConfirmPairingRequest;
 import de.gxp.api.model.DeviceDto;
 import de.gxp.api.model.DeviceUpdateRequest;

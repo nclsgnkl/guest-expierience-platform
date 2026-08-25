@@ -116,7 +116,7 @@ class PersistenceAccessTest {
      * features, on {@code %dev} only. It has no Repository and should not get
      * one: a Repository is a feature's production access path, and this seeder
      * deliberately reaches across features in a way no production code may.
-     * {@code backend/CLAUDE.md} already names {@code de.gxp.devseed} as a
+     * {@code backend/CLAUDE.md} already names {@code de.gxp.infrastructure} as
      * non-feature package for the same reason.
      *
      * <p>Keyed on the PATH, not the class name, so a same-named class added
@@ -124,7 +124,7 @@ class PersistenceAccessTest {
      * exemption whose file has moved is a hole nobody is watching.
      */
     private static final List<String> FILES_THAT_MAY_USE_PERSISTENCE_DIRECTLY =
-            List.of("src/main/java/de/gxp/devseed/DevDataSeeder.java");
+            List.of("src/main/java/de/gxp/infrastructure/devseed/DevDataSeeder.java");
 
     /**
      * Non-vacuity floor: a scan pointed at the wrong directory finds no files

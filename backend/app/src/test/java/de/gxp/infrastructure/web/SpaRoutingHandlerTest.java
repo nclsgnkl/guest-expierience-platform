@@ -1,4 +1,4 @@
-package de.gxp.web;
+package de.gxp.infrastructure.web;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;

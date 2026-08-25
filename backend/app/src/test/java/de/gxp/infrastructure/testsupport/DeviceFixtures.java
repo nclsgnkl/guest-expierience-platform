@@ -1,4 +1,4 @@
-package de.gxp.testsupport;
+package de.gxp.infrastructure.testsupport;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

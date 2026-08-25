@@ -1,4 +1,4 @@
-package de.gxp.devseed;
+package de.gxp.infrastructure.devseed;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;

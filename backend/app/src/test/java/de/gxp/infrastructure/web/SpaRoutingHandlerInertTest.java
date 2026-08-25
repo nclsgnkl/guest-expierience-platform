@@ -1,4 +1,4 @@
-package de.gxp.web;
+package de.gxp.infrastructure.web;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

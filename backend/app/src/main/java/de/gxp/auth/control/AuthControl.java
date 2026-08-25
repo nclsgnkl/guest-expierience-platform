@@ -3,7 +3,7 @@ package de.gxp.auth.control;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
-import de.gxp.api.ApiErrors;
+import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.LoginRequest;
 import de.gxp.api.model.LoginResponse;
 import de.gxp.api.model.PasswordChangeRequest;

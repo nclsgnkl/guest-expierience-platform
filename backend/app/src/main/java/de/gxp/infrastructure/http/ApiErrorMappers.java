@@ -1,4 +1,4 @@
-package de.gxp.api;
+package de.gxp.infrastructure.http;
 
 import java.util.List;
 

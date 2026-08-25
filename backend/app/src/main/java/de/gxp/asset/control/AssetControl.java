@@ -6,7 +6,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 
-import de.gxp.api.ApiErrors;
+import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.AssetMetadataDto;

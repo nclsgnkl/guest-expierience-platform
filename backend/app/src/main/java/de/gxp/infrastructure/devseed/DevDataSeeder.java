@@ -1,4 +1,4 @@
-package de.gxp.devseed;
+package de.gxp.infrastructure.devseed;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -31,7 +31,7 @@ import jakarta.transaction.Transactional;
  * never existing in a production database, never from secrecy.
  *
  * <p>Seeding is plain SQL against the migrated schema (the
- * {@code de.gxp.testsupport.DeviceFixtures} precedent): the packages' write
+ * {@code de.gxp.infrastructure.testsupport.DeviceFixtures} precedent): the packages' write
  * paths are admin-role Controls that a startup observer has no identity to
  * call, and their invariants are re-enforced here by the same DB constraints
  * the migrations installed (hex-shape checks, sort-index bounds, scope

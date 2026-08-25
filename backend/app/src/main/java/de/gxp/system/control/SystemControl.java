@@ -2,7 +2,7 @@ package de.gxp.system.control;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import de.gxp.api.ApiErrors;
+import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.SystemHealth;
 import de.gxp.api.model.SystemInfo;
 import de.gxp.api.model.SystemReadiness;
