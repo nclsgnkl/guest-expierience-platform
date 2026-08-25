@@ -40,7 +40,7 @@ access; it is its precondition. See §3.
 | Part A | Authentication hardening: throttling, per-user accounts, second factor, audit trail |
 | Part B | Certificates and names — a browser-trusted certificate without an inbound port |
 | Part C | The update channel — how a new version reaches a deployed box |
-| Part D | The relay — how a manager reaches the manager UI from outside the building |
+| Part D | The relay — how a manager reaches the manager UI from outside the building. **Sold separately; every instance must work without it** (§7) |
 
 **Deliberately out of scope**
 
@@ -231,9 +231,39 @@ self-signed CA and its manual kiosk step. The ACME path is the default for
 connected instances; the offline path stays supported and tested, and becomes
 the special case rather than the norm.
 
-Open: where the DNS credential lives (it must not be on the boxes — a stolen box
-must not be able to issue certificates for siblings), and what the instance
-identity is (§10).
+**How the name resolves.** Only one machine in the whole system needs to be
+reachable, and it is not a box:
+
+```
+*.props.example.com.  A  <relay-ip>      one wildcard record, forever
+relay.example.com.    A  <relay-ip>      boxes dial this, never a literal IP
+```
+
+A wildcard means a new instance needs **no DNS work at all** — a new name simply
+resolves. Instance names are deliberately opaque (`k3f9`, not
+`ferienhaus-mueller`): certificates appear in public Certificate Transparency
+logs, so a descriptive name would publish the existence and identity of a
+customer's property to anyone who looks.
+
+**Where the DNS credential lives — recommended answer (resolves §10 item 7).**
+DNS-01 requires writing `_acme-challenge.<name>.props.example.com`. Two obvious
+approaches are wrong:
+
+- *a DNS API token on each box* — providers scope tokens per zone, not per
+  record, so a stolen box could issue certificates for every sibling;
+- *a central wildcard certificate distributed to boxes* — every box would hold a
+  key valid for all of them.
+
+Instead the box **asks a small service of ours to publish its challenge**,
+authenticated with the same instance identity the relay uses. The DNS
+credential stays with us, a box can only ever influence its own name, and no
+new identity mechanism is invented. One endpoint.
+
+**Availability, measured against §2:** if DNS is unreachable, *new* remote
+sessions fail; established ones, the LAN manager UI and every guest screen are
+unaffected. Resolver caching absorbs short outages.
+
+Still open: what an instance identity is and who assigns it (§10 item 6).
 
 ---
 
@@ -337,6 +367,21 @@ Requirements:
 7. Enrollment — how a box obtains its relay identity — should reuse the instance
    identity from Part B rather than inventing a second one.
 
+**Remote access is an optional, separately sold capability** (owner decision
+2026-08-25), and that has two binding consequences:
+
+1. **A box must be fully functional having never enrolled**, and enrollment must
+   be possible later without a reinstall, and reversible without loss. A
+   customer who stops paying loses remote access and nothing else. This is §2
+   restated as a commercial requirement, which is the strongest kind.
+2. **Part C must not be gated behind Part D.** They share an outbound
+   connection, but their *availability must be independent*: an instance that
+   never bought remote access must still receive security updates. Tying them
+   together would leave unpatched copies of our software running in the field
+   because someone declined an upsell — a liability for us, not just for the
+   customer. Plan the two channels so that D can be switched off per instance
+   while C keeps running.
+
 **Not foreclosing the hybrid:** if cross-property features are ever needed (one
 host, twenty apartments, one overview), the aggregation layer would read through
 this same channel. Nothing here should assume a single manager per instance in a
@@ -391,7 +436,7 @@ Parts B and C.
 | 4 | **TOTP recovery path** — recovery codes, or an accepted site visit? (A3) |
 | 5 | **Audit retention** — how long, and what prunes it on a box nobody backs up? (A4) |
 | 6 | **Instance identity** — what is an instance called, who assigns it, and what happens when hardware is replaced? Shared by B, C and D |
-| 7 | **Where the DNS credential for ACME lives** — explicitly not on the boxes (B) |
+| 7 | **Where the DNS credential for ACME lives** — explicitly not on the boxes. *§5 records a recommendation (a challenge-publishing service authenticated by instance identity); it needs ratifying, not inventing* (B) |
 | 8 | **Update cadence and consent** — automatic, or manager-approved? What time of day? (C) |
 | 9 | **Migration failure policy** — refuse the update, or apply and risk a partial schema? (C) |
 | 10 | **Who operates the relay**, and what its availability target is (D) |
