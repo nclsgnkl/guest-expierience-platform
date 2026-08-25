@@ -40,17 +40,35 @@ Maven wrapper for building.
 # 1. Build the application (also regenerates contract artifacts)
 cd backend/app && ./mvnw verify
 
-# 2. Start the instance — all three variables are REQUIRED; compose refuses
-#    to interpolate without them, so a missing value fails at once.
+# 2. FIRST start — GXP_DB_PASSWORD and GXP_TLS_HOST are required on every
+#    start; GXP_ADMIN_PASSWORD is required only here, for this one boot.
 cd .. \
   && GXP_DB_PASSWORD='choose-a-db-password' \
      GXP_ADMIN_PASSWORD='choose-the-initial-admin-password' \
      GXP_TLS_HOST='192.168.1.10' \
      docker compose up --build
+
+# 3. EVERY start after that — drop the admin password from the environment.
+cd .. \
+  && GXP_DB_PASSWORD='choose-a-db-password' \
+     GXP_TLS_HOST='192.168.1.10' \
+     docker compose up
 ```
 
+**After the first start, do not pass `GXP_ADMIN_PASSWORD` again.** It is read
+once and ignored forever afterwards, but as long as it stays in the
+environment it is readable by anyone who can run `docker inspect` or read
+`/proc/<pid>/environ` — which needs Docker access, not root. Leaving it out
+removes that exposure without changing anything the running instance does; the
+password lives on only as a PBKDF2 hash in PostgreSQL. Compose therefore
+treats this one variable as optional (`:-`), while the other two keep their
+`:?` guard. A **fresh** instance started without it still refuses to boot —
+`AdminPasswordSeeder` enforces that itself, and its message names the variable
+and the ≥ 8 rule.
+
 - `GXP_DB_PASSWORD` — PostgreSQL password (app and db service).
-- `GXP_ADMIN_PASSWORD` — the admin password, **read on first start only**
+- `GXP_ADMIN_PASSWORD` — the admin password, **read on first start only**, and
+  the one variable compose does not require
   (constitution v1.5.x password lifecycle): when no credential row exists the
   app hashes it (JDK PBKDF2, 600 000 iterations) into PostgreSQL and refuses
   to start if the variable is unset, blank, or shorter than 8 characters. Once

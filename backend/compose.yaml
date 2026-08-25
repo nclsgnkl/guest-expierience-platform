@@ -38,7 +38,14 @@ services:
       GXP_DB_JDBC_URL: jdbc:postgresql://db:5432/gxp
       GXP_DB_USERNAME: gxp
       GXP_DB_PASSWORD: ${GXP_DB_PASSWORD:?set the database password (GXP_DB_PASSWORD)}
-      GXP_ADMIN_PASSWORD: ${GXP_ADMIN_PASSWORD:?set the initial admin password (GXP_ADMIN_PASSWORD)}
+      # Optional ON PURPOSE, unlike the two beside it: this value is read on the
+      # FIRST start only and ignored forever once a credential row exists, so a
+      # running instance should be started WITHOUT it (see README, "After the
+      # first start"). Keeping it required would leave the password readable via
+      # `docker inspect` and /proc/<pid>/environ for the life of the box. A missing
+      # value on a FRESH instance still refuses the boot — AdminPasswordSeeder does
+      # that itself, and its message names the variable and the >= 8 rule.
+      GXP_ADMIN_PASSWORD: ${GXP_ADMIN_PASSWORD:-}
       GXP_TLS_HOST: ${GXP_TLS_HOST:?set the host/IP kiosks use (GXP_TLS_HOST) - the TLS certificate is issued for it}
     volumes:
       - gxp-tls:/tls
