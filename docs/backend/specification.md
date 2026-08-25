@@ -396,6 +396,8 @@ rather than assumed.
 | `quarkus-flyway` | Migrations and catalogue seeding (decision 15) |
 | `quarkus-security` | Kept for **one specific reason**: authorization hangs off `@PermitAll`/`@RolesAllowed` on the **Boundary** method or class, with `quarkus.security.jaxrs.deny-unannotated-endpoints=true` so a new endpoint — including one in a Boundary that does not exist yet — fails closed at build time (constitution v1.6.0, 2026-08-24; it previously sat on the Control with the class-scoped `deny-unannotated-members`, which would have gone inert once the Controls carry no annotations). The alternative — a filter matching path prefixes — is exactly where authorization holes appear, because an endpoint added under the wrong prefix is silently public. Core Quarkus, versioned with the platform |
 
+| `quarkus-scheduler` | Time-driven housekeeping (expired pairing requests, idled-out manager tokens) that must not depend on traffic arriving. Core Quarkus, in-JVM `@Scheduled`, no job store — approved constitution v1.7.0 |
+
 **Build-time**
 
 | Tool | Why |
@@ -412,6 +414,7 @@ nobody can reach.
 |---|---|
 | `quarkus-elytron-security-common` | Its role here was `BcryptUtil`, i.e. hashing **one** password that is now checked only at login. **PBKDF2 from the JDK** (`SecretKeyFactory`, `PBKDF2WithHmacSHA256`, high iteration count) covers that in a few lines with no dependency at all |
 | `quarkus-smallrye-jwt` | The manager token is opaque and validated against an in-memory store (§6). A signed JWT would add an extension and a key to manage, in exchange for statelessness this instance has no use for |
+| `quarkus-quartz` | The core `quarkus-scheduler` covers `@Scheduled` in-JVM. Quartz adds a database job store and cluster coordination — both answer problems a single self-hosted instance does not have (constitution v1.7.0) |
 | Any mapping framework, Lombok, utility libraries | Hand-written mappers and plain Java |
 
 **A pleasant consequence worth protecting:** because the TypeScript client is

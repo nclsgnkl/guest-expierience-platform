@@ -1,7 +1,21 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.6.1 | **Last amended:** 2026-08-25
+**Version:** 1.7.0 | **Last amended:** 2026-08-25
 
+> **1.7.0** — `quarkus-scheduler` added to the approved backend dependencies
+> (owner decision 2026-08-25). A **new approval**, not a correction: the
+> allow-list previously had no scheduler at all, and the code says so — the
+> pairing table is swept opportunistically on every create, and the manager
+> token store purges on every issue. Both work, but both tie housekeeping to
+> traffic: an instance nobody touches never cleans up. The owner chose the
+> **core `quarkus-scheduler`** (a `@Scheduled` annotation, in-JVM, no store, no
+> cluster coordination) explicitly **over Quartz**, whose persistence and
+> clustering answer problems one self-hosted box does not have. Principle 4
+> still applies — it is one more extension to keep patched on machines nobody
+> can reach — and it was accepted because the replacement it displaces is
+> "hang the cleanup off unrelated traffic", not "do nothing". Existing
+> opportunistic cleanups may stay or move; nothing is required to change.
+>
 > **1.6.1** — accuracy corrections to v1.6.0, not new approvals: three
 > statements written on 2026-08-24 were contradicted by measurement once the
 > work landed, and the owner approved the corrected wording on 2026-08-25.
@@ -248,13 +262,17 @@
   Quarkus release at scaffold time): `quarkus-rest`, `quarkus-rest-jackson`,
   `quarkus-hibernate-orm-panache`, `quarkus-jdbc-postgresql`,
   `quarkus-hibernate-validator`, `quarkus-smallrye-openapi`, `quarkus-flyway`,
-  `quarkus-security`; build/test-time: `openapi-generator-maven-plugin`,
+  `quarkus-security`, `quarkus-scheduler` (core `@Scheduled` only — Quartz
+  deliberately not approved, see v1.7.0); build/test-time:
+  `openapi-generator-maven-plugin`,
   `quarkus-junit` (named `quarkus-junit5` before Quarkus 3.31 — same artifact,
   see v1.5.1), `rest-assured`, Quarkus Dev Services (no separate
   Testcontainers dependency). **Deliberate non-additions**, with replacements
   named so they are not re-added by reflex: `quarkus-elytron-security-common`
-  (→ JDK PBKDF2), `quarkus-smallrye-jwt` (→ opaque in-memory token), any
-  mapping framework / Lombok / utility libraries (→ plain hand-written Java).
+  (→ JDK PBKDF2), `quarkus-smallrye-jwt` (→ opaque in-memory token), `quarkus-quartz`
+  (→ core `quarkus-scheduler`; this box needs neither persistence nor
+  cluster coordination for its jobs), any mapping framework / Lombok /
+  utility libraries (→ plain hand-written Java).
 - **The kiosk's last-known-good cache never holds guest-sensitive values** —
   no door codes, key-box codes, alarm codes or WiFi passwords, ever, because
   the kiosk stands in a guest-accessible room (principle 3 applied to

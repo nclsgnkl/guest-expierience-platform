@@ -19,9 +19,14 @@ class PairingRequestRepository implements PanacheRepository<PairingRequest> {
     }
 
     /**
-     * Opportunistic cleanup (REQ-409, no scheduler on the allow-list): every
-     * create deletes expired rows first — a pairing table with a handful of
-     * live rows needs nothing more.
+     * Cleanup of expired requests (REQ-409). Called opportunistically on every
+     * create, which is what this was built around while the allow-list had no
+     * scheduler at all. {@code quarkus-scheduler} was approved on 2026-08-25
+     * (constitution v1.7.0), so a time-driven sweep is now permitted — the
+     * gap this closes is an instance nobody touches, where no create ever
+     * arrives and expired rows are never removed. Nothing here is unsafe
+     * meanwhile: an expired row is rejected by the poll and confirm checks
+     * regardless of whether it has been deleted yet.
      */
     long deleteExpired(Instant now) {
         return delete("expiresAt <= ?1", now);

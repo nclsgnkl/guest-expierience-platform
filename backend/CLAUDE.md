@@ -110,8 +110,14 @@ is the working summary, not a replacement.
 
 - The dependency allow-list in `docs/constitution.md` is **closed** — any
   `pom.xml` addition needs prior user approval. Named non-additions: Elytron
-  (→ JDK PBKDF2), smallrye-jwt (→ opaque in-memory token), mapping
-  frameworks/Lombok/utility libs (→ plain Java).
+  (→ JDK PBKDF2), smallrye-jwt (→ opaque in-memory token), **Quartz**
+  (→ core `quarkus-scheduler`), mapping frameworks/Lombok/utility libs
+  (→ plain Java).
+- **Scheduled work uses core `quarkus-scheduler`** (`@Scheduled`), approved
+  constitution v1.7.0. In-JVM, no job store, no cluster coordination — one box
+  needs none of that. A `@Scheduled` method belongs in a `.control` package
+  like any other collaborator, and does its work through the feature's Control
+  so the housekeeping and the request path share one code path.
 - Schema changes are **Flyway versioned SQL** in
   `src/main/resources/db/migration/` — no Hibernate schema generation, in any
   profile. Migrations run at startup and must leave a fresh instance usable.
