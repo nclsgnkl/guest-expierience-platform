@@ -1,4 +1,4 @@
-package de.gxp.device;
+package de.gxp.device.entity;
 
 import java.time.Instant;
 
@@ -15,37 +15,47 @@ import jakarta.persistence.Table;
  * manager reads it off the kiosk), the poll secret — stored only as
  * {@code pollSecretHash} — is the machine channel the kiosk keeps and never
  * displays. {@code roomId}/{@code deviceName} are set at manager confirm;
- * {@code claimedAt} makes the token hand-out claim-once. Package-private.
+ * {@code claimedAt} makes the token hand-out claim-once.
+ *
+ * <p>The TYPE is {@code public} only because Java has no sub-package
+ * visibility and {@code de.gxp.device.control} names it (spec §4,
+ * constitution v1.6.0); it still never leaves {@code de.gxp.device}, which
+ * the architecture guards enforce instead of the compiler.
+ *
+ * <p>Every field is public: this row has no mapper at all — the whole
+ * lifecycle (create, confirm, poll, claim) is written and read by
+ * {@code DeviceControl} across the sub-package line, so there is nothing left
+ * to keep package-private.
  */
 @Entity
 @Table(name = "pairing_request")
-class PairingRequest {
+public class PairingRequest {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    public Long id;
 
     @Column(nullable = false, unique = true)
-    String code;
+    public String code;
 
     @Column(name = "poll_secret_hash", nullable = false)
-    String pollSecretHash;
+    public String pollSecretHash;
 
     @Column(name = "room_id")
-    Long roomId;
+    public Long roomId;
 
     @Column(name = "device_name")
-    String deviceName;
+    public String deviceName;
 
     @Column(name = "created_at", nullable = false)
-    Instant createdAt;
+    public Instant createdAt;
 
     @Column(name = "expires_at", nullable = false)
-    Instant expiresAt;
+    public Instant expiresAt;
 
     @Column(name = "confirmed_at")
-    Instant confirmedAt;
+    public Instant confirmedAt;
 
     @Column(name = "claimed_at")
-    Instant claimedAt;
+    public Instant claimedAt;
 }

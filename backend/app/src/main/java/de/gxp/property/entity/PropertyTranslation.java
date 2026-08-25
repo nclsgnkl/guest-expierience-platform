@@ -1,4 +1,4 @@
-package de.gxp.property;
+package de.gxp.property.entity;
 
 import java.io.Serializable;
 
@@ -12,7 +12,7 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "property_translation")
 @IdClass(PropertyTranslation.Key.class)
-class PropertyTranslation {
+public class PropertyTranslation {
 
     record Key(Short propertyId, String language) implements Serializable {
     }

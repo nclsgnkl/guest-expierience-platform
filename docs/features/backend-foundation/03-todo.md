@@ -74,6 +74,18 @@
   - Files: `backend/app/src/main/resources/db/migration/V1__foundation_baseline.sql`,
     `application.properties`
   - Validate: `./mvnw quarkus:dev` logs the applied migration; test in T-15
+> **Amendment 2026-08-25 (owner decision D1, constitution v1.6.0) — read
+> before any `de/gxp/system/...` path below.** Every file in that package
+> gained one level: `boundary/SystemResource.java`,
+> `control/{SystemControl,InstanceInfoRepository}.java`,
+> `entity/{InstanceInfo,InstanceInfoMapper}.java`. `InstanceInfoRepository`
+> is still package-private (that is why it sits in `.control`), and
+> `InstanceInfo`'s fields are still package-private too; the TYPES
+> `InstanceInfo` and `InstanceInfoMapper` had to become `public` because Java
+> has no sub-package visibility. Test paths are unchanged — the three
+> `de.gxp.system` tests drive HTTP and stayed at the feature root. See
+> `02-design.md` for the full amended table.
+
 - [x] **T-07** BCE reference package `de.gxp.system` per design table:
   `SystemResource` (implements generated `SystemApi`, every method one
   delegating line), `SystemControl` (public, `@Transactional` where DB is
@@ -84,6 +96,11 @@
   - Files: `backend/app/src/main/java/de/gxp/system/*.java`
   - Validate: build green; review check — Boundary bodies single-statement,
     `@Transactional` only on Control, only Resource+Control public
+  - _Amended 2026-08-25 (D1, constitution v1.6.0):_ these five files moved into
+    `de/gxp/system/{boundary,control,entity}/` — see `02-design.md` for the
+    new table. The "only Resource+Control public" validation is superseded by
+    `FeatureInternalsImportTest` + `EntityExposureTest`; the paths above are
+    the record of what T-07 built, not the current layout.
 - [x] **T-08** Readiness behavior in `SystemControl.ready()`: probe query via
   `InstanceInfoRepository` (`SELECT 1`); on failure throw
   `ServiceUnavailableException` (503) — the pinned non-200 pattern; success
@@ -96,6 +113,9 @@
   name for Quarkus 3.33) in `application.properties`, with a comment naming
   the convention (every public Control method carries exactly one security
   annotation; roles `admin`/`device` reserved). — _REQ-213_
+  **Amended 2026-08-24 (D2):** that comment now describes the **Boundary**, and
+  `quarkus.security.jaxrs.deny-unannotated-endpoints=true` sits beside the
+  property this step added.
   - Files: `backend/app/src/main/resources/application.properties`
   - Validate: tests in T-14
 - [x] **T-10** Logging as a security surface, all profiles:

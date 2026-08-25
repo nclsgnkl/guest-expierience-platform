@@ -1,4 +1,4 @@
-package de.gxp.device;
+package de.gxp.device.control;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -10,9 +10,11 @@ import java.util.HexFormat;
 /**
  * Pairing credential generation (REQ-403/409, pinned parameters). The display
  * code uses a 32-char unambiguous alphabet (Crockford-style — no 0/O/1/I
- * confusion) at 8 chars ≈ 40 bits; combined with the 10-minute TTL and the
- * create rate limit, guessing is infeasible — and the 256-bit poll secret
- * alone protects the token. Logs nothing (principle 3).
+ * confusion) at 8 chars ≈ 40 bits (32⁸ ≈ 1.1 × 10¹²); combined with the
+ * 10-minute TTL that alone makes guessing infeasible — create is not
+ * throttled (REQ-409, owner decision 2026-08-24) and the argument no longer
+ * leans on a rate limit. The 256-bit poll secret alone protects the token.
+ * Logs nothing (principle 3).
  */
 final class PairingCodes {
 

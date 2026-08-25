@@ -6,25 +6,44 @@ is the working summary, not a replacement.
 
 ## BCE — binding rules (spec §4)
 
-- Package **by feature** under `de.gxp.<feature>`: Boundary (`*Resource`),
-  Control (`*Control`), Entities (+ package-private `*Repository`, `*Mapper`).
+- Package **by feature** under `de.gxp.<feature>`, split into three
+  sub-packages: `boundary` (the `*Resource` JAX-RS adapters, and nothing
+  else), `control` (the public `*Control` plus every package-private
+  collaborator that is not a JPA type — `*Repository`, hashers, code
+  generators, auth SPI adapters, filters, seeders), `entity` (the
+  `@Entity` types and their `*Mapper`). Not feature packages, and excluded
+  from the scheme: `de.gxp.api`, `de.gxp.web`, `de.gxp.devseed`,
+  `de.gxp.testsupport`.
 - **A Boundary method is one delegating line** — take the generated DTO, call
   one Control method, return the result. No `if`, no `try`, no loop, no
   mapping, no second call — not even for plain CRUD. Anything more belongs in
   the Control. Non-200 outcomes are thrown from the Control
   (`jakarta.ws.rs` exceptions), never branched on in the Boundary.
 - `@Transactional` sits on the **Control**, never on the Boundary.
-- The **Control is the package's only public type** (the Boundary is just its
-  HTTP adapter). Cross-feature access injects the other feature's Control;
-  Entity, Repository and Mapper stay package-private, and Entities never
-  leave their package.
+- The **Control is the only type another feature may reference.**
+  Cross-feature access injects the other feature's Control. Types in `.entity`
+  and non-Control types in `.control` are `public` only because Java has no
+  sub-package visibility — referencing them from outside `de.gxp.<feature>` is
+  a violation, caught by the architecture tests, not by the compiler.
+  **Entities never leave their feature.** The three guards live in
+  `de.gxp.architecture`: `FeatureInternalsImportTest` (cross-feature
+  references into `.entity`/`.control`/`.boundary`, wildcard imports, layout
+  present), `EntityExposureTest` (entity types in public signatures, including
+  generics, supertypes and interfaces) and `ControlPackageVisibilityTest`
+  (only `*Control` public in `.control`, only `*Resource` in `.boundary`).
+  They derive the feature list from disk, so a new feature is covered the day
+  its directory exists.
 - Controls accept and return **generated API DTOs** and call the hand-written
   Mapper themselves. No mapping framework, no Lombok.
 - Data access uses Panache **repositories**; entities carry no persistence
   methods.
-- A Boundary override may carry `@ResponseStatus` for a non-default success
-  code (e.g. 201) — the only annotation allowed on a Boundary method;
-  everything else stays on the Control.
+- A Boundary method carries **exactly one** of `@PermitAll` /
+  `@RolesAllowed(...)` (method-level, or inherited from a single class-level
+  annotation), and may additionally carry `@ResponseStatus` for a non-default
+  success code (e.g. 201). It carries nothing else. The annotation must sit on
+  the **implementing** method: Quarkus resolves the endpoint implementation
+  first and the generated interface only as a fallback (verified against
+  3.33.3.1).
 - Controls build thrown non-2xx outcomes via `de.gxp.api.ApiErrors`, never
   ad-hoc `Response` construction.
 
@@ -45,10 +64,21 @@ is the working summary, not a replacement.
 
 ## Security & logging
 
-- **Fail closed:** `quarkus.security.deny-unannotated-members=true` stays on,
-  and **every public Control method carries exactly one of** `@PermitAll` /
-  `@RolesAllowed(...)` — on the Control, never the Boundary. Roles: `admin`,
-  `device`. A test asserts unannotated methods are denied; keep it green.
+- **Fail closed:** `quarkus.security.jaxrs.deny-unannotated-endpoints=true`
+  **and** `quarkus.security.deny-unannotated-members=true` both stay on, and
+  **every public Boundary method carries exactly one of** `@PermitAll` /
+  `@RolesAllowed(...)` — on the Boundary, never the Control. Roles: `admin`,
+  `device`. Three tests keep this mechanical and must stay green: (1) every
+  public `*Resource` method resolves to exactly one effective annotation;
+  (2) no generated `de.gxp.api.*Api` interface method carries a security
+  annotation (a generator upgrade must not start supplying one silently);
+  (3) every operation marked `bearerAuth` in `api/openapi.yaml` answers 401 to
+  an anonymous caller.
+- **Class-level is allowed only for `@RolesAllowed`.** `@PermitAll` must sit on
+  the method: a class-level `@PermitAll` is inherited by any method added
+  later, so a forgotten endpoint becomes anonymously reachable with the audit,
+  the contract test and `deny-unannotated-endpoints` all green. A class-level
+  `@RolesAllowed` fails the other way — too restrictive, and loud.
 - **Logging is a security surface** (constitution principle 3, verbatim for
   the backend): no SQL statement or bind-parameter logging, no access/request-
   body logging, no guest-sensitive value (door/key-box/alarm codes, WiFi
@@ -77,5 +107,6 @@ is the working summary, not a replacement.
   contract drift also fails the suite.
 - Shared test fixtures live in `de.gxp.testsupport` (test scope only); tests
   outside `de.gxp.device` seed kiosk devices via `DeviceFixtures` (hash-only
-  DB insert), never the HTTP pairing flow — the global pairing rate limit
-  must not be burned by unrelated suites.
+  DB insert), never the HTTP pairing flow — seeding a device is a
+  fixture concern, and driving the real flow would couple unrelated suites to
+  pairing's contract.

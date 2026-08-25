@@ -13,8 +13,8 @@ import jakarta.persistence.EntityManager;
  * Test-only device seeding. Tests OUTSIDE {@code de.gxp.device} seed device
  * rows directly (hash-only, like the pairing claim would) instead of running
  * the HTTP pairing flow: the pairing lifecycle is proven once in
- * {@code PairingFlowTest}, and going through HTTP here would burn the global
- * 5-per-60s create rate limit across unrelated suites.
+ * {@code PairingFlowTest}, and going through HTTP here would spend three round
+ * trips and a pairing row per fixture for behaviour already proven there.
  */
 public final class DeviceFixtures {
 

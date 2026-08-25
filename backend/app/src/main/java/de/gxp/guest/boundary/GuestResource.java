@@ -1,4 +1,4 @@
-package de.gxp.guest;
+package de.gxp.guest.boundary;
 
 import java.io.File;
 
@@ -6,6 +6,8 @@ import de.gxp.api.GuestApi;
 import de.gxp.api.model.GuestHomeScreen;
 import de.gxp.api.model.GuestPreferencesUpdate;
 import de.gxp.api.model.GuestSession;
+import de.gxp.guest.control.GuestControl;
+import jakarta.annotation.security.RolesAllowed;
 
 /**
  * Boundary — JAX-RS adapter over the generated {@link GuestApi} (tag
@@ -13,6 +15,7 @@ import de.gxp.api.model.GuestSession;
  * line (spec §4, binding). No method carries a room/stay/device parameter —
  * checkable on the contract itself (REQ-411).
  */
+@RolesAllowed("device")
 public class GuestResource implements GuestApi {
 
     private final GuestControl guestControl;

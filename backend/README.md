@@ -53,9 +53,10 @@ cd .. \
 - `GXP_ADMIN_PASSWORD` — the admin password, **read on first start only**
   (constitution v1.5.x password lifecycle): when no credential row exists the
   app hashes it (JDK PBKDF2, 600 000 iterations) into PostgreSQL and refuses
-  to start if the variable is unset or blank. Once a hash exists the variable
-  is **ignored forever** — rotate the password through the API (below), not
-  through the environment. The value is never logged.
+  to start if the variable is unset, blank, or shorter than 8 characters. Once
+  a hash exists the variable is **ignored forever** — rotate the password
+  through the API (below), not through the environment. The value is never
+  logged.
 - `GXP_TLS_HOST` — the **one stable host name or IP the kiosks use** to reach
   this instance; the server certificate is issued for exactly it (SAN).
   Required in `%prod` — the boot refuses without it (same posture as the
@@ -96,10 +97,13 @@ Pairing is manager-attended and needs no typing on the kiosk:
    device's OS/browser trust store. A web page cannot do this; a person does
    it once per device.
 2. **The kiosk requests a pairing code:** `POST /api/pairing/requests`
-   (unauthenticated, rate-limited 5/min) → a short **display code** the kiosk
-   shows, a **poll secret** it keeps (never displayed — the code alone can
-   never yield a token, the screen stands in a guest-accessible room), and a
-   10-minute expiry.
+   (unauthenticated, **not** rate-limited — owner decision 2026-08-24) → a
+   short **display code** the kiosk shows, a **poll secret** it keeps (never
+   displayed — the code alone can never yield a token, the screen stands in a
+   guest-accessible room), and a 10-minute expiry. Live requests are bounded
+   by that expiry and the opportunistic cleanup on each create, not by a
+   budget; guessing a code is infeasible on entropy and TTL alone (32⁸ ≈
+   1.1 × 10¹² combinations, valid 10 minutes).
 3. **The manager confirms the code to a room:**
    `POST /api/manager/pairings/{code}/confirm` with
    `{"roomId": …, "deviceName": "…"}` (name optional — defaults to
@@ -160,8 +164,22 @@ curl -s -X PUT https://<host>/api/manager/password \
   authenticated request slides the window, and every authenticated response
   carries the refreshed expiry in the **`GXP-Token-Expires`** header
   (ISO-8601 instant) so a client can warn before idle-out.
-- **Lockout:** 5 consecutive failed logins lock the endpoint for 30 s
-  (`429` + `Retry-After`). Wrong-password answers are deliberately generic.
+- **No throttling (owner decision 2026-08-24):** login and password change are
+  **deliberately not throttled** — no lockout, no rate limit, no concurrency
+  gate. Two earlier mechanisms were each an unauthenticated denial of service
+  in their own right (a global 5-failure / 30 s lockout answered the manager's
+  *correct* password with `429`; the admission gate that replaced it still shed
+  arriving callers for as long as a flood lasted), and the production hardware
+  is not yet chosen, so a throttle sized for the wrong machine is worse than
+  none. **Accepted and recorded:** anyone on the LAN can spend this box's CPU
+  through PBKDF2, so sustained abuse degrades the whole instance, kiosks
+  included. Revisit once the deployment target is known. Wrong-password answers
+  stay deliberately generic.
+- **First-start password policy:** `GXP_ADMIN_PASSWORD` must be **≥ 8
+  characters** — the same minimum a password change enforces. A shorter value
+  refuses the first start (it names the rule, never the value). With no
+  throttle anywhere, resistance to guessing rests entirely on the password
+  itself.
 - The token store is in-memory: **a restart logs everyone out** (deliberate).
 
 ## Assets

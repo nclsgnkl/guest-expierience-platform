@@ -13,7 +13,9 @@
 #   GXP_DB_PASSWORD     — PostgreSQL password
 #   GXP_ADMIN_PASSWORD  — admin password, read on FIRST start only: seeded
 #                         hashed (PBKDF2) into PostgreSQL, boot refuses when
-#                         unset/blank and no hash exists; ignored once a hash
+#                         unset/blank/shorter than 8 chars and no hash exists
+#                         (the >= 8 minimum matches a password change);
+#                         ignored once a hash
 #                         is stored — rotate via PUT /api/manager/password
 #                         (constitution v1.5.x password lifecycle)
 #   GXP_TLS_HOST        — the ONE host name or IP kiosks use to reach this

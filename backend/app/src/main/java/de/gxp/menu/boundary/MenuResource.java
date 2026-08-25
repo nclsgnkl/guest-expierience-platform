@@ -1,4 +1,4 @@
-package de.gxp.menu;
+package de.gxp.menu.boundary;
 
 import java.util.List;
 
@@ -6,12 +6,15 @@ import de.gxp.api.ManagerMenuApi;
 import de.gxp.api.model.ActionCardDto;
 import de.gxp.api.model.MenuItemConfigEntryDto;
 import de.gxp.api.model.MenuItemDefinitionDto;
+import de.gxp.menu.control.MenuControl;
+import jakarta.annotation.security.RolesAllowed;
 
 /**
  * Boundary — JAX-RS adapter over the generated {@link ManagerMenuApi}.
  * Every method body is ONE delegating line (spec §4, binding);
  * {@code null} is the Control's property-scope marker.
  */
+@RolesAllowed("admin")
 public class MenuResource implements ManagerMenuApi {
 
     private final MenuControl menuControl;

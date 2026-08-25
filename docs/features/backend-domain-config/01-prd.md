@@ -183,13 +183,13 @@ HTTPS/TLS and device tokens stay in `device-pairing-and-guest-api`.
 
 | REQ-ID | Requirement | Priority |
 |--------|-------------|----------|
-| REQ-326 | `POST /api/manager/login` is the **only** endpoint that ever sees the password. Success returns an opaque bearer token — 256-bit `SecureRandom` — plus its idle timeout and current expiry. Failure is a generic `401` (no timing/wording oracle). After 5 consecutive failures the endpoint locks for 30 s (`429` + `Retry-After`) — the single brute-force choke point. | Must |
+| REQ-326 | `POST /api/manager/login` is the **only** endpoint that ever sees the password. Success returns an opaque bearer token — 256-bit `SecureRandom` — plus its idle timeout and current expiry. Failure is a generic `401` (no timing/wording oracle). Manager login and password change are **deliberately not throttled** — no lockout, no rate limit, no concurrency gate (owner decision 2026-08-24, superseding the concurrency gate of the same day, which in turn replaced the original failed-attempt lockout). Rationale: the production hardware is not yet chosen, and a throttle sized for the wrong machine is worse than none. Residual brute-force exposure is carried by the password policy — minimum 8 characters, enforced both on change and on the **first-start seed** — which is worth roughly 10⁸ against a random password where any throttle was worth about 10. **Accepted and recorded:** an unauthenticated caller on the LAN can spend the server's CPU at will through PBKDF2, so sustained abuse degrades the whole instance, kiosks included. Revisit once the deployment target is known. | Must |
 | REQ-327 | The token store is **in-memory** (a restart logs everyone out — acceptable and desirable), holds token **hashes** (SHA-256), and slides: 10-minute idle expiry, reset by every authenticated request; the refreshed expiry is exposed on every authenticated response (header) so the client can warn before idle-out. Expired/unknown tokens → `401`. | Must |
 | REQ-328 | `POST /api/manager/logout` invalidates the presented token immediately (server-side drop), `204`. | Must |
 | REQ-329 | Password hashing is **JDK PBKDF2** (`PBKDF2WithHmacSHA256`, parameters pinned in the design, per-credential random salt, self-describing stored format). No Elytron, no new dependency. | Must |
 | REQ-330 | First-start seeding: when no credential row exists, the hash is seeded from `GXP_ADMIN_PASSWORD`; if the variable is unset **or blank** and no hash exists, the app **refuses to start** with a clear message. Once a hash exists the variable is ignored (never re-read, never logged). | Must |
 | REQ-331 | `PUT /api/manager/password` (authenticated): verifies the current password, enforces a minimal policy (≥ 8 chars), stores the new hash, and **immediately drops every active bearer token** — including the caller's (v1.5.1: the old credential must never survive into another idle window). | Must |
-| REQ-332 | Every public manager Control method carries `@RolesAllowed("admin")` (login: `@PermitAll`); the fail-closed posture stays on. The foundation's `FailClosedTest` 401-revisit lands **here** (the first real authentication mechanism arrives in this feature, earlier than the handoff's guess): with a mechanism installed, anonymous against `@RolesAllowed` must yield `401` + challenge; wrong/expired token `401`; the assertions are updated accordingly. | Must |
+| REQ-332 | Every public manager Control method carries `@RolesAllowed("admin")` (login: `@PermitAll`); the fail-closed posture stays on. **Amended 2026-08-24 (owner decision D2, constitution v1.6.0):** the annotations moved from the Control to the **Boundary** — every public `*Resource` method now resolves to exactly one of `@PermitAll` / `@RolesAllowed(...)` (method-level or from a single class-level annotation) and the Controls carry none, because an internal call is not a trust boundary. The exactly-one guarantee is unchanged in substance, only relocated: `SecurityAnnotationAuditTest` (the `*Control` sweep) is replaced by `BoundaryAnnotationAuditTest` (the `*Resource` sweep plus a guard that no generated `de.gxp.api.*Api` interface carries a security annotation) and by `ContractSecuredOperationsDeniedTest` (every `bearerAuth` operation in `api/openapi.yaml` answers 401 anonymously). The *Control* sweep could not simply be re-pointed: `deny-unannotated-members` is class-scoped, so annotation-free Controls fall outside it — which is why `quarkus.security.jaxrs.deny-unannotated-endpoints=true` (global, build-time) landed in the same change and now covers a brand-new Boundary nobody annotated. The foundation's `FailClosedTest` 401-revisit lands **here** (the first real authentication mechanism arrives in this feature, earlier than the handoff's guess): with a mechanism installed, anonymous against `@RolesAllowed` must yield `401` + challenge; wrong/expired token `401`; the assertions are updated accordingly. | Must |
 | REQ-333 | No password material, token, hash or guest-sensitive value reaches any log or exception message, in any profile — auth errors are generic, the foundation's logging config is not weakened, and no new code logs request payloads. | Must |
 
 ### Operations, tests, docs
@@ -245,10 +245,14 @@ HTTPS/TLS and device tokens stay in `device-pairing-and-guest-api`.
   `409` deletion guards.
 - **REQ-325:** a bean-validation failure returns the `ApiError` shape, not
   the default validation body.
-- **REQ-326/327:** wrong password → generic `401`; 5 failures → `429` +
-  `Retry-After`; a valid token's expiry visibly slides on a subsequent
-  request (header value moves forward); an idled token → `401`; the store
-  holds no plaintext token (asserted at the store's API level).
+- **REQ-326/327:** wrong password → generic `401`; **amended 2026-08-24** —
+  the former criterion *"5 failures → `429` + `Retry-After`"* is withdrawn
+  with the throttling itself; the positive replacement is that **six
+  consecutive wrong passwords arm nothing** (no `429`, no `Retry-After`) and
+  the correct password still logs in immediately afterwards. A valid token's
+  expiry visibly slides on a subsequent request (header value moves forward);
+  an idled token → `401`; the store holds no plaintext token (asserted at the
+  store's API level).
 - **REQ-328/331:** after logout the token is dead; after password change
   **all** tokens (two sessions in the test) are dead and the new password
   logs in.
@@ -258,6 +262,14 @@ HTTPS/TLS and device tokens stay in `device-pairing-and-guest-api`.
 - **REQ-332:** anonymous → `401` with `WWW-Authenticate` on a manager
   endpoint; `FailClosedTest` updated + green; an audit test asserts every
   public manager Control method carries exactly one security annotation.
+  **Amended 2026-08-24:** the audit now sweeps the **Boundaries**
+  (`BoundaryAnnotationAuditTest`), and two criteria are added — no generated
+  `de.gxp.api.*Api` interface method carries a security annotation, and every
+  `bearerAuth` operation in `api/openapi.yaml` answers 401 to an anonymous
+  caller (`ContractSecuredOperationsDeniedTest`, contract-derived rather than
+  hand-listed). `FailClosedResource` keeps ONE deliberately unannotated
+  endpoint: with the global endpoint deny on, that fixture is the only proof
+  the flag bites.
 - **REQ-333:** grep of committed config/code finds no logging of password,
   token or payload material; boot + test logs show zero SQL/bind values
   (unchanged foundation posture).
@@ -278,6 +290,20 @@ allow-list (**this feature adds nothing**), auth & transport model verbatim
 (the TLS half lands next feature), principle 3 verbatim for logs, principles
 6/7 (tests, traceability), branch discipline (`feature/backend`), input
 validated at every boundary, secrets never hardcoded.
+
+**Amended 2026-08-25 (owner decision D1, constitution v1.6.0):** the clause
+*"package-private Entities/Repositories/Mappers"* no longer describes what is
+on disk and is replaced, not deleted. Each feature package is now split into
+`de.gxp.<f>.boundary` / `.control` / `.entity`; Java has no sub-package
+visibility, so the **Entity and the Mapper are `public`** (and so are the
+individual entity fields a Control writes across the split — widened one at a
+time, never wholesale). The **Repository stays package-private**, which is
+exactly why it lives in `.control` rather than beside the entity. What the
+compiler used to guarantee is now guaranteed by three dependency-free
+architecture tests in `de.gxp.architecture` — `FeatureInternalsImportTest`,
+`EntityExposureTest` and `ControlPackageVisibilityTest` — which the
+constitution makes part of the definition of done. Every other clause of this
+paragraph is unchanged.
 
 ## Risks & open questions
 

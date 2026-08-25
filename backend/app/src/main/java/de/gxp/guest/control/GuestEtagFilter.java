@@ -1,4 +1,4 @@
-package de.gxp.guest;
+package de.gxp.guest.control;
 
 import java.io.IOException;
 import java.security.MessageDigest;

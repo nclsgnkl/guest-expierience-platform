@@ -36,7 +36,6 @@ export const de = {
     'Diesen Code im Verwaltungsbereich bestätigen, um das Gerät einem Zimmer zuzuweisen.',
   'pairing.waiting': 'Warten auf Bestätigung …',
   'pairing.renewing': 'Neuer Code wird erstellt …',
-  'pairing.cooldown': 'Zu viele Versuche — kurze Pause …',
   'pairing.offline': 'Keine Verbindung zum Server. Verbindet automatisch neu.',
   'connection.title': 'Keine Verbindung',
   'connection.body':

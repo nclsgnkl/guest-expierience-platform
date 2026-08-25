@@ -14,6 +14,13 @@ import io.quarkus.test.junit.QuarkusTest;
  * T-23 (REQ-332): anyone on the guest WiFi gets a 401 challenge — one
  * endpoint per manager Resource, anonymous. (Wrong/expired-token variants
  * are covered in {@code AuthResourceTest}.)
+ *
+ * <p>Not redundant with {@link ContractSecuredOperationsDeniedTest}, which
+ * asserts the same 401 far more completely: these paths are HAND-WRITTEN, so
+ * they are the only anonymous-401 assertions that do NOT derive from
+ * {@code api/openapi.yaml}. An edit to the contract — dropping a
+ * {@code bearerAuth}, deleting a path — silences the derived test by
+ * construction, and this one keeps failing. Keep it, and keep it hand-listed.
  */
 @QuarkusTest
 class ManagerSurfaceDeniedTest {

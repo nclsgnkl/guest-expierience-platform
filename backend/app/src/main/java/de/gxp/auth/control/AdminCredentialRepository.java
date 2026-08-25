@@ -1,11 +1,16 @@
-package de.gxp.auth;
+package de.gxp.auth.control;
 
 import java.time.Instant;
 
+import de.gxp.auth.entity.AdminCredential;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
-/** Package-private data access for the single credential row. */
+/**
+ * Control (data access) — package-private data access for the single
+ * credential row. It lives in {@code .control} rather than beside the entity
+ * precisely so it can stay package-private (spec §4).
+ */
 @ApplicationScoped
 class AdminCredentialRepository implements PanacheRepositoryBase<AdminCredential, Short> {
 

@@ -128,8 +128,10 @@
       OCCUPIED → previous route restored; DISCONNECTED+no-cache →
       `/connection`.
 - [x] **T-16** *(done 2026-08-20, dev — 8 machine + 5 component spec cases green; status-dot colour deviation recorded in handoff)* `features/pairing/`: `pairing.service.ts` (state machine
-      02-design §3 — create/poll/claim, 3 s cadence, 429 `Retry-After`,
-      expiry auto-renew, offline backoff 5→30 s, secret in memory only) +
+      02-design §3 — create/poll/claim, 3 s cadence, ~~429 `Retry-After`~~
+      (**amended 2026-08-24:** removed with the backend's throttle — any create
+      failure is now the single offline path), expiry auto-renew, offline
+      backoff 5→30 s, secret in memory only) +
       `PairingComponent` per the T-01 spec (brandless, code hero, status
       line, reduced-motion respected). i18n keys de+en. — REQ-506/507
       Validate: service spec covers every transition incl. claim-once

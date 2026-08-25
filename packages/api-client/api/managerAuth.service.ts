@@ -113,7 +113,7 @@ export class ManagerAuthService extends BaseService {
 
     /**
      * Log in with the shared admin password
-     * The only operation that ever sees the password. Success returns an opaque 256-bit bearer token with a sliding 10-minute idle expiry. Failure is a deliberately generic 401 (no oracle); after 5 consecutive failures the endpoint locks for 30 seconds (429 + Retry-After).
+     * The only operation that ever sees the password. Success returns an opaque 256-bit bearer token with a sliding 10-minute idle expiry. Failure is a deliberately generic 401 (no oracle). Deliberately not throttled (owner decision 2026-08-24): no lockout, no rate limit, no concurrency gate — repeated failures accumulate no state and a correct password is never refused. Brute-force resistance rests on the password policy (minimum 8 characters).
      * @endpoint post /api/manager/login
      * @param loginRequest 
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

@@ -1,4 +1,4 @@
-package de.gxp.property;
+package de.gxp.property.control;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
@@ -17,10 +17,10 @@ import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.LanguageCode;
 import de.gxp.api.model.LanguageOptionDto;
 import de.gxp.api.model.PropertyDto;
-import de.gxp.asset.AssetControl;
-import de.gxp.text.TemplateControl;
-import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
+import de.gxp.asset.control.AssetControl;
+import de.gxp.property.entity.Property;
+import de.gxp.property.entity.PropertyMapper;
+import de.gxp.text.control.TemplateControl;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 
@@ -44,14 +44,12 @@ public class PropertyControl {
         this.templateControl = templateControl;
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public PropertyDto get() {
         return PropertyMapper.toDto(repository.theRow(), repository.translations(),
                 repository.languageOptions(), repository.appearanceOptions());
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public PropertyDto update(PropertyDto dto) {
         validate(dto);
@@ -68,13 +66,11 @@ public class PropertyControl {
     }
 
     /**
-     * Guest-read projection (REQ-416/417 — the {@code TemplateControl}
-     * {@code @PermitAll}-on-internal precedent): the property snapshot —
+     * Guest-read projection (REQ-416/417): the property snapshot —
      * name, brand, defaults, offered options, RAW templates, asset ids.
      * Read-only, not HTTP-mapped (no Boundary routes it); {@code GuestControl}
      * composes and resolves.
      */
-    @PermitAll
     @Transactional
     public PropertyDto guestView() {
         return PropertyMapper.toDto(repository.theRow(), repository.translations(),
@@ -86,7 +82,6 @@ public class PropertyControl {
      * be inside the property's offered sets (REQ-304/305/309). {@code null}
      * means "no override" and passes.
      */
-    @RolesAllowed("admin")
     @Transactional
     public void requireOffered(LanguageCode language, AppearanceMode appearance) {
         if (language != null
@@ -102,7 +97,6 @@ public class PropertyControl {
     }
 
     /** Cross-feature read: the language's configured locale (template resolution). */
-    @RolesAllowed("admin")
     @Transactional
     public Locale localeOf(LanguageCode language) {
         return repository.languageOptions().stream()

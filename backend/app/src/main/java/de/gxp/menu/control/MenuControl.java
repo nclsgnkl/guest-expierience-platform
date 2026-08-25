@@ -1,4 +1,4 @@
-package de.gxp.menu;
+package de.gxp.menu.control;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -12,10 +12,15 @@ import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.GuestMenuItem;
 import de.gxp.api.model.MenuItemConfigEntryDto;
 import de.gxp.api.model.MenuItemDefinitionDto;
-import de.gxp.room.RoomControl;
-import de.gxp.text.TemplateControl;
-import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
+import de.gxp.menu.entity.ActionCardConfig;
+import de.gxp.menu.entity.ActionCardConfigTranslation;
+import de.gxp.menu.entity.MenuItemConfig;
+import de.gxp.menu.entity.MenuItemConfigTranslation;
+import de.gxp.menu.entity.MenuItemDefinition;
+import de.gxp.menu.entity.MenuItemDefinitionTranslation;
+import de.gxp.menu.entity.MenuMapper;
+import de.gxp.room.control.RoomControl;
+import de.gxp.text.control.TemplateControl;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 
@@ -48,7 +53,6 @@ public class MenuControl {
 
     // ------------------------------------------------------------ catalogue
 
-    @RolesAllowed("admin")
     @Transactional
     public List<MenuItemDefinitionDto> getCatalogue() {
         List<MenuItemDefinitionTranslation> translations = repository.definitionTranslations();
@@ -59,7 +63,6 @@ public class MenuControl {
 
     // ---------------------------------------------------------- menu config
 
-    @RolesAllowed("admin")
     @Transactional
     public List<MenuItemConfigEntryDto> getConfig(Long roomId) {
         if (roomId != null) {
@@ -73,7 +76,6 @@ public class MenuControl {
      * invariant 3 against every affected scope INSIDE the same transaction —
      * any stranded card rolls the whole change back (REQ-314).
      */
-    @RolesAllowed("admin")
     @Transactional
     public List<MenuItemConfigEntryDto> putConfig(Long roomId, List<MenuItemConfigEntryDto> entries) {
         if (roomId != null) {
@@ -132,7 +134,6 @@ public class MenuControl {
     // ---------------------------------------------------------- action cards
 
     /** The scope's OWN rows — a room answers its own set, possibly empty. */
-    @RolesAllowed("admin")
     @Transactional
     public List<ActionCardDto> getCards(Long roomId) {
         if (roomId != null) {
@@ -141,7 +142,6 @@ public class MenuControl {
         return cardDtos(roomId);
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public List<ActionCardDto> putCards(Long roomId, List<ActionCardDto> cards) {
         if (roomId != null) {
@@ -177,8 +177,7 @@ public class MenuControl {
     // ------------------------------------------------------------ guest reads
 
     /**
-     * Guest-read resolution (REQ-417 — the {@code @PermitAll}-on-internal
-     * precedent): the room's resolved menu. Resolved-ENABLED items only —
+     * Guest-read resolution (REQ-417): the room's resolved menu. Resolved-ENABLED items only —
      * through {@link #enabled}, THE ceiling implementation, never
      * re-implemented; icon/sort/label resolve per-field room → property →
      * catalogue (labels per language, so every offered language always
@@ -186,7 +185,6 @@ public class MenuControl {
      * index; the route comes from the catalogue. Not HTTP-mapped,
      * {@code GuestControl} composes it.
      */
-    @PermitAll
     @Transactional
     public List<GuestMenuItem> guestResolvedMenu(long roomId, List<String> languages) {
         List<MenuItemConfig> propertyConfigs = repository.configsOf(null);
@@ -236,7 +234,6 @@ public class MenuControl {
      * templates: {@code GuestControl} resolves them per offered language
      * against the active stay. Not HTTP-mapped.
      */
-    @PermitAll
     @Transactional
     public List<ActionCardDto> guestResolvedCards(long roomId) {
         List<ActionCardConfig> cards = repository.cardsOf(roomId);

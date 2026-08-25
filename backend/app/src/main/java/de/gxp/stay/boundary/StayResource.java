@@ -1,4 +1,4 @@
-package de.gxp.stay;
+package de.gxp.stay.boundary;
 
 import java.util.List;
 
@@ -6,11 +6,14 @@ import org.jboss.resteasy.reactive.ResponseStatus;
 
 import de.gxp.api.ManagerStaysApi;
 import de.gxp.api.model.StayDto;
+import de.gxp.stay.control.StayControl;
+import jakarta.annotation.security.RolesAllowed;
 
 /**
  * Boundary — JAX-RS adapter over the generated {@link ManagerStaysApi}.
  * Every method body is ONE delegating line (spec §4, binding).
  */
+@RolesAllowed("admin")
 public class StayResource implements ManagerStaysApi {
 
     private final StayControl stayControl;

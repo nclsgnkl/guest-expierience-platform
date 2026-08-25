@@ -1,11 +1,16 @@
-package de.gxp.room;
+package de.gxp.room.control;
 
 import java.util.List;
 
+import de.gxp.room.entity.Room;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 
-/** Package-private data access for rooms. */
+/**
+ * Control (data access) — package-private data access for rooms. It lives in
+ * {@code .control} rather than beside the entity precisely so it can stay
+ * package-private (spec §4).
+ */
 @ApplicationScoped
 class RoomRepository implements PanacheRepository<Room> {
 

@@ -1,4 +1,4 @@
-package de.gxp.text;
+package de.gxp.text.control;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import jakarta.annotation.security.PermitAll;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
@@ -25,9 +24,14 @@ import jakarta.enterprise.context.ApplicationScoped;
  * braces are literal text. {@code |time}/{@code |date} format the value in
  * the property's timezone with the language's locale.
  *
- * <p>{@code @PermitAll}: this Control has no HTTP surface and carries no
- * secrets; the annotation keeps the "every public Control method is
- * explicitly annotated" audit mechanical.
+ * <p>Like every Control since constitution v1.6.0 it carries no security
+ * annotation at all — the trust boundary is HTTP, and this Control has no HTTP
+ * surface whatsoever.
+ *
+ * <p>{@code de.gxp.text} is the one feature package with NO Entity and no
+ * Boundary, so the sub-package layout (constitution v1.6.0) gives it a
+ * {@code .control} package and nothing else. The architecture guards name it
+ * as the documented exception to "every feature has an {@code .entity}".
  */
 @ApplicationScoped
 public class TemplateControl {
@@ -51,7 +55,6 @@ public class TemplateControl {
      * {@code {stay.checkout}}) — empty means the template is valid for a
      * field allowing {@code allowedPlaceholders}.
      */
-    @PermitAll
     public List<String> findInvalidPlaceholders(String template, Set<String> allowedPlaceholders) {
         List<String> invalid = new ArrayList<>();
         if (template == null) {
@@ -70,7 +73,6 @@ public class TemplateControl {
      * Resolves a stored (already validated) template. A placeholder whose
      * context value is absent stays as-is rather than rendering "null".
      */
-    @PermitAll
     public String resolve(String template, TemplateContext context) {
         if (template == null) {
             return null;

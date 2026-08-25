@@ -1,9 +1,9 @@
-package de.gxp.auth;
+package de.gxp.auth.control;
 
 import java.security.Principal;
 import java.time.Instant;
 
-import de.gxp.device.DeviceControl;
+import de.gxp.device.control.DeviceControl;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.identity.AuthenticationRequestContext;
 import io.quarkus.security.identity.IdentityProvider;

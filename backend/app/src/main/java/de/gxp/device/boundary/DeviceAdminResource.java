@@ -1,4 +1,4 @@
-package de.gxp.device;
+package de.gxp.device.boundary;
 
 import java.util.List;
 
@@ -6,6 +6,8 @@ import de.gxp.api.ManagerDevicesApi;
 import de.gxp.api.model.ConfirmPairingRequest;
 import de.gxp.api.model.DeviceDto;
 import de.gxp.api.model.DeviceUpdateRequest;
+import de.gxp.device.control.DeviceControl;
+import jakarta.annotation.security.RolesAllowed;
 
 /**
  * Boundary — admin-facing device adapter over the generated
@@ -13,6 +15,7 @@ import de.gxp.api.model.DeviceUpdateRequest;
  * is ONE delegating line (spec §4, binding); both Boundaries of this package
  * adapt the single public {@link DeviceControl}.
  */
+@RolesAllowed("admin")
 public class DeviceAdminResource implements ManagerDevicesApi {
 
     private final DeviceControl deviceControl;

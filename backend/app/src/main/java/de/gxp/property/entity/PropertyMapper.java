@@ -1,4 +1,4 @@
-package de.gxp.property;
+package de.gxp.property.entity;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -12,13 +12,18 @@ import de.gxp.api.model.LanguageCode;
 import de.gxp.api.model.LanguageOptionDto;
 import de.gxp.api.model.PropertyDto;
 
-/** Hand-written mapper (spec §4) — package-private, static. */
-final class PropertyMapper {
+/**
+ * Hand-written mapper (spec §4) — static, no mapping framework. Public only
+ * because {@code de.gxp.property.control} invokes it; the two per-option
+ * {@code toDto} overloads stay package-private because nothing outside this
+ * package calls them.
+ */
+public final class PropertyMapper {
 
     private PropertyMapper() {
     }
 
-    static PropertyDto toDto(Property property, List<PropertyTranslation> translations,
+    public static PropertyDto toDto(Property property, List<PropertyTranslation> translations,
             List<PropertyLanguageOption> languages, List<PropertyAppearanceOption> appearances) {
         PropertyDto dto = new PropertyDto()
                 .name(property.name)
@@ -63,7 +68,7 @@ final class PropertyMapper {
     }
 
     /** Mutates the managed row and builds fresh child rows from the DTO. */
-    static void apply(PropertyDto dto, Property property) {
+    public static void apply(PropertyDto dto, Property property) {
         property.name = dto.getName();
         property.mainLanguage = dto.getMainLanguage().toString();
         property.timezone = dto.getTimezone();
@@ -75,7 +80,7 @@ final class PropertyMapper {
         property.artworkAssetId = dto.getArtworkAssetId();
     }
 
-    static List<PropertyTranslation> toTranslations(PropertyDto dto, Short propertyId) {
+    public static List<PropertyTranslation> toTranslations(PropertyDto dto, Short propertyId) {
         TreeSet<String> languages = new TreeSet<>();
         languages.addAll(dto.getHeroSubtitle().keySet());
         languages.addAll(dto.getHeadline().keySet());
@@ -97,7 +102,7 @@ final class PropertyMapper {
         return rows;
     }
 
-    static List<PropertyLanguageOption> toLanguageOptions(PropertyDto dto, Short propertyId) {
+    public static List<PropertyLanguageOption> toLanguageOptions(PropertyDto dto, Short propertyId) {
         List<PropertyLanguageOption> rows = new ArrayList<>();
         for (int i = 0; i < dto.getLanguages().size(); i++) {
             LanguageOptionDto option = dto.getLanguages().get(i);
@@ -113,7 +118,7 @@ final class PropertyMapper {
         return rows;
     }
 
-    static List<PropertyAppearanceOption> toAppearanceOptions(PropertyDto dto, Short propertyId) {
+    public static List<PropertyAppearanceOption> toAppearanceOptions(PropertyDto dto, Short propertyId) {
         List<PropertyAppearanceOption> rows = new ArrayList<>();
         for (int i = 0; i < dto.getAppearances().size(); i++) {
             AppearanceOptionDto option = dto.getAppearances().get(i);

@@ -1,12 +1,17 @@
-package de.gxp.stay;
+package de.gxp.stay.control;
 
 import java.time.Instant;
 import java.util.List;
 
+import de.gxp.stay.entity.Stay;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 
-/** Package-private data access for stays. */
+/**
+ * Control (data access) — package-private data access for stays. It lives in
+ * {@code .control} rather than beside the entity precisely so it can stay
+ * package-private (spec §4).
+ */
 @ApplicationScoped
 class StayRepository implements PanacheRepository<Stay> {
 

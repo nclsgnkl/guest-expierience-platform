@@ -1,4 +1,4 @@
-package de.gxp.stay;
+package de.gxp.stay.control;
 
 import java.time.Instant;
 import java.util.List;
@@ -6,10 +6,10 @@ import java.util.List;
 import de.gxp.api.ApiErrors;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.StayDto;
-import de.gxp.property.PropertyControl;
-import de.gxp.room.RoomControl;
-import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
+import de.gxp.property.control.PropertyControl;
+import de.gxp.room.control.RoomControl;
+import de.gxp.stay.entity.Stay;
+import de.gxp.stay.entity.StayMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 
@@ -33,14 +33,12 @@ public class StayControl {
         this.propertyControl = propertyControl;
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public List<StayDto> list(Long roomId) {
         List<Stay> stays = roomId == null ? repository.allOrdered() : repository.byRoom(roomId);
         return stays.stream().map(StayMapper::toDto).toList();
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public StayDto create(StayDto dto) {
         validate(dto);
@@ -52,13 +50,11 @@ public class StayControl {
         return StayMapper.toDto(stay);
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public StayDto get(Long stayId) {
         return StayMapper.toDto(require(stayId));
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public StayDto update(Long stayId, StayDto dto) {
         Stay stay = require(stayId);
@@ -69,19 +65,17 @@ public class StayControl {
         return StayMapper.toDto(stay);
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public void delete(Long stayId) {
         repository.delete(require(stayId));
     }
 
     /**
-     * Guest-read (REQ-419, the {@code @PermitAll}-on-internal precedent): the
-     * room's ACTIVE stay — or {@code null} when vacant. The occupancy
+     * Guest-read (REQ-419): the room's ACTIVE stay — or {@code null} when
+     * vacant. The occupancy
      * derivation lives HERE (with the repository's range query), never
      * re-implemented; not HTTP-mapped, {@code GuestControl} composes it.
      */
-    @PermitAll
     @Transactional
     public StayDto activeStayOf(long roomId) {
         Stay stay = repository.activeOf(roomId, Instant.now());
@@ -94,8 +88,20 @@ public class StayControl {
      * pre-validated against the offered sets ({@code GuestControl}'s named
      * 400); a vacant room is the named 409 — the kiosk's fire-and-forget
      * write treats that as normal.
+     *
+     * <p>The pre-validation is on the caller only because {@code validate()}
+     * reaches {@code PropertyControl.requireOffered}, which used to be
+     * {@code @RolesAllowed("admin")} and would have thrown under the guest's
+     * device identity — so this write bypasses {@code validate()} and
+     * {@code GuestControl} re-implements the offered-set check. <b>That
+     * blocker is gone</b> (constitution v1.6.0, 2026-08-24: authorization
+     * lives on the Boundary, Controls carry no annotations): this method may
+     * now call {@code requireOffered} itself and the duplicate can go. Left
+     * standing deliberately — the two checks raise different named 400s
+     * ({@code value-not-offered} here, contract-declared, versus
+     * {@code language-not-offered}) and take different types, so the fold is
+     * its own delegation, not a drive-by of the annotation move.
      */
-    @PermitAll
     @Transactional
     public void writePreference(long roomId, String language, String appearance) {
         Stay stay = repository.activeOf(roomId, Instant.now());

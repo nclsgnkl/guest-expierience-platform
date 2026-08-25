@@ -41,7 +41,7 @@ export class PairingService extends BaseService {
 
     /**
      * Create a short-lived pairing request (kiosk, unauthenticated)
-     * Returns the display code the kiosk shows to the manager, the poll secret the kiosk keeps (never displayed), and the expiry. Rate-limited (pairing is a rare, manager-attended act); expired requests are cleaned up opportunistically on each create.
+     * Returns the display code the kiosk shows to the manager, the poll secret the kiosk keeps (never displayed), and the expiry. Expired requests are cleaned up opportunistically on each create. Deliberately not throttled (owner decision 2026-08-24): no rate limit and no admission gate, so there is no 429 here — the number of live requests is bounded only in age, by the 10-minute TTL plus that opportunistic cleanup, and guessing is made infeasible by the code entropy and TTL rather than by a budget.
      * @endpoint post /api/pairing/requests
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.

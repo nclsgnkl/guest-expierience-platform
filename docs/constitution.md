@@ -1,7 +1,38 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.5.1 | **Last amended:** 2026-08-19
+**Version:** 1.6.1 | **Last amended:** 2026-08-25
 
+> **1.6.1** — accuracy corrections to v1.6.0, not new approvals: three
+> statements written on 2026-08-24 were contradicted by measurement once the
+> work landed, and the owner approved the corrected wording on 2026-08-25.
+> (a) *"fails closed **at build time**"* — the build does not fail; a dropped
+> annotation compiles and is denied at runtime. (b) *"the types in `.entity`
+> **(and their fields)**"* — only the fields a Control outside `.entity`
+> actually touches must be widened: 58 of 97, compiler-proven minimal.
+> (c) *"**two** dependency-free architecture tests"* — there are **three**,
+> and the third exists because a reviewer walked a real leak through the
+> unguarded `.boundary` sub-package that the first two did not cover. Recorded
+> rather than quietly fixed, per the v1.3.0 lesson.
+>
+> **1.6.0** — the project owner's two backend conventions of 2026-08-24,
+> approved after an architecture review. (a) **Feature packages gain
+> `boundary`/`control`/`entity` sub-packages.** Chosen for readability, in full
+> knowledge of the price: Java has no sub-package visibility, so entity types
+> and their fields become `public` and the feature boundary is enforced by two
+> dependency-free architecture tests instead of by the compiler. ArchUnit was
+> considered and rejected — a dependency on an unpatchable box for what 120
+> lines of reflection do (principle 4). (b) **Security annotations move from the
+> Control to the Boundary**, together with
+> `quarkus.security.jaxrs.deny-unannotated-endpoints=true`. This is a net
+> *increase* in safety: `deny-unannotated-members` is class-scoped and would
+> have gone inert on annotation-free Controls, whereas
+> `deny-unannotated-endpoints` denies **every** unannotated JAX-RS endpoint,
+> including in a Boundary that does not exist yet — a hole the old model left
+> open. It also removes the five `@PermitAll`-on-internal-method warts and the
+> latent "this internal call only works because the caller happens to be admin"
+> coupling. Both are rewrites of previously approved sentences, hence a
+> major-feeling minor (the v1.4.0 precedent).
+>
 > **1.5.1** — name correction, not a new approval: `quarkus-junit5` was renamed
 > **`quarkus-junit`** upstream in Quarkus 3.31 (the old id is only a relocation
 > pom), verified by `dev` at scaffold time against Quarkus 3.33 per the
@@ -141,11 +172,29 @@
   `quarkus-rest` + Hibernate ORM with **Panache repositories** (entities carry
   no persistence methods). Packages follow **BCE (Boundary–Control–Entity),
   by feature**, under the strict rules of `docs/backend/specification.md` §4 —
-  binding highlights: a Boundary method is **one delegating line** (no
-  validation, mapping, branching or transactions — not even for plain CRUD);
-  `@Transactional` sits on the Control; the Control is the package's public
-  type and speaks generated API DTOs; Entities, Repositories and Mappers stay
-  package-private; mappers are hand-written, no mapping framework.
+  binding highlights: every feature package `de.gxp.<feature>` is split into
+  the sub-packages **`boundary` / `control` / `entity`** (owner decision
+  2026-08-24); a Boundary method is **one delegating line** (no validation,
+  mapping, branching or transactions — not even for plain CRUD);
+  `@Transactional` sits on the Control; **the Control is the only type any
+  other feature may reference**, and it speaks generated API DTOs; mappers are
+  hand-written, no mapping framework. Because Java has no sub-package
+  visibility, the types in `.entity` are necessarily `public`, and so is every
+  field that a Control outside `.entity` actually touches — but only those:
+  the migration widened **58 of 97** fields and left 39 package-private, and
+  that minimum is compiler-checkable. **The feature boundary is therefore held
+  by three dependency-free architecture tests in `de.gxp.architecture`, not by
+  the compiler**: `FeatureInternalsImportTest` (nothing outside
+  `de.gxp.<feature>` may reference that feature's `.entity`, `.control` or
+  `.boundary` types, except its own `*Control`; no wildcard imports; the
+  layout is actually present), `EntityExposureTest` (no public signature
+  outside `.entity` may expose an entity type — including generic arguments,
+  array components, supertypes and interfaces) and
+  `ControlPackageVisibilityTest` (only a `*Control` may be public in
+  `.control`, only a `*Resource` in `.boundary`). Those tests are part of the
+  definition of done and must stay green. They are a strong regression net,
+  not a proof: each records its known gaps in its own javadoc, and leaving one
+  sub-package out of scope is exactly how a real leak survived review once. A library such as ArchUnit is **deliberately not used** (principle 4).
 - **Contract-first API.** `api/openapi.yaml` is the source of truth. The Maven
   build generates the JAX-RS interfaces + DTOs (implementations hand-written)
   **and** the TypeScript client in `packages/api-client/` — which is generated
@@ -170,8 +219,17 @@
   bearer token (**10-minute idle expiry, sliding**, in-memory store on the
   server, in-memory only on the client, 256-bit `SecureRandom`, stored
   hashed). Password hashing is **JDK PBKDF2** — no Elytron. Authorization
-  hangs off `@RolesAllowed` on Control methods with `deny-unannotated-members`
-  so a new endpoint **fails closed**. All LAN traffic is **HTTPS** with an
+  hangs off `@PermitAll` / `@RolesAllowed(...)` on **Boundary** methods or
+  Boundary classes — the trust boundary is HTTP, not a Java call — with
+  **`quarkus.security.jaxrs.deny-unannotated-endpoints=true`**, so any endpoint
+  carrying no annotation, **including one in a brand-new Boundary**, **fails
+  closed** — denied at runtime by a decision baked in at build time; the build
+  itself does not fail, and `BoundaryAnnotationAuditTest` is the loud, early
+  signal. `deny-unannotated-members` stays on as the second
+  line for any bean mixing annotated and unannotated members. Controls carry no
+  security annotations: internal calls are not a trust boundary, and the room
+  is still derived exclusively from the authenticated device identity
+  (principle 4). All LAN traffic is **HTTPS** with an
   instance-generated CA distributed to kiosks at pairing — non-negotiable,
   since a shared password over plain HTTP is readable by the guest WiFi.
   Accepted and recorded: no per-user audit trail until a user table replaces

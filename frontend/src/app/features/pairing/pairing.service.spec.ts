@@ -13,9 +13,8 @@ import { PairingService } from './pairing.service';
 /**
  * S-pair — the pairing state machine (REQ-506/507, 02-design.md §3): every
  * transition incl. claim-once (token stored, bootstrap run, navigation
- * triggered), unattended renewal on 404, `Retry-After` on 429, the offline
- * resume-same-code rule — and that no storage write ever contains the code
- * or the poll secret.
+ * triggered), unattended renewal on 404, the offline resume-same-code rule —
+ * and that no storage write ever contains the code or the poll secret.
  */
 const CREATED = {
   code: 'ABCDEFGH',
@@ -144,19 +143,22 @@ describe('PairingService', () => {
     expect(service.status()).toBe('waiting');
   });
 
-  it('429 respects Retry-After and re-creates after the cooldown', async () => {
+  it('an HTTP error at create takes the same offline path as a dead network', async () => {
+    // The contract has no throttled answer any more (the `429` and the whole
+    // `cooldown` state went with the backend's rate limiter, 2026-08-24), so
+    // there is exactly ONE create-failure path left and every status code
+    // must land in it — including a 429 from something in front of the app.
     service.start();
     await settle();
-    http.expectOne('/api/pairing/requests').flush(
-      {},
-      { status: 429, statusText: 'Too Many Requests', headers: { 'Retry-After': '7' } },
-    );
+    http
+      .expectOne('/api/pairing/requests')
+      .flush({}, { status: 500, statusText: 'Internal Server Error' });
     await settle();
-    expect(service.status()).toBe('cooldown');
+    expect(service.status()).toBe('offline');
 
-    await vi.advanceTimersByTimeAsync(6_900);
+    await vi.advanceTimersByTimeAsync(4_900);
     http.expectNone('/api/pairing/requests');
-    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(100);
     http.expectOne('/api/pairing/requests').flush(CREATED);
     await settle();
     expect(service.status()).toBe('waiting');
@@ -227,7 +229,7 @@ describe('PairingService', () => {
 
     await vi.advanceTimersByTimeAsync(3_000);
     // Polls the SAME code — no premature renewal (which used to loop
-    // create → 3 s → create until the rate limit answered 429).
+    // create → 3 s → create without ever settling on a usable code).
     http
       .expectOne('/api/pairing/requests/ABCDEFGH')
       .flush(null, { status: 202, statusText: 'Accepted' });

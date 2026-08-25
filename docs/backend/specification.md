@@ -121,13 +121,22 @@ Boundary, a Control and its Entities.
 > package without a Control, and "it is only CRUD" is not a reason to skip one.
 
 ```
-de.<org>.gxp.room/
-    RoomResource.java     # Boundary — JAX-RS adapter, one delegating line per endpoint
-    RoomControl.java      # Control  — all behaviour, @Transactional, the package's public type
-    RoomRepository.java   # Control  — data access only (PanacheRepository), package-private
-    Room.java             # Entity   — state + invariants, no persistence methods
-    RoomMapper.java       # Entity <-> API DTO, package-private, invoked by the Control
+de.gxp.room/
+    boundary/RoomResource.java   # Boundary — JAX-RS adapter, one delegating line per endpoint,
+                                 #            carries the endpoint's ONE security annotation
+    control/RoomControl.java     # Control  — all behaviour, @Transactional, the feature's only
+                                 #            cross-feature entry point; NO security annotations
+    control/RoomRepository.java  # Control  — data access only (PanacheRepository), package-private
+    entity/Room.java             # Entity   — state + invariants, no persistence methods; public
+                                 #            only because Java has no sub-package visibility
+    entity/RoomMapper.java       # Entity <-> API DTO, invoked by the Control
 ```
+
+The sub-package split is the project owner's decision of 2026-08-24: it is a
+deliberate departure from textbook BCE, taken for readability. Its cost is that
+package-private visibility no longer enforces the feature boundary — two
+dependency-free architecture tests in `de.gxp.architecture` do — three of
+them (see `backend/CLAUDE.md`).
 
 Conventions to write down once and then enforce at review:
 
@@ -138,12 +147,15 @@ Conventions to write down once and then enforce at review:
 - **`@Transactional` sits on the Control, never on the Boundary.** The
   transaction boundary follows the behaviour, and no behaviour lives in the
   Boundary.
-- **The Control is the package's public type; the Boundary is only its HTTP
-  adapter.** This follows directly from the rule above: with a pass-through
-  Boundary, making *it* the cross-package entry point would drag HTTP concerns
-  into internal calls. A feature needing another feature's data therefore
-  injects **that feature's Control**. Repository, Mapper and Entity stay
-  package-private.
+- **The Control is the feature's public type; the Boundary is only its HTTP
+  adapter.** A feature needing another feature's data injects **that feature's
+  Control**. Repository and the Control's non-JPA collaborators stay
+  package-private inside `.control`; Entity and Mapper are `public` inside
+  `.entity` purely because Java has no sub-package visibility, and referencing
+  them from another feature is a violation caught by the architecture tests.
+  **Security annotations are the one exception to "the Boundary is trivial":
+  authorization is stated on the Boundary, because HTTP is the trust
+  boundary.**
 - **Controls speak API DTOs; Entities never leave the package.** Because the
   Boundary may not map, the Control accepts and returns the generated types and
   calls the Mapper itself. The trade-off is deliberate and worth stating: the
@@ -244,7 +256,7 @@ surprise on a kiosk. Start with `{stay.displayName}`, `{stay.checkOut|time}`,
 
 All paths are illustrative; `api/openapi.yaml` is the authority once written.
 
-### Pairing (unauthenticated, rate-limited)
+### Pairing (unauthenticated, unthrottled since 2026-08-24)
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -284,9 +296,13 @@ an earlier draft proposed:
 - **Idle logout is a real security property here**, not convenience. The manager
   laptop may sit at a hotel reception desk. Basic authentication has no notion
   of idleness at all.
-- **Brute-force limiting gets a single choke point again.** Rate limiting and
-  failed-attempt lockout live on `/api/manager/login` alone, instead of having
-  to be applied to every manager path.
+- **The password reaches a single endpoint.** `/api/manager/login` is the only
+  operation that ever sees it, instead of the credential travelling on every
+  manager path. (The brute-force *limiting* this bullet originally also claimed
+  was removed on 2026-08-24 — see REQ-326 as amended: there is deliberately no
+  lockout, rate limit or concurrency gate, because both mechanisms tried were
+  themselves denial-of-service vectors and the production hardware is not yet
+  known.)
 - **Logout becomes real** — the server drops the token — instead of "the client
   forgot the password".
 
@@ -378,7 +394,7 @@ rather than assumed.
 | `quarkus-hibernate-validator` | Constitution: *input validated at every system boundary* |
 | `quarkus-smallrye-openapi` | Serves the contract and the dev UI |
 | `quarkus-flyway` | Migrations and catalogue seeding (decision 15) |
-| `quarkus-security` | Kept for **one specific reason**: authorization hangs off `@RolesAllowed` on the individual Control method, with `deny-unannotated-members` so a new endpoint fails closed. The alternative — a filter matching path prefixes — is exactly where authorization holes appear, because an endpoint added under the wrong prefix is silently public. Core Quarkus, versioned with the platform |
+| `quarkus-security` | Kept for **one specific reason**: authorization hangs off `@PermitAll`/`@RolesAllowed` on the **Boundary** method or class, with `quarkus.security.jaxrs.deny-unannotated-endpoints=true` so a new endpoint — including one in a Boundary that does not exist yet — fails closed at build time (constitution v1.6.0, 2026-08-24; it previously sat on the Control with the class-scoped `deny-unannotated-members`, which would have gone inert once the Controls carry no annotations). The alternative — a filter matching path prefixes — is exactly where authorization holes appear, because an endpoint added under the wrong prefix is silently public. Core Quarkus, versioned with the platform |
 
 **Build-time**
 

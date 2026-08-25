@@ -21,9 +21,11 @@ import io.quarkus.test.junit.QuarkusTest;
  * {@code %test.gxp.admin.password} through {@link AdminPasswordSeeder} — a
  * successful login here IS the end-to-end seeding proof (REQ-330/334).
  *
- * <p>State discipline (shared DB, shared in-memory limiter): every test that
- * fails a login ends with a successful one (resets the failure counter), and
- * the password-change test restores the original password before finishing.
+ * <p>State discipline (shared DB): the login path keeps NO failure state at
+ * all — REQ-326 as amended 2026-08-24 has no lockout, no rate limit and no
+ * concurrency gate, so nothing needs resetting after a failed attempt. The
+ * password-change test still restores the original password before
+ * finishing.
  */
 @QuarkusTest
 class AuthResourceTest {
@@ -67,7 +69,6 @@ class AuthResourceTest {
                 // generic — the message must not echo or hint at anything
                 .body("message", not(equalTo("definitely-wrong")))
                 .body("message", equalTo("Login failed"));
-        login(PASSWORD); // reset the failure counter for other tests
     }
 
     @Test
@@ -162,7 +163,7 @@ class AuthResourceTest {
                 .body(Map.of("currentPassword", newPassword, "newPassword", PASSWORD))
                 .when().put("/api/manager/password")
                 .then().statusCode(204);
-        login(PASSWORD); // proves restoration and resets the failure counter
+        login(PASSWORD); // proves restoration
     }
 
     @Test
@@ -175,14 +176,17 @@ class AuthResourceTest {
     }
 
     @Test
-    void retryAfterAppearsOnlyWhenLocked() {
-        // sanity guard for the limiter wiring without tripping the real lock
-        // (the full lockout window is LoginLockoutTest's, on its own profile)
-        given().contentType("application/json").body(Map.of("password", "wrong-once"))
-                .when().post("/api/manager/login")
-                .then().statusCode(401)
-                .header("Retry-After", org.hamcrest.Matchers.nullValue());
-        login(PASSWORD);
+    void sixWrongPasswordsInARowArmNothingAndTheCorrectOneStillWorks() {
+        // The positive statement of REQ-326 as amended: login is deliberately
+        // NOT throttled, so repeated failures accumulate no punitive state and
+        // never produce a 429 or a Retry-After.
+        for (int attempt = 0; attempt < 6; attempt++) {
+            given().contentType("application/json").body(Map.of("password", "wrong-" + attempt))
+                    .when().post("/api/manager/login")
+                    .then().statusCode(401)
+                    .header("Retry-After", org.hamcrest.Matchers.nullValue());
+        }
+        login(PASSWORD); // still the correct password, after six failures in a row
     }
 
     @Test

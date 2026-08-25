@@ -1,4 +1,4 @@
-package de.gxp.menu;
+package de.gxp.menu.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,23 +15,23 @@ import jakarta.persistence.Table;
  */
 @Entity
 @Table(name = "menu_item_config")
-class MenuItemConfig {
+public class MenuItemConfig {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Long id;
+    public Long id;
 
     @Column(name = "menu_item_key", nullable = false)
-    String menuItemKey;
+    public String menuItemKey;
 
     @Column(name = "room_id")
-    Long roomId;
+    public Long roomId;
 
-    Boolean enabled;
+    public Boolean enabled;
 
     @Column(name = "sort_index")
-    Integer sortIndex;
+    public Integer sortIndex;
 
     @Column(name = "icon_override")
-    String iconOverride;
+    public String iconOverride;
 }

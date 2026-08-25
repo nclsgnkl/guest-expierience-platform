@@ -273,3 +273,130 @@ REQs implemented, 0 orphans; every `backend/CLAUDE.md` convention holds; spec
 chain (PRD → design → code → tests → system-context) consistent.
 **Ready for the single commit** (contract + backend + `packages/api-client/` +
 docs — the user/lead commits per the granted authority).
+
+---
+
+## Addendum 2026-08-24 — superseded by `backend-bce-refactor` (block A)
+
+Appended, not rewritten: this file is the dated record of what was true on
+review day. Two findings above have since changed status.
+
+- **🟢 #5 (password change outside the login lockout) — resolved.**
+  `AuthControl.changePassword` now runs both of its PBKDF2 operations inside
+  the same `LoginConcurrencyGate` as `login`, so a stolen-token holder no
+  longer guesses the current password outside the choke point. The optional
+  remedy this row suggested ("route failures through `LoginRateLimiter`") is
+  moot in its literal form — the limiter itself is gone.
+- **The "login lockout" every row above refers to no longer exists.** It was
+  found to be an unauthenticated denial of service (one **global** failure
+  counter and lock, checked *before* verification, so the manager's correct
+  password was answered `429`, re-armable forever with five requests per
+  30 s). REQ-326 was amended by the owner and the mechanism replaced with a
+  fair single-permit concurrency gate that paces and never denies. See
+  `01-prd.md` REQ-326, `02-design.md` (pinned parameters), `03-todo.md` T-10.
+- Unchanged by this addendum: 🟢 #1/#3/#4/#6/#7/#8/#9 and the PASS verdict.
+
+---
+
+## Addendum 2026-08-24 (second, same day) — throttling removed entirely
+
+Appended, not rewritten. The addendum directly above records the concurrency
+gate that replaced the login lockout. The owner then decided to **remove
+throttling from the backend altogether, for now**: no lockout, no rate limit,
+no concurrency gate on login or password change. The production hardware is
+not chosen, and a throttle sized for the wrong machine is worse than none.
+
+- **🟢 #5 (password change outside the login lockout) — withdrawn, not
+  resolved.** The gate that closed it is gone. `changePassword` is again
+  unthrottled, and that is now the intended behaviour; it is admin-only, so it
+  is not an unauthenticated surface. Do not re-open this row without reading
+  REQ-326 first.
+- **Every "login lockout" reference in the rows above is doubly historical.**
+  The lockout was an unauthenticated DoS (global counter, checked before
+  verification, correct password answered `429`); its replacement paced rather
+  than denied but still shed arriving callers throughout a flood; both are
+  removed. `LoginConcurrencyGate`, `LoginConcurrencyGateTest`,
+  `LoginBusyWireShapeTest`, `ApiErrors.tooManyRequests`, the `gxp.auth.gate-*`
+  keys and the login `429` in `api/openapi.yaml` no longer exist.
+- **Explicitly accepted and recorded** (so nobody "fixes" it unknowingly): an
+  unauthenticated caller on the LAN can spend the server's CPU at will through
+  PBKDF2, so sustained abuse degrades the whole instance, kiosks included.
+  Brute-force resistance rests solely on the ≥ 8 password policy — which is
+  **kept**, on both the change endpoint and the first-start seed.
+- Unchanged: the PASS verdict and every other finding.
+
+---
+
+## Addendum 2026-08-24 (third, same day) — the annotations moved to the Boundary
+
+Appended, not rewritten. Owner decision **D2** (constitution **v1.6.0**,
+`backend/CLAUDE.md`, spec §4): authorization hangs off the **Boundary**, not
+the Control, because the trust boundary is HTTP and an internal Java call is
+not one. Rows above that read "on the Control" are historical from now on.
+
+- **REQ-332's substance is unchanged: still exactly one of `@PermitAll` /
+  `@RolesAllowed(...)` per public method, still fail-closed — only the carrier
+  moved.** Every `*Resource` method resolves to exactly one annotation, taken
+  from the method or from a single class-level one; every `*Control` carries
+  none.
+- **`SecurityAnnotationAuditTest` (row 141, 218) no longer exists.** It could
+  not simply be re-pointed at the Boundaries and left at that:
+  `quarkus.security.deny-unannotated-members` is **class-scoped**, so once the
+  Controls have zero annotations it goes inert *for them* — the move alone
+  would have been strictly weaker than the model this review passed. It
+  therefore landed together with
+  **`quarkus.security.jaxrs.deny-unannotated-endpoints=true`** (global,
+  build-time), which closes a hole that existed while this review was written:
+  a new Boundary over a new Control with no annotation anywhere was wide open,
+  and the old audit caught it only if the class name ended in `Control`.
+  Three tests replace the one: `BoundaryAnnotationAuditTest` (the `*Resource`
+  sweep, ten Boundaries pinned by name, **plus** a guard that no generated
+  `de.gxp.api.*Api` interface carries a security annotation — Quarkus resolves
+  the implementation first and the interface as a *fallback*, so a generator
+  upgrade emitting them would silently become the fallback), and
+  `ContractSecuredOperationsDeniedTest` (every `bearerAuth` operation in
+  `api/openapi.yaml` answers 401 anonymously — contract-derived, so a new
+  secured operation cannot be forgotten).
+- **🟢 row 66 (`TemplateControl` `@PermitAll`) — withdrawn, not reversed.** The
+  reading was right for the model in force; the model changed. `TemplateControl`
+  now carries no annotation at all, which is the same conclusion by a shorter
+  route: it has no HTTP surface, so it was never a place where authorization
+  belonged. The same is true of the four other `@PermitAll`-on-internal warts
+  and of `DeviceControl.verifyToken`, which is called from
+  `TokenIdentityProvider` **during authentication, before any identity exists**.
+- **Kept deliberately:** `deny-unannotated-members` stays on as the second line
+  for beans that do mix annotated and unannotated members, and the test-only
+  `FailClosedControl`/`FailClosedResource` pair still proves it. One endpoint
+  in that fixture stays annotated **nowhere** on purpose — with the global deny
+  on, it is the only evidence the flag bites.
+- Unchanged: the PASS verdict, the roles (`admin`, `device`), every path and
+  every status code on the wire.
+
+
+## Addendum 2026-08-25 — the sub-package split (`backend-bce-refactor`, block C)
+
+Appended, not rewritten. Owner decision **D1** (constitution **v1.6.0**) split
+every feature package into `de.gxp.<f>.boundary` / `.control` / `.entity`.
+Two verified findings above are superseded in their MECHANISM, not in their
+substance:
+
+- *"Every Entity/Repository/Mapper is package-private (verified for all seven
+  packages)"* — the **Repositories are all still package-private**, now inside
+  each feature's `.control` package, which is the whole reason they live there
+  rather than beside the entity. **Entities and Mappers are now `public`**,
+  because Java has no sub-package visibility and the Control has to name them
+  across the split. Entity FIELDS were widened one at a time and only where a
+  Control genuinely touches one — most stayed package-private (`Room` and
+  `Property` gave up one field each; `Stay` six of eight; `Device`,
+  `PairingRequest` and `AdminCredential` all of theirs, because their Controls
+  drive the whole row and they have no or nearly no mapper).
+- *"BCE strictness preserved: … no new cross-package imports"* — still true,
+  and no longer only by review: `FeatureInternalsImportTest` fails the build
+  on any reference from outside a feature to its `.entity`/`.control` types
+  other than the feature's own `*Control`.
+
+The compiler's role is taken by three dependency-free architecture tests in
+`de.gxp.architecture` (`FeatureInternalsImportTest`, `EntityExposureTest`,
+`ControlPackageVisibilityTest`), all re-proven by injected violation at full
+scope on 2026-08-25. ArchUnit was rejected — a new dependency on an
+unpatchable box, principle 4.

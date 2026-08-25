@@ -370,3 +370,64 @@ datastore/infra choice, new pattern) comes back as ⏸.
 Phases 01–04 drafted from scratch (fresh REQ-4xx block); gate ran **GAPS**
 with the five-decision batch as the sole gap class; registry row added.
 All five decisions were recommended exactly as later approved.
+
+---
+
+## Addendum 2026-08-24 — pairing create is unthrottled (`backend-bce-refactor`)
+
+Appended to a closed record. Owner decision: throttling is removed from the
+backend entirely for now. `PairingRateLimiter` (5 creates / 60 s, global) and
+the `PairingConcurrencyGate` that briefly replaced it are both gone, together
+with `ApiErrors.tooManyRequests` and the `gxp.pairing.*` config keys.
+`DeviceControl.createPairingRequest` neither paces nor sheds. REQ-409 amended
+in `01-prd.md`; live pairing rows are bounded by the 10-minute TTL and the
+opportunistic cleanup on create, not by a budget. The `429` in
+`api/openapi.yaml` for this operation is **still there, pending an owner
+decision**, because the guest frontend's `cooldown` state depends on it.
+
+**Same day, later — that pending decision is answered: the `429` is gone.**
+The owner chose removal over keeping a client-side handler for an answer the
+backend can no longer give. `createPairingRequest` in `api/openapi.yaml` lost
+the `429`, its `Retry-After` header block and the "Rate-limited …" wording;
+nothing in the contract mentions `429` or `Retry-After` any more. The
+regenerated `packages/api-client` changed **one doc-comment line** in
+`api/pairing.service.ts` and no code — `typescript-angular` models only the
+success type — proven by deleting the generator's `.sha256` marker and
+re-running twice (run 2 byte-identical to run 1 across all 65 files). The
+kiosk's whole `cooldown` state was deleted with it (union member, `429` catch
+branch, `COOLDOWN_FALLBACK_MS`, `retryAfterMs()`, the muted-dot branch, the
+`de`/`en` strings and the two tests); every create failure now takes the one
+remaining `offline` path, which is pinned by a test. Backend 185 green,
+frontend 251 green. Details in `06-review.md`, same date.
+
+
+## Addendum 2026-08-25 — the sub-package split (`backend-bce-refactor`, block C)
+
+Appended, not rewritten. Owner decision **D1** (constitution **v1.6.0**) split
+every feature package into `de.gxp.<f>.boundary` / `.control` / `.entity`.
+For this feature that means:
+
+- `de.gxp.device` → `boundary.{PairingResource, DeviceAdminResource}` /
+  `control.{DeviceControl, DeviceRepository, PairingRequestRepository,
+  PairingCodes}` / `entity.{Device, PairingRequest, DeviceMapper}`. The
+  two-Boundary exception is unaffected — both sit in `.boundary` over the one
+  public `.control.DeviceControl`.
+- `de.gxp.guest` → `boundary.GuestResource` /
+  `control.{GuestControl, GuestEtagFilter}`. It owns no table, so it has no
+  `.entity` package; it is one of the two features named as that exception in
+  the architecture guards.
+- The repositories, `PairingCodes` and `GuestEtagFilter` are **still
+  package-private** — that is why they live in `.control`. `Device`,
+  `PairingRequest` and `DeviceMapper` are now `public`, including every field
+  of both entities, because Java has no sub-package visibility and
+  `DeviceControl` drives their whole lifecycle across the split.
+- **Verified at runtime, not by compilation:** `TokenIdentityProvider` (an SPI
+  provider Quarkus discovers by implemented interface) is package-private in
+  `de.gxp.auth.control` and still injects `DeviceControl` during
+  authentication — `DeviceAuthTest`, `AuthResourceTest`, `PairingFlowTest`,
+  `PairingCaTest` and `RoomScopingTest` all pass unchanged.
+
+Enforcement is now the three dependency-free guards in `de.gxp.architecture`
+(`FeatureInternalsImportTest`, `EntityExposureTest`,
+`ControlPackageVisibilityTest`), re-proven by injected violation at full scope
+on 2026-08-25.

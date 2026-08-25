@@ -1,13 +1,19 @@
-package de.gxp.property;
+package de.gxp.property.control;
 
 import java.util.List;
 
+import de.gxp.property.entity.Property;
+import de.gxp.property.entity.PropertyAppearanceOption;
+import de.gxp.property.entity.PropertyLanguageOption;
+import de.gxp.property.entity.PropertyTranslation;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Package-private data access for the property aggregate (the single row,
- * its translations and its offered-option rows).
+ * Control (data access) — package-private data access for the property
+ * aggregate (the single row, its translations and its offered-option rows).
+ * It lives in {@code .control} rather than beside the entities precisely so
+ * it can stay package-private (spec §4).
  */
 @ApplicationScoped
 class PropertyRepository implements PanacheRepositoryBase<Property, Short> {

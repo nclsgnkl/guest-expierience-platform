@@ -1,4 +1,4 @@
-package de.gxp.auth;
+package de.gxp.auth.control;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

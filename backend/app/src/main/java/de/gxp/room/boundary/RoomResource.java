@@ -1,4 +1,4 @@
-package de.gxp.room;
+package de.gxp.room.boundary;
 
 import java.util.List;
 
@@ -6,11 +6,14 @@ import org.jboss.resteasy.reactive.ResponseStatus;
 
 import de.gxp.api.ManagerRoomsApi;
 import de.gxp.api.model.RoomDto;
+import de.gxp.room.control.RoomControl;
+import jakarta.annotation.security.RolesAllowed;
 
 /**
  * Boundary — JAX-RS adapter over the generated {@link ManagerRoomsApi}.
  * Every method body is ONE delegating line (spec §4, binding).
  */
+@RolesAllowed("admin")
 public class RoomResource implements ManagerRoomsApi {
 
     private final RoomControl roomControl;

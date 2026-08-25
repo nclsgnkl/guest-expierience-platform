@@ -17,7 +17,7 @@
 | REQ-ID range | **Fresh 3xx block (REQ-301…336)** | Matches the established per-feature-block pattern. |
 | `einstellungen` not in catalogue | **Out** | Spec decision 5 says a catalogue item is manager-configurable (enable/disable/reorder). The settings entry is structurally fixed app chrome (frontend renders it outside `menuItems`; guests must always be able to switch language/theme) — a manager must not be able to disable it. Hand-off note for the guest API: serve it as fixed chrome. |
 | Stay `status` | `BOOKED`/`CANCELLED` stored; **"active" derived** from the clock | Nobody flips a state machine at 15:00 on a box in a building. With non-overlap (invariant 5) over non-cancelled stays, "at most one active per room" holds by construction. |
-| Overlap enforcement | **Control-level under a per-room `SELECT … FOR UPDATE`**, no DB exclusion constraint | The DB alternative (`EXCLUDE USING gist` + `btree_gist`) would mean enabling a Postgres extension — avoidable governance surface. The repository is package-private, so the Control is provably the only write path; the room-row lock serializes concurrent stay writes per room, making the range check race-free at any isolation level. |
+| Overlap enforcement | **Control-level under a per-room `SELECT … FOR UPDATE`**, no DB exclusion constraint | The DB alternative (`EXCLUDE USING gist` + `btree_gist`) would mean enabling a Postgres extension — avoidable governance surface. The repository is package-private, so the Control is provably the only write path (**still true after 2026-08-25**: `StayRepository` moved into `de.gxp.stay.control` precisely so it could keep that visibility, and `ControlPackageVisibilityTest` now enforces it mechanically); the room-row lock serializes concurrent stay writes per room, making the range check race-free at any isolation level. |
 | Asset upload transport | **Raw binary body** (`image/png` / `image/jpeg`), `kind` as query param — no multipart | Streams naturally, generator-friendlier, one less moving part. Multipart (built into `quarkus-rest`) is the fallback if the generator fights back — either way no new dependency. |
 | MIME allow-list | **PNG + JPEG only** | The JDK's ImageIO can decode/verify/downscale both. SVG is rejected: not raster-verifiable, and a stored-XSS vector when served (`image/svg+xml` executes script on direct navigation). WebP: no JDK decoder → cannot content-verify → out. |
 | No new dependencies | Confirmed line by line | ImageIO, `MessageDigest`, `SecureRandom`, PBKDF2 (`SecretKeyFactory`) are JDK; the auth mechanism implements the SPI of approved `quarkus-security` (+ transitive `quarkus-vertx-http`); `UNIQUE NULLS NOT DISTINCT` is core Postgres 15+ syntax (image is 17.11). Anything found missing at implementation → ⏸ stop. |
@@ -29,8 +29,8 @@
 | PBKDF2 | `PBKDF2WithHmacSHA256`, **600 000 iterations** (OWASP 2023), 16-byte random salt, 256-bit key; stored self-describing in one text column: `pbkdf2-sha256$<iter>$<salt-b64>$<hash-b64>` — a later parameter bump rehashes on next successful login |
 | Bearer token | 32 bytes `SecureRandom` → base64url (no padding); server stores **SHA-256 hex** of it, never the raw value |
 | Idle expiry | **600 s**, slid by every authenticated request; refreshed expiry on every authenticated response as header `GXP-Token-Expires` (ISO-8601 instant); also in the login body (`idleTimeoutSeconds`, `expiresAt`) |
-| Login lockout | 5 consecutive failures → 30 s lock, `429` + `Retry-After: 30`; counter and lock are in-memory (one instance, one admin) |
-| Password policy | ≥ 8 characters (change endpoint; first-start seed value is the owner's responsibility and is not policy-checked — refusing to start on a short env value would brick a box remotely) |
+| Login throttling | **None — deliberately (REQ-326, owner decision 2026-08-24).** No lockout, no rate limit, no concurrency gate on `login` or `changePassword`; no `429` on either. Two mechanisms were tried and withdrawn the same day: the 5-failure / 30 s global lockout (an unauthenticated DoS — one global counter checked *before* verification, so the correct password got `429`) and the fair single-permit gate that replaced it (which still shed arriving callers for the whole duration of a flood). The question is deferred until the production hardware is known. **Accepted and recorded:** an unauthenticated LAN caller can spend the box's CPU through PBKDF2, degrading the whole instance, kiosks included. |
+| Password policy | ≥ 8 characters at **both** entry points — the change endpoint and, **since 2026-08-24**, the first-start `GXP_ADMIN_PASSWORD` seed (a short value refuses the start, extending the existing refuse-to-start posture for the unset variable). The earlier "not policy-checked, it would brick a box remotely" call is superseded: with **no throttle of any kind** left, this is the *only* thing carrying brute-force resistance (a throttle was worth ~10×, the policy ~10⁸×), and the box has not started yet, so nothing is bricked — it refuses the *first* boot, with a message naming the rule, never the value. |
 | Asset cap | 10 MiB (app-enforced while reading → `413`); `quarkus.http.limits.max-body-size=12M` set explicitly so the app cap, not the HTTP layer, produces the error |
 | Downscale | longest edge > **2560 px** → scaled to 2560 (bilinear, `Graphics2D`), re-encoded in the source format (JPEG q≈0.85, PNG lossless, alpha preserved); sha/size/dimensions computed over the **stored** bytes |
 | Seed defaults | main language `de`; offered languages `de` (`DE`/`Deutsch`/`de-DE`), `en` (`EN`/`English`/`en-GB`); appearances `light`+`dark` (icons `phosphorSun`/`phosphorMoon`), default `light`; timezone `Europe/Berlin`; one room `code='1'`, name `Zimmer 1`; neutral greeting/standby copy (placeholder prose, manager edits it) |
@@ -41,13 +41,48 @@ request-body parameter type; `useBeanValidation=true` behavior in generator
 7.24.0; package-private visibility acceptance for CDI beans implementing the
 auth SPI (if ArC demands `public`, the class stays in `de.gxp.auth` with a
 comment — it is an infrastructure adapter like the Boundary, not a Control).
+**Resolved, and re-verified 2026-08-25:** ArC accepts package-private for all
+three adapters, and they survived the move to `de.gxp.auth.control`
+package-private too — Quarkus discovers them by implemented interface and
+`@Provider`, never by package (proven by `DeviceAuthTest`, `AuthResourceTest`
+and the pairing suites passing after the move, not by compilation alone).
 
 ## Architecture — BCE packages
+
+> **Amended 2026-08-25 (owner decision D1, constitution v1.6.0) — read the
+> block below as the FEATURE map, not the package map.** Every package named
+> here has since been split into three sub-packages: the Boundary moves to
+> `de.gxp.<f>.boundary`, the Control and all its non-JPA collaborators
+> (Repository, `ImageProcessor`, `TokenStore`, `Pbkdf2PasswordHasher`,
+> `PairingCodes`, the auth SPI adapters, …) to `de.gxp.<f>.control`, and the
+> `@Entity` types plus their hand-written `*Mapper` to `de.gxp.<f>.entity`.
+> So `AuthResource` is `de.gxp.auth.boundary.AuthResource`, `AuthControl` is
+> `de.gxp.auth.control.AuthControl`, `AdminCredential` is
+> `de.gxp.auth.entity.AdminCredential`, and so on for every row.
+>
+> **What that costs, stated plainly:** Java has no sub-package visibility, so
+> every Entity and Mapper had to become `public`, and so did the individual
+> entity FIELDS a Control writes across the split. The "(all
+> package-private)" note on the `de.gxp.auth` row, and the same claim
+> wherever it appears below, therefore no longer describes the *entities* —
+> it still holds exactly for the collaborators, which is why they moved into
+> `.control` rather than beside the entity. Fields were widened one at a
+> time, only where a Control genuinely touches them; the rest stayed
+> package-private.
+>
+> **What replaces the compiler** is three dependency-free architecture tests
+> in `de.gxp.architecture`, which the constitution makes part of the
+> definition of done: `FeatureInternalsImportTest` (nothing outside a feature
+> may name its `.entity`/`.control` types, the feature's own `*Control`
+> excepted), `EntityExposureTest` (no public signature outside `.entity` may
+> mention an entity type) and `ControlPackageVisibilityTest` (only a
+> `*Control` may be public inside a `.control` package). ArchUnit was
+> rejected — a new dependency on an unpatchable box, principle 4.
 
 ```
 de.gxp.system      (unchanged, foundation)
 de.gxp.auth        AuthResource | AuthControl | AdminCredential, AdminCredentialRepository,
-                   TokenStore, Pbkdf2PasswordHasher, LoginRateLimiter (all package-private),
+                   TokenStore, Pbkdf2PasswordHasher (all package-private),
                    BearerAuthMechanism + TokenIdentityProvider + TokenExpiryResponseFilter
                    (infrastructure adapters, see note), AdminPasswordSeeder (startup)
 de.gxp.text        TemplateControl (public; stateless validate/resolve — no Boundary, no Entity)
@@ -67,7 +102,9 @@ de.gxp.api         ApiErrorMappers (ConstraintViolation→400 ApiError; infrastr
   circular Control injection (menu asks "which cards target k", cards ask "is
   k enabled"). One `MenuControl` owns catalogue reads, config CRUD, card CRUD
   and both invariants, in one transaction.
-- **Cross-feature injection (public Controls only):** `PropertyControl` →
+- **Cross-feature injection (public Controls only** — since 2026-08-25 this
+  is no longer merely a convention but the thing
+  `FeatureInternalsImportTest` fails on**):** `PropertyControl` →
   `AssetControl` (logo/artwork kind check) and `TemplateControl`;
   `RoomControl` → `AssetControl`, `PropertyControl` (offered-option checks);
   `MenuControl` → `TemplateControl`; `StayControl` → `RoomControl`,
@@ -76,26 +113,30 @@ de.gxp.api         ApiErrorMappers (ConstraintViolation→400 ApiError; infrastr
   `TokenExpiryResponseFilter`, `ApiErrorMappers`, `AdminPasswordSeeder`) are
   platform SPI implementations, not Boundaries/Controls: they carry zero
   business logic (the mechanism delegates token lookup to the package-private
-  `TokenStore`; mappers only reshape errors). This mirrors the already-pinned
+  `TokenStore` — still package-private after 2026-08-25, now in
+  `de.gxp.auth.control`; mappers only reshape errors). This mirrors the already-pinned
   precedent that the JAX-RS runtime — not the Boundary — maps exceptions.
 - All non-2xx outcomes are thrown from Controls as `jakarta.ws.rs`
   exceptions carrying an `ApiError` entity (`Response`-based constructors) —
   the foundation's pinned pattern, now with bodies: `400` unknown
   placeholder/target, `409` offending cards / stay conflict / delete guards,
-  `413` upload cap, `429` login lockout.
+  `413` upload cap. (No `429` anywhere: `ApiErrors` has no `tooManyRequests`
+  overload — it was added with the concurrency gates on 2026-08-24 and removed
+  with them the same day, leaving no dead API surface.)
 
 ### Auth flow
 
 ```
 POST /api/manager/login {password}
-  AuthControl: rate-limiter check → PBKDF2 verify (constant-time compare)
+  AuthControl: PBKDF2 verify (constant-time compare), unthrottled by design
     → 256-bit token → TokenStore.put(sha256(token), now+600s)
     → LoginResponse {token, idleTimeoutSeconds, expiresAt}
 
 any /api/manager/** request
   BearerAuthMechanism: Authorization: Bearer t → TokenIdentityProvider:
     TokenStore.slide(sha256(t)) → hit: SecurityIdentity(role=admin), miss: 401 challenge
-  @RolesAllowed("admin") on the Control method authorizes
+  @RolesAllowed("admin") authorizes   // amended 2026-08-24 (D2): on the
+                                      // BOUNDARY method/class, not the Control
   TokenExpiryResponseFilter appends GXP-Token-Expires
 
 PUT /api/manager/password {currentPassword, newPassword}
@@ -233,7 +274,7 @@ applied per-operation to everything below except `login`.
 
 | Op | Method & path | Success | Named errors |
 |---|---|---|---|
-| `managerLogin` | `POST /api/manager/login` | 200 `LoginResponse{token,idleTimeoutSeconds,expiresAt}` | 401 generic, 429+`Retry-After` |
+| `managerLogin` | `POST /api/manager/login` | 200 `LoginResponse{token,idleTimeoutSeconds,expiresAt}` | 401 generic (the only failure — no `429`, login is deliberately unthrottled since 2026-08-24) |
 | `managerLogout` | `POST /api/manager/logout` | 204 | 401 |
 | `changeManagerPassword` | `PUT /api/manager/password` | 204 (all tokens dropped) | 400 policy/current-mismatch, 401 |
 | `getProperty` / `updateProperty` | `GET`/`PUT /api/manager/property` | 200 `PropertyDto` | 400 (validation, options, templates) |
@@ -260,8 +301,9 @@ change to the shared schema.
 - **Whole-set card PUT / per-field config inheritance asymmetry** — deliberate:
   config rows have a natural identity (the catalogue key), cards do not.
   Recorded so the manager UI designs against it knowingly.
-- **In-memory lockout/token state** disappears on restart — an attacker who
-  can restart the box already owns it; accepted (spec §6 shape).
+- **In-memory token state** disappears on restart — an attacker who
+  can restart the box already owns it; accepted (spec §6 shape). Since
+  2026-08-24 there is no throttling state at all, in memory or otherwise.
 - **Derived "active" stay needs a correct clock** — sharpens spec §11 item 6
   (owner-level, open); recorded, not solved here.
 - **Neutral seed copy** shows until the manager edits it; flagged to
@@ -311,8 +353,10 @@ here, all judged acceptable at review (full judgments in
    `ON DELETE RESTRICT` FKs as backstop.
 6. **Test-profile tuning knobs:** `gxp.auth.pbkdf2-iterations` (default
    600 000, `%test` 1000 — behavior-neutral, self-describing hash format),
-   `gxp.auth.idle-timeout-seconds` (600), `gxp.auth.lockout-seconds` (30;
-   `LoginLockoutTest` uses 2 s in its own `@TestProfile`).
+   `gxp.auth.idle-timeout-seconds` (600). **No throttling knobs exist:**
+   `gxp.auth.lockout-seconds` was removed 2026-08-24 with the lockout, and
+   `gxp.auth.gate-*` / `gxp.pairing.gate-*` were added and removed the same
+   day with the concurrency gates (owner decision — REQ-326/REQ-409).
 7. **`de.gxp.api.ApiErrors`** — shared builder for thrown non-2xx `ApiError`
    outcomes (now a `backend/CLAUDE.md` convention). Also
    `ApiErrorMappers.WrappedJacksonExceptionMapper`: Quarkus' Jackson body

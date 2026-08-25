@@ -1,18 +1,24 @@
-package de.gxp.asset;
+package de.gxp.asset.control;
 
 import java.util.List;
 
+import de.gxp.asset.entity.Asset;
+import de.gxp.asset.entity.AssetMetaRow;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 
-/** Package-private data access for assets. */
+/**
+ * Control (data access) — package-private, reachable only through
+ * {@link AssetControl}. It lives in {@code .control} rather than beside the
+ * entity precisely so it can stay package-private (spec §4).
+ */
 @ApplicationScoped
 class AssetRepository implements PanacheRepository<Asset> {
 
     /** Metadata only — the payload column is deliberately never selected. */
     List<AssetMetaRow> listMetadata() {
         return getEntityManager().createQuery(
-                "select new de.gxp.asset.AssetMetaRow(a.id, a.mimeType, a.byteSize, a.width, a.height, a.sha256, a.kind) "
+                "select new de.gxp.asset.entity.AssetMetaRow(a.id, a.mimeType, a.byteSize, a.width, a.height, a.sha256, a.kind) "
                         + "from Asset a order by a.id",
                 AssetMetaRow.class).getResultList();
     }

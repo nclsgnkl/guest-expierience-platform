@@ -7,6 +7,41 @@
 > runs it if dev's sandbox has none); suite runs on this box want a quiet
 > window + `-Dquarkus.datasource.jdbc.acquisition-timeout=60`.
 
+> **Amendment 2026-08-24 (owner decision D2, constitution v1.6.0) — read
+> before any `@PermitAll` / `@RolesAllowed` below.** Every security annotation
+> these steps place *on a Control* now sits on the **Boundary** instead
+> (`PairingResource` `@PermitAll` class-wide, `DeviceAdminResource`
+> `@RolesAllowed("admin")` class-wide, `GuestResource`
+> `@RolesAllowed("device")` class-wide, `SystemResource` method-level), and the
+> Controls carry none — including `DeviceControl.verifyToken` and the
+> `@PermitAll` guest-read methods on the owning Controls, which only ever
+> needed the annotation so an internal call would pass.
+> `quarkus.security.jaxrs.deny-unannotated-endpoints=true` now fails an
+> unannotated endpoint closed globally, and the "annotation audit" the steps
+> below refer to is `BoundaryAnnotationAuditTest` (plus the generated-interface
+> guard and `ContractSecuredOperationsDeniedTest`). Roles, paths and wire
+> behaviour are unchanged — only the carrier and the enforcing test are.
+
+> **Amendment 2026-08-25 (owner decision D1, constitution v1.6.0) — read
+> before any file path below.** Every `de/gxp/device/...` and
+> `de/gxp/guest/...` path in these steps gained one level:
+> `de/gxp/device/boundary/{PairingResource,DeviceAdminResource}.java`,
+> `de/gxp/device/control/{DeviceControl,DeviceRepository,PairingRequestRepository,PairingCodes}.java`,
+> `de/gxp/device/entity/{Device,PairingRequest,DeviceMapper}.java`,
+> `de/gxp/guest/boundary/GuestResource.java`,
+> `de/gxp/guest/control/{GuestControl,GuestEtagFilter}.java`. On the test
+> side, `src/test/java/de/gxp/device/{DeviceLastSeenTest,PairingFlowTest}.java`
+> moved to `.../device/control/` because they reach package-private internals;
+> `PairingCaTest` drives HTTP only and stayed put.
+>
+> The "package-private" notes below still hold for `DeviceRepository`,
+> `PairingRequestRepository`, `PairingCodes` and `GuestEtagFilter`, and
+> `ControlPackageVisibilityTest` now fails the build if any of them is
+> widened. They do **not** hold for `Device`, `PairingRequest` and
+> `DeviceMapper`, which are `public` in `.entity` — Java has no sub-package
+> visibility, and these two entities needed every field widened because
+> `DeviceControl` drives their whole lifecycle across the split.
+
 ## Phase 1 — Contract & schema
 
 - [x] **T-01** Extend `api/openapi.yaml`: tags `pairing`, `manager-devices`,
@@ -30,14 +65,17 @@
 - [x] **T-04** Entities + repositories: `Device`, `PairingRequest`,
       `DeviceRepository` (find-by-token-hash unique, active-of-room),
       `PairingRequestRepository` (by code, opportunistic expired-delete);
-      `PairingCodes` (8-char unambiguous alphabet), `PairingRateLimiter`
-      (5/60 s, 429 + `Retry-After` — `LoginRateLimiter` pattern). All
+      `PairingCodes` (8-char unambiguous alphabet). All
       package-private except nothing. *(REQ-403, REQ-409)* — Files:
       `backend/app/src/main/java/de/gxp/device/*`.
       Validate: `./mvnw test-compile`.
+      **Amended 2026-08-24 (owner decision):** the `PairingRateLimiter`
+      (5/60 s, 429 + `Retry-After`) built by this step, and the
+      `PairingConcurrencyGate` that briefly replaced it, are both removed —
+      create is unthrottled. See T-20 and REQ-409.
 - [x] **T-05** `DeviceControl` (the package's one public type):
-      `createPairingRequest` (@PermitAll, rate-limited, deletes expired rows
-      first, returns code + raw poll secret + expiry; hashes at rest),
+      `createPairingRequest` (@PermitAll, **unthrottled** since 2026-08-24 —
+      see T-04 — deletes expired rows first, returns code + raw poll secret + expiry; hashes at rest),
       `poll` (@PermitAll: secret verified by hash; pending → 202 semantics;
       confirmed → mint 256-bit token, insert `Device` with hash, atomic
       claim-once, return raw token exactly once; all misses → one identical
@@ -159,10 +197,17 @@
       shape, expiry), poll pending 202, confirm (204; 404 unknown; 409
       double), claim exactly once (incl. two racing polls → one 200), the
       indistinguishable-404 matrix (unknown/expired/claimed/wrong-secret:
-      status + body equality asserted), rate limit 429 + `Retry-After`,
-      opportunistic cleanup, token stored as 64-hex hash only, no token
-      material in device DTOs. *(REQ-403, REQ-404, REQ-405, REQ-406,
-      REQ-407, REQ-409)* — Files: `src/test/java/de/gxp/device/*`.
+      status + body equality asserted), opportunistic cleanup, token stored
+      as 64-hex hash only, no token material in device DTOs. *(REQ-403,
+      REQ-404, REQ-405, REQ-406, REQ-407, REQ-409)* — Files:
+      `src/test/java/de/gxp/device/*`.
+      **Amended 2026-08-24 (owner decision):** the "rate limit 429 +
+      `Retry-After`" assertion is withdrawn with the rate limit. Its
+      replacement asserts the opposite and is the positive statement of
+      REQ-409 as amended — a concurrent create-flood is **fully served**
+      (every request 201, no `Retry-After` anywhere) and the kiosk arriving
+      behind it is served too. The `resetRateLimiter` `@BeforeEach`/`@AfterEach`
+      hook is gone: there is no shared budget left to reset.
 - [x] **T-21** Device auth & scoping (`DeviceAuthTest`, `RoomScopingTest`):
       valid token → session 200; revoked → 401 + challenge next request;
       unknown/malformed → 401; admin token on guest op → 403; device token

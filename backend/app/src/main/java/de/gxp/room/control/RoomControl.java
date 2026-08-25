@@ -1,4 +1,4 @@
-package de.gxp.room;
+package de.gxp.room.control;
 
 import java.util.List;
 
@@ -6,10 +6,10 @@ import de.gxp.api.ApiErrors;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.RoomDto;
-import de.gxp.asset.AssetControl;
-import de.gxp.property.PropertyControl;
-import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
+import de.gxp.asset.control.AssetControl;
+import de.gxp.property.control.PropertyControl;
+import de.gxp.room.entity.Room;
+import de.gxp.room.entity.RoomMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 
@@ -33,13 +33,11 @@ public class RoomControl {
         this.assetControl = assetControl;
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public List<RoomDto> list() {
         return repository.allOrdered().stream().map(RoomMapper::toDto).toList();
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public RoomDto create(RoomDto dto) {
         validateOverrides(dto);
@@ -52,13 +50,11 @@ public class RoomControl {
         return RoomMapper.toDto(room);
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public RoomDto get(Long roomId) {
         return RoomMapper.toDto(require(roomId));
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public RoomDto update(Long roomId, RoomDto dto) {
         Room room = require(roomId);
@@ -71,7 +67,6 @@ public class RoomControl {
         return RoomMapper.toDto(room);
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public void delete(Long roomId) {
         Room room = require(roomId);
@@ -102,21 +97,18 @@ public class RoomControl {
      * artwork and defaults. Not HTTP-mapped; the roomId comes exclusively
      * from the authenticated device identity (REQ-411).
      */
-    @PermitAll
     @Transactional
     public RoomDto guestView(long roomId) {
         return RoomMapper.toDto(require(roomId));
     }
 
     /** Cross-feature existence check (menu config / cards on a room scope). */
-    @RolesAllowed("admin")
     @Transactional
     public void requireExists(Long roomId) {
         require(roomId);
     }
 
     /** Cross-feature read: every room id (invariant 3's affected scopes). */
-    @RolesAllowed("admin")
     @Transactional
     public List<Long> allRoomIds() {
         return repository.allOrdered().stream().map(room -> room.id).toList();
@@ -127,7 +119,6 @@ public class RoomControl {
      * referencing a nonexistent room is invalid input, not a wrong URL) and
      * takes the per-room write lock that serializes concurrent stay writes.
      */
-    @RolesAllowed("admin")
     @Transactional
     public void lockForStayWrite(Long roomId) {
         if (repository.findById(roomId) == null) {

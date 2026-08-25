@@ -1,11 +1,16 @@
-package de.gxp.device;
+package de.gxp.device.control;
 
 import java.time.Instant;
 
+import de.gxp.device.entity.PairingRequest;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 
-/** Package-private data access for pairing requests. */
+/**
+ * Control (data access) — package-private data access for pairing requests.
+ * It lives in {@code .control} rather than beside the entity precisely so it
+ * can stay package-private (spec §4).
+ */
 @ApplicationScoped
 class PairingRequestRepository implements PanacheRepository<PairingRequest> {
 

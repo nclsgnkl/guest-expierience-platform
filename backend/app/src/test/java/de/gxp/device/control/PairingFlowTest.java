@@ -1,4 +1,4 @@
-package de.gxp.device;
+package de.gxp.device.control;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
@@ -7,8 +7,10 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -16,8 +18,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -30,24 +30,17 @@ import jakarta.persistence.EntityManager;
  * T-20 (REQ-403..407, REQ-409): the full pairing lifecycle over the real
  * contract paths — create (201, code shape, TTL), pending 202, confirm
  * (204/404/409/400), claim EXACTLY once (incl. two racing polls), the
- * indistinguishable-404 matrix (status AND body equality), rate limit 429 +
- * Retry-After, opportunistic cleanup, hash-only storage, token-free DTOs.
- * Created devices are removed again — tests share one database.
+ * indistinguishable-404 matrix (status AND body equality), opportunistic
+ * cleanup, hash-only storage, token-free DTOs. Created devices are removed
+ * again — tests share one database. Creation carries no throttle of any kind
+ * since REQ-409 was amended 2026-08-24, so there is no shared budget to reset
+ * between tests — that absence is itself part of the fix.
  */
 @QuarkusTest
 class PairingFlowTest {
 
     @Inject
     EntityManager entityManager;
-
-    @Inject
-    PairingRateLimiter rateLimiter;
-
-    @BeforeEach
-    @AfterEach
-    void resetRateLimiter() {
-        rateLimiter.reset(); // the 5/60 s window is global — keep tests independent
-    }
 
     private static String adminToken() {
         return given().contentType("application/json")
@@ -219,15 +212,47 @@ class PairingFlowTest {
                 .then().statusCode(409).body("code", equalTo("pairing-already-confirmed"));
     }
 
+    /**
+     * REQ-409 as amended 2026-08-24 (owner decision): pairing-request creation
+     * is <b>deliberately not throttled</b> — no rate limit, no admission gate —
+     * so this is the positive statement of that, the counterpart of
+     * {@code AuthResourceTest}'s six-wrong-passwords test.
+     *
+     * <p>A concurrent flood must leave nothing behind: every request is
+     * answered 201, none carries a {@code Retry-After}, and the kiosk arriving
+     * afterwards is served. The removed global 5-per-60 s limiter failed all
+     * three — it let anyone on the LAN, or a single clock-skewed kiosk retrying
+     * by itself ({@code guest-frontend-integration} 06-review 🟡 #3), keep a
+     * real kiosk out for the rest of the window.
+     *
+     * <p>What bounds live rows now is age, not count: the 10-minute TTL and the
+     * opportunistic {@code deleteExpired} on each create (asserted by
+     * {@link #expiredRequestsAreCleanedUpOnTheNextCreate}). Guessing stays
+     * infeasible on entropy and TTL alone — 32⁸ ≈ 1.1 × 10¹² codes, 10 minutes.
+     */
     @Test
-    void createFloodHitsTheRateLimitWithRetryAfter() {
-        for (int i = 0; i < 5; i++) {
-            createPairing();
+    void aConcurrentFloodIsFullyServedAndArmsNothing() throws Exception {
+        int floodSize = 12;
+        List<Response> responses = new ArrayList<>();
+        ExecutorService executor = Executors.newFixedThreadPool(floodSize);
+        try {
+            List<Callable<Response>> flood = new ArrayList<>();
+            for (int i = 0; i < floodSize; i++) {
+                flood.add(() -> given().when().post("/api/pairing/requests").then().extract().response());
+            }
+            for (Future<Response> result : executor.invokeAll(flood)) {
+                responses.add(result.get());
+            }
+        } finally {
+            executor.shutdownNow();
         }
-        given().when().post("/api/pairing/requests")
-                .then().statusCode(429)
-                .body("code", equalTo("pairing-rate-limited"))
-                .header("Retry-After", matchesPattern("^\\d+$"));
+
+        for (Response response : responses) {
+            assertEquals(201, response.statusCode(), "creation is not throttled — every flood request is served");
+            assertNull(response.header("Retry-After"), "nothing throttles, so nothing hints at a retry delay");
+        }
+        // and no window to sit out: the kiosk behind the flood is served too
+        createPairing();
     }
 
     @Test

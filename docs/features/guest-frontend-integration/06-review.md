@@ -380,3 +380,95 @@ generated client are pristine, and the working tree holds exactly the fix
 round plus these review documents. The user commits (fix round on top of
 `ea28870`); the `frontend/CLAUDE.md` entries follow as a separate doc change
 once the user answers the gate.
+
+---
+
+## Addendum 2026-08-24 — backend half of 🟡-3 changed (`backend-bce-refactor`, block A)
+
+Appended, not rewritten — this file records what was true on review day.
+
+🟡-3 described a kiosk with a fast clock renewing in a loop until "the
+backend's rate limit answers 429 and the screen sits in `cooldown`", burning a
+**global** budget. That budget no longer exists: `PairingRateLimiter` (5
+creates per 60 s, global — one flooder could keep every kiosk from ever
+obtaining a code) has been replaced by `PairingConcurrencyGate`, which paces
+admissions in fair order and sheds only what is over-full *at that instant*,
+with an immediately retryable `Retry-After`. The wire shape (`429`,
+`pairing-rate-limited`, `Retry-After`) is unchanged.
+
+**The frontend finding still stands and is still worth fixing**: comparing the
+server's `expiresAt` against the kiosk clock is the defect; the new gate only
+means a skewed kiosk now paces itself instead of locking itself — and everyone
+else — out for the rest of a window.
+
+---
+
+## Addendum 2026-08-24 (second, same day) — 🟡-3's backend half is gone entirely
+
+Appended, not rewritten. The addendum directly above described the pairing
+rate limiter becoming a paced admission gate. The owner then removed
+throttling from the backend **altogether**: `POST /api/pairing/requests` has
+no rate limit and no gate, and `POST /api/manager/login` has neither lockout
+nor gate.
+
+**🟡-3 is now moot in a second, different way.** It was already RESOLVED
+frontend-side (`localDeadline()` measures the code's lifetime on the server's
+clock). What changes now is the consequence it warned about: a skewed kiosk
+retrying in a loop can no longer lock anyone out, because **there is nothing
+left to lock** — no window, no budget, no shared denying state. The worst it
+can do is create pairing rows that expire in 10 minutes.
+
+**Still true and unresolved:** the guest frontend keeps a full `429` handling
+path for pairing create — `PairingStatus` `'cooldown'`, `COOLDOWN_FALLBACK_MS`,
+`retryAfterMs()`, the muted-dot branch in `pairing.component.ts`, the
+`pairing.cooldown` strings in `catalog/de.ts` + `catalog/en.ts`, and two tests.
+With the backend unable to emit a `429` on that operation, that state is
+unreachable in production. Nothing breaks (the handling is defensive and
+correct if some proxy ever emits one), but it is dead UX. Whether to strip it
+or keep it as defensive client behaviour is an open owner decision; the `429`
+was therefore left in `api/openapi.yaml` rather than removed silently.
+
+---
+
+## Addendum 2026-08-24 (third, same day) — the `cooldown` state is removed
+
+Appended, not rewritten. The open owner decision at the end of the addendum
+above is **answered: strip it.** The `429` was removed from
+`createPairingRequest` in `api/openapi.yaml` (with its `Retry-After` header
+block), and the kiosk's `cooldown` path went with it in the same change — so a
+future reader does not conclude the state was lost by accident, here is exactly
+what was deleted:
+
+| File | Removed |
+|---|---|
+| `frontend/src/app/features/pairing/pairing.service.ts` | `'cooldown'` from the `PairingStatus` union; the `error.status === 429` branch in `create()`; `COOLDOWN_FALLBACK_MS`; `retryAfterMs()` (its only caller was that branch) |
+| `frontend/src/app/features/pairing/pairing.component.ts` | the `cooldown` half of `troubled()` — the muted status dot now means `offline` and nothing else |
+| `frontend/src/app/core/i18n/catalog/de.ts`, `…/en.ts` | `pairing.cooldown`, from **both** catalogues |
+| `frontend/src/app/features/pairing/pairing.component.spec.ts` | the `status.set('cooldown')` leg of the status-line test |
+| `frontend/src/app/features/pairing/pairing.service.spec.ts` | *"429 respects Retry-After and re-creates after the cooldown"* — **replaced**, not just deleted (see below) |
+
+**Error handling was not lost with it.** The `429` branch was the *special*
+case; every other create failure already fell through to `'offline'` + the
+5 s → 30 s backoff, and that path is untouched. Deleting the branch makes
+`create()` single-pathed: any failure at all, transport or HTTP status, is
+`offline`. That is now pinned by *"an HTTP error at create takes the same
+offline path as a dead network"* (a `500`, then the 5 s retry succeeding),
+which replaces the deleted `429` test so the surviving behaviour stays tested
+(constitution principle 6).
+
+**i18n parity was checked before the keys were touched**, because removing a
+key from one catalogue only is exactly the kind of thing this project asserts
+against: `TranslationKey = keyof typeof de` makes `en` a
+`Record<TranslationKey, string>` (compile-time), and `catalog.spec.ts` asserts
+key-set equality across every registered catalogue at runtime. Both catalogues
+were edited together; `ng test` is green. The pairing template references only
+`troubled()` and `statusText()` — no per-state branch and no CSS rule named
+after `cooldown` — so nothing dangling was left behind.
+
+Suites after the change: frontend **251 passed / 32 files**, backend **185
+passed**.
+
+**Left stale on purpose, for the owner to route:**
+`docs/design/screens-inhouse/pairing.md` still lists `cooldown` as a pairing
+state (lines 71, 86, 105). That file is the as-built record of what exists in
+Figma, so it is not this change's to edit.

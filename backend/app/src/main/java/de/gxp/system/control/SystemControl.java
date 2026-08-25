@@ -1,24 +1,31 @@
-package de.gxp.system;
+package de.gxp.system.control;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import de.gxp.api.model.SystemHealth;
 import de.gxp.api.model.SystemInfo;
 import de.gxp.api.model.SystemReadiness;
-import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
+import de.gxp.system.entity.InstanceInfoMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.ServiceUnavailableException;
 
 /**
- * Control — the package's public entry point and the only public type besides
- * its HTTP adapter {@link SystemResource} (spec §4). All behavior lives here:
- * transactions, security annotations, mapping calls, non-200 outcomes.
+ * Control — the feature's entry point and the ONLY type another feature may
+ * reference (spec §4). All behavior lives here: transactions, mapping calls,
+ * non-200 outcomes.
  *
- * Security convention (design §Security posture): every public Control method
- * carries exactly one of {@code @PermitAll} / {@code @RolesAllowed(...)}.
- * These three are the box-diagnosis endpoints — deliberately {@code @PermitAll}.
+ * <p>{@code de.gxp.system} is the BCE reference package and the first one
+ * migrated to the {@code boundary}/{@code control}/{@code entity} sub-package
+ * layout (constitution v1.6.0, 2026-08-24): its HTTP adapter is
+ * {@code de.gxp.system.boundary.SystemResource}, its collaborator
+ * {@link InstanceInfoRepository} stays package-private here, and its JPA types
+ * live in {@code de.gxp.system.entity}.
+ *
+ * <p>Security convention (constitution v1.6.0): authorization sits on the
+ * Boundary, so this Control carries no security annotation. The surface is
+ * {@code /health} and {@code /ready} as the unauthenticated box-diagnosis
+ * endpoints, and {@code /info} as {@code admin} or {@code device} (REQ-432).
  */
 @ApplicationScoped
 public class SystemControl {
@@ -33,7 +40,6 @@ public class SystemControl {
     }
 
     /** Liveness — static, no database touch: answers whenever the process serves HTTP. */
-    @PermitAll
     public SystemHealth health() {
         return new SystemHealth().status(SystemHealth.StatusEnum.UP);
     }
@@ -44,7 +50,6 @@ public class SystemControl {
      * are thrown from the Control, never branched on in the Boundary — the
      * pinned pattern for later features.
      */
-    @PermitAll
     @Transactional
     public SystemReadiness ready() {
         try {
@@ -62,7 +67,6 @@ public class SystemControl {
      * unpatchable box is not offered anonymously; health/ready above stay
      * public for box diagnosis.
      */
-    @RolesAllowed({ "admin", "device" })
     @Transactional
     public SystemInfo info() {
         return InstanceInfoMapper.toSystemInfo(instanceInfoRepository.theRow(), applicationVersion);

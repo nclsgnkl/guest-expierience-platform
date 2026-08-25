@@ -1,4 +1,4 @@
-package de.gxp.stay;
+package de.gxp.stay.entity;
 
 import java.time.ZoneOffset;
 
@@ -7,13 +7,17 @@ import de.gxp.api.model.LanguageCode;
 import de.gxp.api.model.StayDto;
 import de.gxp.api.model.StayStatus;
 
-/** Hand-written mapper (spec §4) — package-private, static. */
-final class StayMapper {
+/**
+ * Hand-written mapper (spec §4) — static, no mapping framework. Public only
+ * because {@code de.gxp.stay.control} invokes it; it is still a
+ * {@code de.gxp.stay} internal.
+ */
+public final class StayMapper {
 
     private StayMapper() {
     }
 
-    static StayDto toDto(Stay stay) {
+    public static StayDto toDto(Stay stay) {
         return new StayDto()
                 .id(stay.id)
                 .roomId(stay.roomId)
@@ -25,7 +29,7 @@ final class StayMapper {
                 .status(StayStatus.fromValue(stay.status));
     }
 
-    static void apply(StayDto dto, Stay stay) {
+    public static void apply(StayDto dto, Stay stay) {
         stay.roomId = dto.getRoomId();
         stay.displayName = dto.getDisplayName();
         stay.checkIn = dto.getCheckIn().toInstant();

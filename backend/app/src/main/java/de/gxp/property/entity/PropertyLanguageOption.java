@@ -1,4 +1,4 @@
-package de.gxp.property;
+package de.gxp.property.entity;
 
 import java.io.Serializable;
 
@@ -8,11 +8,17 @@ import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 
-/** One offered language (ordered; REQ-304). */
+/**
+ * One offered language (ordered; REQ-304).
+ *
+ * <p>{@code code} and {@code locale} are public because
+ * {@code PropertyControl.requireOffered}/{@code localeOf} read them directly
+ * across the sub-package line; the rest stays package-private.
+ */
 @Entity
 @Table(name = "property_language_option")
 @IdClass(PropertyLanguageOption.Key.class)
-class PropertyLanguageOption {
+public class PropertyLanguageOption {
 
     record Key(Short propertyId, String code) implements Serializable {
     }
@@ -22,7 +28,7 @@ class PropertyLanguageOption {
     Short propertyId;
 
     @Id
-    String code;
+    public String code;
 
     @Column(name = "short_label", nullable = false)
     String shortLabel;
@@ -32,7 +38,7 @@ class PropertyLanguageOption {
     String label;
 
     @Column(nullable = false)
-    String locale;
+    public String locale;
 
     @Column(name = "sort_index", nullable = false)
     int sortIndex;

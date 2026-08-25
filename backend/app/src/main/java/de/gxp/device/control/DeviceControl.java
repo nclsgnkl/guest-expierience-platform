@@ -1,4 +1,4 @@
-package de.gxp.device;
+package de.gxp.device.control;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -19,9 +19,10 @@ import de.gxp.api.model.DeviceDto;
 import de.gxp.api.model.DeviceUpdateRequest;
 import de.gxp.api.model.PairingCompleted;
 import de.gxp.api.model.PairingRequestCreated;
-import de.gxp.room.RoomControl;
-import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
+import de.gxp.device.entity.Device;
+import de.gxp.device.entity.DeviceMapper;
+import de.gxp.device.entity.PairingRequest;
+import de.gxp.room.control.RoomControl;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -54,7 +55,6 @@ public class DeviceControl {
 
     private final DeviceRepository deviceRepository;
     private final PairingRequestRepository pairingRequestRepository;
-    private final PairingRateLimiter rateLimiter;
     private final RoomControl roomControl;
     private final String caPemPath;
     private final Clock clock;
@@ -64,16 +64,15 @@ public class DeviceControl {
 
     @Inject
     DeviceControl(DeviceRepository deviceRepository, PairingRequestRepository pairingRequestRepository,
-            PairingRateLimiter rateLimiter, RoomControl roomControl,
+            RoomControl roomControl,
             @ConfigProperty(name = "gxp.tls.ca-pem-path", defaultValue = "/tls/ca.pem") String caPemPath) {
-        this(deviceRepository, pairingRequestRepository, rateLimiter, roomControl, caPemPath, Clock.systemUTC());
+        this(deviceRepository, pairingRequestRepository, roomControl, caPemPath, Clock.systemUTC());
     }
 
     DeviceControl(DeviceRepository deviceRepository, PairingRequestRepository pairingRequestRepository,
-            PairingRateLimiter rateLimiter, RoomControl roomControl, String caPemPath, Clock clock) {
+            RoomControl roomControl, String caPemPath, Clock clock) {
         this.deviceRepository = deviceRepository;
         this.pairingRequestRepository = pairingRequestRepository;
-        this.rateLimiter = rateLimiter;
         this.roomControl = roomControl;
         this.caPemPath = caPemPath;
         this.clock = clock;
@@ -82,15 +81,24 @@ public class DeviceControl {
     // ------------------------------------------------------------ pairing (kiosk)
 
     /**
-     * Creates a pairing request (REQ-403): rate-limited, deletes expired rows
-     * first (opportunistic cleanup), returns display code + RAW poll secret +
+     * Creates a pairing request (REQ-403): deletes expired rows first
+     * (opportunistic cleanup), returns display code + RAW poll secret +
      * expiry — the secret is hashed at rest, this response is the only place
      * the raw value ever appears.
+     *
+     * <p><b>Deliberately not throttled</b> (REQ-409, owner decision
+     * 2026-08-24): no rate limit and no admission gate. The earlier global
+     * 5-per-60 s limiter let anyone on the LAN — or a single clock-skewed
+     * kiosk retrying by itself — keep a real kiosk from ever obtaining a code.
+     * Guessing a code stays infeasible on entropy and TTL alone (8 characters
+     * from a 32-symbol alphabet ≈ 1.1 × 10¹² combinations, valid 10 minutes),
+     * and a flooder reaches neither {@code confirm} (admin-only) nor
+     * {@code poll} (256-bit secret). Live rows are therefore unbounded in
+     * count, bounded only in age: the 10-minute TTL plus the opportunistic
+     * {@code deleteExpired} below.
      */
-    @PermitAll
     @Transactional
     public PairingRequestCreated createPairingRequest() {
-        rateLimiter.acquire();
         Instant now = clock.instant();
         pairingRequestRepository.deleteExpired(now);
         String code = PairingCodes.newDisplayCode();
@@ -117,7 +125,6 @@ public class DeviceControl {
      * the raw token — exactly once. Every miss (unknown, expired, claimed,
      * wrong secret) is the one identical 404.
      */
-    @PermitAll
     @Transactional
     public PairingCompleted poll(String code, String pollSecret) {
         Instant now = clock.instant();
@@ -150,7 +157,6 @@ public class DeviceControl {
      * provisioning). Without TLS material ({@code %dev}/{@code %test}) → a
      * clearly coded 404.
      */
-    @PermitAll
     public String caPem() {
         Path path = Path.of(caPemPath);
         if (!Files.isReadable(path)) {
@@ -172,7 +178,6 @@ public class DeviceControl {
      * delete cannot slip between the check and the confirm. Default device
      * name: {@code Kiosk <room code>}.
      */
-    @RolesAllowed("admin")
     @Transactional
     public void confirmPairing(String code, ConfirmPairingRequest request) {
         Instant now = clock.instant();
@@ -193,7 +198,6 @@ public class DeviceControl {
 
     // ------------------------------------------------------------ devices (manager)
 
-    @RolesAllowed("admin")
     @Transactional
     public List<DeviceDto> listDevices() {
         return deviceRepository.allOrdered().stream()
@@ -201,7 +205,6 @@ public class DeviceControl {
                 .toList();
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public DeviceDto renameDevice(Long deviceId, DeviceUpdateRequest request) {
         if (request.getName() == null || request.getName().isBlank()) {
@@ -213,7 +216,6 @@ public class DeviceControl {
     }
 
     /** Soft revoke (REQ-407/412): idempotent; the token is dead on the very next request. */
-    @RolesAllowed("admin")
     @Transactional
     public void revokeDevice(Long deviceId) {
         Device device = require(deviceId);
@@ -226,13 +228,15 @@ public class DeviceControl {
 
     /**
      * Token verification for {@code de.gxp.auth} (REQ-410/412/413) — invoked
-     * DURING authentication, pre-identity, hence {@code @PermitAll}. Reads
+     * DURING authentication, before any identity exists. That is precisely why
+     * a Control carries no security annotation (constitution v1.6.0): an
+     * annotation here would have to be {@code @PermitAll} to let authentication
+     * itself through, which said nothing and hid the rule. Reads
      * the row on every request (instant revocation beats caching a
      * credential check); the {@code last_seen_at} WRITE is throttled to one
      * per device per {@link #LAST_SEEN_INTERVAL}. Returns {@code null} for
      * unknown or revoked — the caller answers the generic 401 + challenge.
      */
-    @PermitAll
     @Transactional
     public DeviceIdentity verifyToken(String tokenSha256Hex) {
         Device device = deviceRepository.byTokenHash(tokenSha256Hex);

@@ -1,4 +1,4 @@
-package de.gxp.asset;
+package de.gxp.asset.control;
 
 import java.io.File;
 import java.io.IOException;
@@ -10,8 +10,8 @@ import de.gxp.api.ApiErrors;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.AssetMetadataDto;
-import jakarta.annotation.security.PermitAll;
-import jakarta.annotation.security.RolesAllowed;
+import de.gxp.asset.entity.Asset;
+import de.gxp.asset.entity.AssetMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
@@ -51,7 +51,6 @@ public class AssetControl {
         this.requestHeaders = requestHeaders;
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public AssetMetadataDto upload(AssetKind kind, File body) {
         if (body == null || body.length() == 0) {
@@ -94,14 +93,12 @@ public class AssetControl {
         return AssetMapper.toDto(asset);
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public List<AssetMetadataDto> list() {
         return repository.listMetadata().stream().map(AssetMapper::toDto).toList();
     }
 
     /** Always throws the built 200/304 Response — see the class comment. */
-    @RolesAllowed("admin")
     @Transactional
     public File binary(Long assetId, String ifNoneMatch) {
         Asset asset = repository.findById(assetId);
@@ -112,14 +109,13 @@ public class AssetControl {
     }
 
     /**
-     * Guest delivery variant (REQ-422 — the {@code @PermitAll}-on-internal
-     * precedent): the same thrown-Response binary path, with the guest cache
+     * Guest delivery variant (REQ-422): the same thrown-Response binary
+     * path, with the guest cache
      * pin — asset content per id is IMMUTABLE (a replacement is a new id),
      * so {@code private, max-age=2592000}. Reachability is
      * {@code GuestControl}'s check (its named 404 answers first); the
      * unknown-id branch here is the defensive backstop with the same code.
      */
-    @PermitAll
     @Transactional
     public File guestBinary(Long assetId, String ifNoneMatch) {
         Asset asset = repository.findById(assetId);
@@ -143,7 +139,6 @@ public class AssetControl {
                 .build());
     }
 
-    @RolesAllowed("admin")
     @Transactional
     public void delete(Long assetId) {
         Asset asset = repository.findById(assetId);
@@ -165,7 +160,6 @@ public class AssetControl {
      * Cross-feature check (Property/Room Controls inject this): the
      * referenced asset must exist and be of the expected kind.
      */
-    @RolesAllowed("admin")
     @Transactional
     public void requireKind(Long assetId, AssetKind expectedKind, String fieldName) {
         if (assetId == null) {

@@ -1,4 +1,4 @@
-package de.gxp.device;
+package de.gxp.device.control;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

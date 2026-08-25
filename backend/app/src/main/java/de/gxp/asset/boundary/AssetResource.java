@@ -1,4 +1,4 @@
-package de.gxp.asset;
+package de.gxp.asset.boundary;
 
 import java.io.File;
 import java.util.List;
@@ -8,6 +8,8 @@ import org.jboss.resteasy.reactive.ResponseStatus;
 import de.gxp.api.ManagerAssetsApi;
 import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.AssetMetadataDto;
+import de.gxp.asset.control.AssetControl;
+import jakarta.annotation.security.RolesAllowed;
 
 /**
  * Boundary — JAX-RS adapter over the generated {@link ManagerAssetsApi}.
@@ -15,6 +17,7 @@ import de.gxp.api.model.AssetMetadataDto;
  * {@code getAssetBinary} never actually returns: the Control throws the
  * built 200/304 Response (see {@link AssetControl#binary}).
  */
+@RolesAllowed("admin")
 public class AssetResource implements ManagerAssetsApi {
 
     private final AssetControl assetControl;

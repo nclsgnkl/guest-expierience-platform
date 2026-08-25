@@ -1,17 +1,19 @@
-package de.gxp.system;
+package de.gxp.system.entity;
 
 import de.gxp.api.model.SystemInfo;
 
 /**
  * Entity → generated API DTO, hand-written (no mapping framework — spec §4).
- * Package-private; invoked by the Control only.
+ * Public only because it is invoked from {@code de.gxp.system.control}; it is
+ * still a {@code de.gxp.system} internal, and calling it from another feature
+ * is a violation the architecture tests catch.
  */
-final class InstanceInfoMapper {
+public final class InstanceInfoMapper {
 
     private InstanceInfoMapper() {
     }
 
-    static SystemInfo toSystemInfo(InstanceInfo entity, String applicationVersion) {
+    public static SystemInfo toSystemInfo(InstanceInfo entity, String applicationVersion) {
         return new SystemInfo()
                 .instanceName(entity.name)
                 .applicationVersion(applicationVersion);

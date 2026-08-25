@@ -168,3 +168,32 @@ authoritative.
   Boundaries, exactly one security annotation per public Control method,
   no SQL/access logging in committed config, allow-list diff — **after**
   the user's re-run of the suite confirms 8/8 green with the 403 fix.
+
+
+## Addendum 2026-08-25 — the sub-package split (`backend-bce-refactor`, block C)
+
+Appended, not rewritten: everything above is the accurate record of what was
+reviewed on the day, and the visibility finding it states WAS true then.
+
+Owner decision **D1** (constitution **v1.6.0**) has since restructured every
+feature package into `de.gxp.<f>.boundary` / `.control` / `.entity`, starting
+with `de.gxp.system` as the reference. Two statements above are therefore no
+longer literally true of the code, and are superseded rather than corrected:
+
+- *"`InstanceInfo`, `InstanceInfoRepository`, `InstanceInfoMapper` all
+  package-private"* — the **Repository is still package-private**, now in
+  `de.gxp.system.control`; that is precisely why the layout puts it there.
+  `InstanceInfo` and `InstanceInfoMapper` moved to `de.gxp.system.entity` and
+  had to become `public`, because Java has no sub-package visibility. Their
+  entity FIELDS did not: `InstanceInfo`'s fields are still package-private,
+  since nothing outside `.entity` reads them.
+- *"the Control is the package's only public type"* — read it now as **the
+  Control is the only type another feature may reference**.
+
+What the compiler used to guarantee is guaranteed instead by three
+dependency-free architecture tests in `de.gxp.architecture`, which the
+constitution makes part of the definition of done:
+`FeatureInternalsImportTest` (source-text scan), `EntityExposureTest`
+(bytecode signature scan) and `ControlPackageVisibilityTest` (only a
+`*Control` may be public in a `.control` package). All three were re-proven by
+injected violation at full scope on 2026-08-25.

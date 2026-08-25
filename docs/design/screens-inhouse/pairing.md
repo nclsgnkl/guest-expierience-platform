@@ -68,7 +68,7 @@ a property's colours.
 |-----------|-------------------|-------|
 | Pairing panel | one | The glass panel above; no interactive element inside |
 | Code display | `visible` / `renewing` | While a replacement code is being fetched (expiry), the old code dims to 40 % opacity rather than disappearing — the block must not collapse (no-jump rule) |
-| Status dot + line | `waiting` / `cooldown` / `offline` / `renewing` | One line, swapped in place; dot colour per state (see Layout 4) |
+| Status dot + line | `waiting` / `offline` / `renewing` | One line, swapped in place; dot colour per state (see Layout 4). **`cooldown` was removed 2026-08-24** — see the as-built note at the end of this file |
 
 No buttons, no inputs, no focusable elements — there is nothing a person may
 do *on the kiosk*. (Touch does nothing; that is correct, not an omission.)
@@ -83,7 +83,6 @@ All strings via `TranslationService` (both catalogues; keys indicative):
 | `pairing.instruction` | Diesen Code im Verwaltungsbereich bestätigen, um das Gerät einem Zimmer zuzuweisen. | Confirm this code in the management area to assign this device to a room. |
 | `pairing.waiting` | Warten auf Bestätigung … | Waiting for confirmation … |
 | `pairing.renewing` | Neuer Code wird erstellt … | Requesting a new code … |
-| `pairing.cooldown` | Zu viele Versuche — kurze Pause … | Too many attempts — pausing briefly … |
 | `pairing.offline` | Keine Verbindung zum Server. Verbindet automatisch neu. | No connection to the server. Reconnecting automatically. |
 
 Voice per `design-sheet.md`: short, warm, non-technical; the audience is the
@@ -102,8 +101,9 @@ project-wide.
 ## Interactions
 
 - No touch interaction. State transitions are network-driven
-  (02-design.md §3: create → waiting → claimed / expired-renew / cooldown /
-  offline-retry).
+  (02-design.md §3: create → waiting → claimed / expired-renew /
+  offline-retry). A failed create of any kind now takes the offline path
+  (**as-built 2026-08-24**, below).
 - On claim, the kiosk stores the token and boots the guest app **without a
   reload**; the pairing panel simply gives way to the app's normal bootstrap
   (an instant swap is acceptable; if a transition is used, it follows the
@@ -121,3 +121,26 @@ viewport).
 
 - None. (The code group-of-four presentation is this spec's own call; if the
   manager-side UI later renders codes differently, align both then.)
+
+---
+
+## As-built note — 2026-08-24: the `cooldown` state was removed
+
+This file originally specified a fourth status-line state, `cooldown`, shown
+when pairing-request creation was answered `429` with a `Retry-After` header.
+
+**That state no longer exists and cannot occur.** The backend's pairing rate
+limiter was removed on 2026-08-24 (owner decision — the limiter was global, so
+an attacker looping create requests could keep a real kiosk from ever obtaining
+a pairing code; the wider throttling question is deferred until the production
+hardware is known, see `REQ-409` and `REQ-326` as amended). The `429` was then
+removed from `api/openapi.yaml`, and with it the kiosk's `'cooldown'` status,
+its copy in both catalogues, and its component branch.
+
+**What happens instead:** any failed create — transport error, or any HTTP
+status — takes the `offline` path with its 5 s → 30 s backoff. A stray `429`
+from a proxy in front of the app therefore still behaves sanely; it simply has
+no dedicated state.
+
+Nothing else on this screen changed: the layout, the code display and its
+`renewing` behaviour, and the `waiting` / `offline` copy are untouched.

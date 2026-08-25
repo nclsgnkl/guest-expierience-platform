@@ -1,4 +1,4 @@
-package de.gxp.auth;
+package de.gxp.auth.control;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -10,6 +10,8 @@ import java.time.Instant;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+
+import de.gxp.auth.entity.AdminCredential;
 
 /**
  * Component-level tests for {@link AdminPasswordSeeder} (REQ-330) — the
@@ -51,6 +53,39 @@ class AdminPasswordSeederTest {
         StubRepository repository = new StubRepository();
         AdminPasswordSeeder seeder = new AdminPasswordSeeder(repository, hasher, Optional.of("   "));
         assertThrows(IllegalStateException.class, seeder::seedIfMissing);
+        assertNull(repository.seededHash);
+    }
+
+    @Test
+    void tooShortAVariableWithNoRowRefusesStartNamingTheRuleOnly() {
+        // REQ-326 (amended): the >= 8 minimum now also applies to the seed —
+        // brute-force resistance rests on the password, not on a lockout
+        StubRepository repository = new StubRepository();
+        AdminPasswordSeeder seeder = new AdminPasswordSeeder(repository, hasher, Optional.of("short7c"));
+        IllegalStateException failure = assertThrows(IllegalStateException.class, seeder::seedIfMissing);
+        assertTrue(failure.getMessage().contains("GXP_ADMIN_PASSWORD"));
+        assertTrue(failure.getMessage().contains("8"));
+        assertFalse(failure.getMessage().contains("short7c"), "the value must never appear in the message");
+        assertNull(repository.seededHash);
+    }
+
+    @Test
+    void exactlyTheMinimumLengthIsAccepted() {
+        StubRepository repository = new StubRepository();
+        AdminPasswordSeeder seeder = new AdminPasswordSeeder(repository, hasher, Optional.of("12345678"));
+        seeder.seedIfMissing();
+        assertTrue(hasher.verify("12345678", repository.seededHash));
+    }
+
+    @Test
+    void anExistingRowIsNeverRePolicedByTheVariable() {
+        // the variable is dead once a row exists — a short leftover value must
+        // not turn a running instance into a refused start
+        StubRepository repository = new StubRepository();
+        repository.existing = new AdminCredential();
+        repository.existing.passwordHash = "pbkdf2-sha256$1000$AAAA$BBBB";
+        AdminPasswordSeeder seeder = new AdminPasswordSeeder(repository, hasher, Optional.of("a"));
+        seeder.seedIfMissing(); // no exception
         assertNull(repository.seededHash);
     }
 

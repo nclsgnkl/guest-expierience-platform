@@ -35,9 +35,11 @@ import jakarta.transaction.Transactional;
  * paths are admin-role Controls that a startup observer has no identity to
  * call, and their invariants are re-enforced here by the same DB constraints
  * the migrations installed (hex-shape checks, sort-index bounds, scope
- * uniqueness). SHA-256-hex is the identical algorithm
- * {@code de.gxp.device.PairingCodes}/{@code de.gxp.auth.TokenStore} use; both
- * are package-private, hence the local three-line JDK call (same reasoning as
+ * uniqueness). SHA-256-hex is the identical algorithm the device and auth
+ * features use internally; both of those helpers are package-private inside
+ * their own {@code control} package and are deliberately NOT named here —
+ * naming them would be exactly the cross-feature reach the architecture
+ * guards forbid — hence the local three-line JDK call (same reasoning as
  * {@code DeviceFixtures}).
  *
  * <p>Idempotent: when the dev device row already exists (a live-reload

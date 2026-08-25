@@ -1,15 +1,20 @@
-package de.gxp.asset;
+package de.gxp.asset.entity;
 
 import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.AssetMetadataDto;
 
-/** Hand-written mapper (spec §4) — package-private, static. */
-final class AssetMapper {
+/**
+ * Hand-written mapper (spec §4) — static, no mapping framework. Public only
+ * because it is invoked from {@code de.gxp.asset.control}; it is still a
+ * {@code de.gxp.asset} internal, and calling it from another feature is a
+ * violation the architecture guards catch.
+ */
+public final class AssetMapper {
 
     private AssetMapper() {
     }
 
-    static AssetMetadataDto toDto(Asset asset) {
+    public static AssetMetadataDto toDto(Asset asset) {
         return new AssetMetadataDto()
                 .id(asset.id)
                 .mimeType(AssetMetadataDto.MimeTypeEnum.fromValue(asset.mimeType))
@@ -20,7 +25,7 @@ final class AssetMapper {
                 .kind(AssetKind.fromValue(asset.kind));
     }
 
-    static AssetMetadataDto toDto(AssetMetaRow row) {
+    public static AssetMetadataDto toDto(AssetMetaRow row) {
         return new AssetMetadataDto()
                 .id(row.id())
                 .mimeType(AssetMetadataDto.MimeTypeEnum.fromValue(row.mimeType()))

@@ -1,4 +1,4 @@
-package de.gxp.menu;
+package de.gxp.menu.entity;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -9,13 +9,17 @@ import de.gxp.api.model.ActionCardDto;
 import de.gxp.api.model.MenuItemConfigEntryDto;
 import de.gxp.api.model.MenuItemDefinitionDto;
 
-/** Hand-written mappers (spec §4) — package-private, static. */
-final class MenuMapper {
+/**
+ * Hand-written mappers (spec §4) — static, no mapping framework. Public only
+ * because {@code de.gxp.menu.control} invokes them; they are still
+ * {@code de.gxp.menu} internals.
+ */
+public final class MenuMapper {
 
     private MenuMapper() {
     }
 
-    static MenuItemDefinitionDto toDto(MenuItemDefinition definition,
+    public static MenuItemDefinitionDto toDto(MenuItemDefinition definition,
             List<MenuItemDefinitionTranslation> translations) {
         Map<String, String> label = new LinkedHashMap<>();
         for (MenuItemDefinitionTranslation translation : translations) {
@@ -32,7 +36,7 @@ final class MenuMapper {
                 .introducedRelease(definition.introducedRelease);
     }
 
-    static MenuItemConfigEntryDto toDto(MenuItemConfig config, List<MenuItemConfigTranslation> translations) {
+    public static MenuItemConfigEntryDto toDto(MenuItemConfig config, List<MenuItemConfigTranslation> translations) {
         Map<String, String> label = new LinkedHashMap<>();
         for (MenuItemConfigTranslation translation : translations) {
             if (translation.configId.equals(config.id)) {
@@ -47,7 +51,7 @@ final class MenuMapper {
                 .label(label.isEmpty() ? null : label);
     }
 
-    static MenuItemConfig toEntity(MenuItemConfigEntryDto dto, Long roomId) {
+    public static MenuItemConfig toEntity(MenuItemConfigEntryDto dto, Long roomId) {
         MenuItemConfig config = new MenuItemConfig();
         config.menuItemKey = dto.getMenuItemKey();
         config.roomId = roomId;
@@ -57,7 +61,7 @@ final class MenuMapper {
         return config;
     }
 
-    static List<MenuItemConfigTranslation> toTranslations(MenuItemConfigEntryDto dto) {
+    public static List<MenuItemConfigTranslation> toTranslations(MenuItemConfigEntryDto dto) {
         List<MenuItemConfigTranslation> rows = new ArrayList<>();
         if (dto.getLabel() != null) {
             for (Map.Entry<String, String> entry : dto.getLabel().entrySet()) {
@@ -70,7 +74,7 @@ final class MenuMapper {
         return rows;
     }
 
-    static ActionCardDto toDto(ActionCardConfig card, List<ActionCardConfigTranslation> translations) {
+    public static ActionCardDto toDto(ActionCardConfig card, List<ActionCardConfigTranslation> translations) {
         Map<String, String> title = new LinkedHashMap<>();
         Map<String, String> description = new LinkedHashMap<>();
         for (ActionCardConfigTranslation translation : translations) {
@@ -88,7 +92,7 @@ final class MenuMapper {
                 .description(description);
     }
 
-    static ActionCardConfig toEntity(ActionCardDto dto, Long roomId) {
+    public static ActionCardConfig toEntity(ActionCardDto dto, Long roomId) {
         ActionCardConfig card = new ActionCardConfig();
         card.roomId = roomId;
         card.sortIndex = dto.getSortIndex();
@@ -97,7 +101,7 @@ final class MenuMapper {
         return card;
     }
 
-    static List<ActionCardConfigTranslation> toTranslations(ActionCardDto dto) {
+    public static List<ActionCardConfigTranslation> toTranslations(ActionCardDto dto) {
         List<ActionCardConfigTranslation> rows = new ArrayList<>();
         var languages = new java.util.TreeSet<String>();
         languages.addAll(dto.getTitle().keySet());

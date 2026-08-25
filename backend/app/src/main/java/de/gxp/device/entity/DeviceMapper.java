@@ -1,20 +1,22 @@
-package de.gxp.device;
+package de.gxp.device.entity;
 
 import java.time.ZoneOffset;
 
 import de.gxp.api.model.DeviceDto;
 
 /**
- * Hand-written mapper (spec §4) — package-private, static. The DTO NEVER
+ * Hand-written mapper (spec §4) — static, no mapping framework. The DTO NEVER
  * carries token material (REQ-407): {@code tokenHash} is deliberately not
- * mapped, not even redacted.
+ * mapped, not even redacted. Public only because
+ * {@code de.gxp.device.control} invokes it; it is still a
+ * {@code de.gxp.device} internal.
  */
-final class DeviceMapper {
+public final class DeviceMapper {
 
     private DeviceMapper() {
     }
 
-    static DeviceDto toDto(Device device, String roomCode) {
+    public static DeviceDto toDto(Device device, String roomCode) {
         return new DeviceDto()
                 .id(device.id)
                 .name(device.name)

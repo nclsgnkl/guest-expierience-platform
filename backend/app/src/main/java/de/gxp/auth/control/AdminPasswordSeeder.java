@@ -1,4 +1,4 @@
-package de.gxp.auth;
+package de.gxp.auth.control;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -19,9 +19,19 @@ import jakarta.transaction.Transactional;
  * <p>Unset or blank with no row is a refused start: the failure message names
  * the VARIABLE only, never any value (principle 3). Startup observers run
  * before the HTTP server accepts requests.
+ *
+ * <p>Since login throttling was removed entirely (REQ-326, owner decision
+ * 2026-08-24 — no lockout, no rate limit, no concurrency gate), brute-force
+ * resistance rests on the password itself. So the {@code ≥ 8} minimum
+ * {@code AuthControl.changePassword} enforces applies to the first-start seed
+ * too, using the same refuse-to-start posture as the unset variable rather
+ * than a new concept.
  */
 @ApplicationScoped
 class AdminPasswordSeeder {
+
+    /** Same minimum as {@code AuthControl.changePassword} — one policy, two entry points. */
+    static final int MINIMUM_PASSWORD_LENGTH = 8;
 
     private final AdminCredentialRepository credentials;
     private final Pbkdf2PasswordHasher hasher;
@@ -48,6 +58,13 @@ class AdminPasswordSeeder {
             throw new IllegalStateException(
                     "No admin credential exists yet and GXP_ADMIN_PASSWORD is unset or blank. "
                             + "Set GXP_ADMIN_PASSWORD for the first start; it is stored hashed and ignored afterwards.");
+        }
+        if (password.length() < MINIMUM_PASSWORD_LENGTH) {
+            // names the variable and the rule, never the value (principle 3)
+            throw new IllegalStateException(
+                    "GXP_ADMIN_PASSWORD is shorter than the required minimum of " + MINIMUM_PASSWORD_LENGTH
+                            + " characters. Set a longer value for the first start; there is no login "
+                            + "throttling, so the password is the only thing resisting guesses.");
         }
         credentials.seed(hasher.hash(password), Instant.now());
     }

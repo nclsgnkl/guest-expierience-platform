@@ -95,14 +95,29 @@ class DeviceAuthTest {
                 .then().statusCode(403);
     }
 
+    /**
+     * One path per manager Boundary — deliberately all six, not a sample.
+     * Since the annotations moved to the Boundary (constitution v1.6.0), a
+     * widened role is a CLASS-level edit: {@code @RolesAllowed({"admin",
+     * "device"})} on one Boundary opens its whole surface, and nothing else
+     * would notice. The audit still counts exactly 1 annotation, the contract
+     * test still sees 401 for anonymous (the contract models no roles), and
+     * every feature suite drives these with an admin token. Pinning each
+     * Boundary against a DEVICE token is the only assertion that fails.
+     */
     @Test
     void aDeviceTokenGrantsNoManagerEndpoint() {
-        given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/manager/rooms")
-                .then().statusCode(403);
-        given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/manager/devices")
-                .then().statusCode(403);
+        for (String managerPath : new String[] {
+                "/api/manager/property",       // PropertyResource
+                "/api/manager/rooms",          // RoomResource
+                "/api/manager/stays",          // StayResource
+                "/api/manager/assets",         // AssetResource
+                "/api/manager/menu/catalogue", // MenuResource
+                "/api/manager/devices" }) {    // DeviceAdminResource
+            given().header("Authorization", "Bearer " + deviceToken)
+                    .when().get(managerPath)
+                    .then().statusCode(403);
+        }
     }
 
     @Test

@@ -127,8 +127,11 @@ paths:
       description: >-
         The only operation that ever sees the password. Success returns an
         opaque 256-bit bearer token with a sliding 10-minute idle expiry.
-        Failure is a deliberately generic 401 (no oracle); after 5 consecutive
-        failures the endpoint locks for 30 seconds (429 + Retry-After).
+        Failure is a deliberately generic 401 (no oracle). Deliberately not
+        throttled (owner decision 2026-08-24): no lockout, no rate limit, no
+        concurrency gate — repeated failures accumulate no state and a correct
+        password is never refused. Brute-force resistance rests on the
+        password policy (minimum 8 characters).
       requestBody:
         required: true
         content:
@@ -147,17 +150,6 @@ paths:
                 $ref: "#/components/schemas/LoginResponse"
         "401":
           description: Wrong password — deliberately generic.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "429":
-          description: Locked after 5 consecutive failures.
-          headers:
-            Retry-After:
-              description: Seconds until the lock lifts.
-              schema:
-                type: integer
           content:
             application/json:
               schema:
@@ -957,9 +949,13 @@ paths:
       summary: Create a short-lived pairing request (kiosk, unauthenticated)
       description: >-
         Returns the display code the kiosk shows to the manager, the poll
-        secret the kiosk keeps (never displayed), and the expiry.
-        Rate-limited (pairing is a rare, manager-attended act); expired
+        secret the kiosk keeps (never displayed), and the expiry. Expired
         requests are cleaned up opportunistically on each create.
+        Deliberately not throttled (owner decision 2026-08-24): no rate limit
+        and no admission gate, so there is no 429 here — the number of live
+        requests is bounded only in age, by the 10-minute TTL plus that
+        opportunistic cleanup, and guessing is made infeasible by the code
+        entropy and TTL rather than by a budget.
       responses:
         "201":
           description: Pairing request created.
@@ -967,17 +963,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PairingRequestCreated"
-        "429":
-          description: Create rate limit hit.
-          headers:
-            Retry-After:
-              description: Seconds until the next create is accepted.
-              schema:
-                type: integer
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /api/pairing/requests/{code}:
     get:
       tags: [pairing]

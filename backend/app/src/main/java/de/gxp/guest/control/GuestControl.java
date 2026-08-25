@@ -1,4 +1,4 @@
-package de.gxp.guest;
+package de.gxp.guest.control;
 
 import java.io.File;
 import java.time.ZoneId;
@@ -30,31 +30,40 @@ import de.gxp.api.model.OccupancyState;
 import de.gxp.api.model.PropertyDto;
 import de.gxp.api.model.RoomDto;
 import de.gxp.api.model.StayDto;
-import de.gxp.asset.AssetControl;
-import de.gxp.auth.AuthControl;
-import de.gxp.menu.MenuControl;
-import de.gxp.property.PropertyControl;
-import de.gxp.room.RoomControl;
-import de.gxp.stay.StayControl;
-import de.gxp.text.TemplateControl;
+import de.gxp.asset.control.AssetControl;
+import de.gxp.auth.control.AuthControl;
+import de.gxp.menu.control.MenuControl;
+import de.gxp.property.control.PropertyControl;
+import de.gxp.room.control.RoomControl;
+import de.gxp.stay.control.StayControl;
+import de.gxp.text.control.TemplateControl;
 import io.quarkus.security.identity.SecurityIdentity;
-import jakarta.annotation.security.RolesAllowed;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 
 /**
  * Control — the guest read model (REQ-416..426): the ONE place where
  * cross-feature composition is expected, deliberately read-only (spec §4)
- * plus the single stay-anchored preference write. Every method is
- * {@code @RolesAllowed("device")} and derives the room EXCLUSIVELY from the
- * authenticated device identity — no method takes a room, stay, device or
- * property parameter (REQ-411, principle 4 verbatim).
+ * plus the single stay-anchored preference write. Its Boundary
+ * ({@code de.gxp.guest.boundary.GuestResource}) is
+ * {@code @RolesAllowed("device")} class-wide, and
+ * every method here derives the room EXCLUSIVELY from the authenticated device
+ * identity — no method takes a room, stay, device or property parameter
+ * (REQ-411, principle 4 verbatim).
  *
  * <p>Resolution is NEVER re-implemented (REQ-417): the menu ceiling lives in
  * {@link MenuControl}, occupancy in {@link StayControl}, templates in
- * {@link TemplateControl} — this Control only composes their
- * {@code @PermitAll} guest reads. Vacancy is maximally data-sparing (spec
+ * {@link TemplateControl} — this Control only composes their internal guest
+ * reads. Vacancy is maximally data-sparing (spec
  * decision 9): no stay-derived value leaves the server for a vacant room.
+ *
+ * <p>Sub-package layout (constitution v1.6.0): {@code de.gxp.guest} is the
+ * second feature with NO Entity — it owns no table at all, by design. It gets
+ * a {@code .boundary} and a {@code .control} and nothing else; the
+ * {@code GuestEtagFilter} sits package-private beside this class. Every one
+ * of the six features this Control reaches into is reached through that
+ * feature's public {@code *Control}, which is the only crossing spec §4
+ * allows.
  */
 @ApplicationScoped
 public class GuestControl {
@@ -95,7 +104,6 @@ public class GuestControl {
      * and settings config the standby screen renders from — but no display
      * name and no preference override.
      */
-    @RolesAllowed("device")
     @Transactional
     public GuestSession session() {
         long roomId = roomId();
@@ -142,7 +150,6 @@ public class GuestControl {
      * offered language against the active stay — no braces ever leave the
      * server. Artwork falls back room → property.
      */
-    @RolesAllowed("device")
     @Transactional
     public GuestHomeScreen homeScreen() {
         long roomId = roomId();
@@ -189,7 +196,6 @@ public class GuestControl {
      * images. Delegates to {@link AssetControl}'s thrown-Response binary path
      * (ETag / 304 / long private cache).
      */
-    @RolesAllowed("device")
     @Transactional
     public File asset(Long assetId, String ifNoneMatch) {
         long roomId = roomId();
@@ -216,8 +222,21 @@ public class GuestControl {
      * nullable (null = follow the defaults), validated against the property's
      * offered sets (the named 400), landed on the ACTIVE stay via
      * {@link StayControl} (vacant → its named 409).
+     *
+     * <p>The offered-set check below DUPLICATES {@code PropertyControl}'s
+     * {@code requireOffered}. It exists only because {@code requireOffered}
+     * carried {@code @RolesAllowed("admin")} and would have thrown under the
+     * guest's device identity, so the check had to be re-implemented on this
+     * side. <b>That blocker is gone</b> (constitution v1.6.0, 2026-08-24:
+     * authorization lives on the Boundary, no Control method is
+     * role-restricted any more) — the duplication is now removable and should
+     * be removed. It is left standing here because the fold is not free: the
+     * guest 400 is {@code value-not-offered} (contract-declared for
+     * {@code putGuestPreferences}) while {@code requireOffered} raises
+     * {@code language-not-offered} / {@code appearance-not-offered}, and it
+     * takes the typed enums rather than the update's nullable strings. That is
+     * a separate delegation, not a drive-by of the annotation move.
      */
-    @RolesAllowed("device")
     @Transactional
     public void writePreferences(GuestPreferencesUpdate update) {
         long roomId = roomId();
@@ -241,7 +260,7 @@ public class GuestControl {
     private long roomId() {
         Long roomId = identity.getAttribute(AuthControl.DEVICE_ROOM_ATTRIBUTE);
         if (roomId == null) {
-            // unreachable behind @RolesAllowed("device"); fail closed anyway
+            // unreachable behind the Boundary's @RolesAllowed("device"); fail closed anyway
             throw ApiErrors.notFound("unknown-room", "No room identity");
         }
         return roomId;

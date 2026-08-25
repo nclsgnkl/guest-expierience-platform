@@ -95,10 +95,6 @@ describe('PairingComponent', () => {
     await fixture.whenStable();
     expect(el.querySelector('.pairing__status-text')?.textContent).toContain('Keine Verbindung');
     expect(el.querySelector('.pairing__status-dot--muted')).toBeTruthy();
-
-    status.set('cooldown');
-    await fixture.whenStable();
-    expect(el.querySelector('.pairing__status-text')?.textContent).toContain('Zu viele Versuche');
   });
 
   it('has no button, no input, no focusable element — the flow is unattended', () => {

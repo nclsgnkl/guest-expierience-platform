@@ -1,4 +1,4 @@
-package de.gxp.text;
+package de.gxp.text.control;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -10,7 +10,7 @@ import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
-import de.gxp.text.TemplateControl.TemplateContext;
+import de.gxp.text.control.TemplateControl.TemplateContext;
 
 /**
  * Unit tests for {@link TemplateControl} (REQ-317/REQ-318). Formatting is

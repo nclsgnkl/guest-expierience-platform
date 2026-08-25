@@ -1,14 +1,22 @@
-package de.gxp.menu;
+package de.gxp.menu.control;
 
 import java.util.List;
 
+import de.gxp.menu.entity.ActionCardConfig;
+import de.gxp.menu.entity.ActionCardConfigTranslation;
+import de.gxp.menu.entity.MenuItemConfig;
+import de.gxp.menu.entity.MenuItemConfigTranslation;
+import de.gxp.menu.entity.MenuItemDefinition;
+import de.gxp.menu.entity.MenuItemDefinitionTranslation;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Package-private data access for the menu consistency unit: catalogue,
- * config rows and action cards live in ONE package because invariants 2/3
- * make them one transactional unit (design decision).
+ * Control (data access) — package-private data access for the menu
+ * consistency unit: catalogue, config rows and action cards live in ONE
+ * feature because invariants 2/3 make them one transactional unit (design
+ * decision). It lives in {@code .control} rather than beside the entities
+ * precisely so it can stay package-private (spec §4).
  */
 @ApplicationScoped
 class MenuRepository implements PanacheRepositoryBase<MenuItemDefinition, String> {
