@@ -54,9 +54,18 @@ class TokenStore {
         return idleTimeout.toSeconds();
     }
 
-    /** Issues a fresh 256-bit token; only its SHA-256 is retained. Purges lazily. */
+    /**
+     * Issues a fresh 256-bit token; only its SHA-256 is retained.
+     *
+     * <p>It no longer purges expired entries first (constitution v1.7.0,
+     * 2026-08-25): the purge is now time-driven, from
+     * {@code de.gxp.infrastructure.scheduler}. <b>Safety of that removal:</b>
+     * this only ever changed MEMORY behaviour, never an auth decision —
+     * {@link #slide} re-checks the expiry itself and drops an idled-out entry
+     * on the spot, so an entry that outlives its expiry in the map is already
+     * dead as a credential.
+     */
     IssuedToken issue() {
-        purgeExpired();
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -87,9 +96,21 @@ class TokenStore {
         expiryByTokenHash.clear();
     }
 
-    private void purgeExpired() {
+    /**
+     * Drops every idled-out entry. Package-private since 2026-08-25 so
+     * {@link AuthControl#purgeExpiredTokens()} — the feature's one public
+     * type — can offer it to the central scheduler. Memory hygiene only: an
+     * entry still sitting here past its expiry is already refused by
+     * {@link #slide}.
+     */
+    void purgeExpired() {
         Instant now = clock.instant();
         expiryByTokenHash.values().removeIf(expiry -> !expiry.isAfter(now));
+    }
+
+    /** Test probe (same package): how many entries the map currently holds. */
+    int size() {
+        return expiryByTokenHash.size();
     }
 
     static String sha256Hex(String rawToken) {

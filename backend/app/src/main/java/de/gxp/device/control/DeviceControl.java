@@ -169,6 +169,29 @@ public class DeviceControl {
         }
     }
 
+    /**
+     * Time-driven sweep of expired pairing requests (constitution v1.7.0,
+     * owner decision 2026-08-25) — invoked by
+     * {@code de.gxp.infrastructure.scheduler.DeviceScheduler}, which is the
+     * reason this method is {@code public}: scheduling is centrally managed
+     * in one package, and that package may name a feature's {@code *Control}
+     * and nothing else.
+     *
+     * <p>The opportunistic {@code deleteExpired} in
+     * {@link #createPairingRequest()} STAYS: it is what bounds the table
+     * during a flood of anonymous creates, which a daily sweep cannot do.
+     * This closes the opposite gap — an instance nobody touches, where no
+     * create ever arrives and expired rows are never removed.
+     *
+     * <p>Returns the row count so the scheduler can log a COUNT and nothing
+     * else (principle 3): a pairing row holds a display code and a secret
+     * hash, neither of which may reach a log.
+     */
+    @Transactional
+    public long sweepExpiredPairingRequests() {
+        return pairingRequestRepository.deleteExpired(clock.instant());
+    }
+
     // ------------------------------------------------------------ pairing (manager)
 
     /**
@@ -177,6 +200,21 @@ public class DeviceControl {
      * — which also holds the room row until commit, so a concurrent room
      * delete cannot slip between the check and the confirm. Default device
      * name: {@code Kiosk <room code>}.
+     *
+     * <p><b>Known residual race</b> (found in review 2026-08-25, accepted as
+     * is): a confirm that passes its {@code expiresAt.isAfter(now)} check
+     * microseconds before the row crosses its TTL can have that row bulk-
+     * deleted underneath it — by the opportunistic
+     * {@link PairingRequestRepository#deleteExpired(java.time.Instant)} on a
+     * concurrent create, or by the daily
+     * {@link #sweepExpiredPairingRequests()} — before the dirty-check UPDATE
+     * commits. The manager then sees a {@code StaleStateException} → 500 where
+     * a second later the same request would have given the deterministic 404.
+     * The window is sub-second, the sweep runs once a day at 02:00, and the
+     * behavior is not new: the create-path delete has had exactly this shape
+     * since REQ-409. Closing it means locking the pairing row for update, and
+     * that cost was judged not worth a race that ends in "retry, you get the
+     * 404 you were going to get anyway".
      */
     @Transactional
     public void confirmPairing(String code, ConfirmPairingRequest request) {

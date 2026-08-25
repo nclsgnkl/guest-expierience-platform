@@ -112,12 +112,43 @@ class TokenStoreTest {
         assertNull(store.slide(TokenStore.sha256Hex(b.rawToken())));
     }
 
+    /**
+     * The scheduled purge (constitution v1.7.0) actually SHRINKS the map.
+     *
+     * <p>Rewritten 2026-08-25 from {@code issuePurgesExpiredEntriesLazily},
+     * which asserted only that {@code slide(...)} returned {@code null} for
+     * the stale token — true whether or not anything had been purged, because
+     * {@code slide} rejects an expired entry by itself. It therefore tested
+     * the purge not at all. The map size is the only observable that tells
+     * the two apart, hence {@link TokenStore#size()}.
+     */
     @Test
-    void issuePurgesExpiredEntriesLazily() {
-        TokenStore.IssuedToken old = store.issue();
+    void purgeExpiredDropsIdledOutEntries() {
+        TokenStore.IssuedToken stale = store.issue();
         clock.advance(Duration.ofSeconds(700));
-        store.issue(); // triggers the lazy purge
-        assertNull(store.slide(TokenStore.sha256Hex(old.rawToken())));
+        TokenStore.IssuedToken fresh = store.issue();
+        assertEquals(2, store.size(), "both entries are still in the map — nothing purges on issue any more");
+
+        store.purgeExpired();
+
+        assertEquals(1, store.size(), "the idled-out entry must be GONE from the map, not merely rejected");
+        assertNull(store.slide(TokenStore.sha256Hex(stale.rawToken())));
+        assertNotNull(store.slide(TokenStore.sha256Hex(fresh.rawToken())), "the live token is untouched");
+    }
+
+    /**
+     * The safety argument for removing the purge from {@code issue()}: a
+     * lingering entry is never a usable credential, because {@code slide}
+     * re-checks the expiry and drops it on the spot.
+     */
+    @Test
+    void anUnpurgedExpiredEntryIsStillRefusedAndDropped() {
+        TokenStore.IssuedToken issued = store.issue();
+        clock.advance(Duration.ofSeconds(700));
+        assertEquals(1, store.size(), "the expired entry is still in the map until something purges it");
+
+        assertNull(store.slide(TokenStore.sha256Hex(issued.rawToken())), "but it does not authenticate");
+        assertEquals(0, store.size(), "and slide dropped it on the spot");
     }
 
     @Test

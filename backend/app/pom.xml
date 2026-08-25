@@ -64,6 +64,13 @@
             <artifactId>quarkus-security</artifactId>
         </dependency>
         <dependency>
+            <!-- core @Scheduled only (constitution v1.7.0, owner decision 2026-08-25):
+                 in-JVM, no job store, no cluster coordination. quarkus-quartz stays
+                 deliberately un-added - one self-hosted box needs neither. -->
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-scheduler</artifactId>
+        </dependency>
+        <dependency>
             <!-- allow-list name "quarkus-junit5": renamed to quarkus-junit in Quarkus 3.31
                  (quarkus-junit5 is now only a relocation pom) - same artifact, corrected name -->
             <groupId>io.quarkus</groupId>

@@ -19,14 +19,16 @@ class PairingRequestRepository implements PanacheRepository<PairingRequest> {
     }
 
     /**
-     * Cleanup of expired requests (REQ-409). Called opportunistically on every
-     * create, which is what this was built around while the allow-list had no
-     * scheduler at all. {@code quarkus-scheduler} was approved on 2026-08-25
-     * (constitution v1.7.0), so a time-driven sweep is now permitted — the
-     * gap this closes is an instance nobody touches, where no create ever
-     * arrives and expired rows are never removed. Nothing here is unsafe
-     * meanwhile: an expired row is rejected by the poll and confirm checks
-     * regardless of whether it has been deleted yet.
+     * Cleanup of expired requests (REQ-409), with TWO callers since
+     * 2026-08-25. {@link DeviceControl#createPairingRequest()} calls it
+     * opportunistically on every create, which is what bounds the table during
+     * a flood of anonymous creates; {@link
+     * DeviceControl#sweepExpiredPairingRequests()} calls it once a day from
+     * {@code de.gxp.infrastructure.scheduler.DeviceScheduler} (constitution
+     * v1.7.0), which covers the opposite case — an instance nobody touches,
+     * where no create ever arrives and expired rows would otherwise stay
+     * forever. Neither is a security control: an expired row is rejected by
+     * the poll and confirm checks whether or not it has been deleted yet.
      */
     long deleteExpired(Instant now) {
         return delete("expiresAt <= ?1", now);

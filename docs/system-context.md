@@ -237,6 +237,32 @@ below.
 
 ## Cross-Cutting Concerns
 
+- **Scheduled housekeeping:** the only work this box does unattended. Core
+  `quarkus-scheduler` (`@Scheduled`, in-JVM, no job store, no cluster
+  coordination — Quartz deliberately not approved, constitution v1.7.0).
+  **Scheduling is centrally managed in `de.gxp.infrastructure.scheduler`**
+  (owner decision 2026-08-25), one class per domain holding only the
+  annotation and a single delegating call into the feature's public
+  `*Control`; the logic stays in the feature. Two jobs today, both **daily at
+  02:00** (`cron = "0 0 2 * * ?"`, `concurrentExecution = SKIP`):
+  `DeviceScheduler` sweeps expired `pairing_request` rows, `AuthScheduler`
+  purges expired admin bearer-token hashes from the in-memory store. Cron, not
+  `every = …`, because a relative interval restarts with the process and an
+  on-premise box reboots with the building; the accepted residual is that a
+  machine never powered on at 02:00 never sweeps, which is harmless since the
+  rows are already functionally inert. The pairing table keeps its
+  *opportunistic* delete on create as well — that is what bounds it during a
+  flood of anonymous `POST /api/pairing/requests`; the sweep only clears the
+  residue a flood leaves behind. **The authoritative answer to "what runs on a
+  timer, and how often" is `ScheduledJobInventoryTest`**, which pins each job
+  and its cron as a literal list and fails the build when one is added,
+  removed or re-timed — this bullet is prose, that test is the source of
+  truth. Jobs never fire during the suite
+  (`%test.quarkus.scheduler.start-mode=halted`); tests call the Control
+  directly. Principle 3 applies with teeth: Quarkus logs an uncaught job
+  failure with a full stack trace and a `PSQLException` quotes statement text,
+  so every job catches `RuntimeException` and logs the exception's class name
+  only, and success logs counts only, and only when the count > 0.
 - **Design tokens:** CSS custom properties in two layers (primitive → semantic).
   Components reference semantic roles only. Full rationale and shape in
   `docs/design/tokens.md` → "Implementation". No Tailwind. As of

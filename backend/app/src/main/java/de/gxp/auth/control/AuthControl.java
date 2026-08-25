@@ -87,6 +87,23 @@ public class AuthControl {
     }
 
     /**
+     * Drops the idled-out entries from the in-memory token store
+     * (constitution v1.7.0, owner decision 2026-08-25) — called by
+     * {@code de.gxp.infrastructure.scheduler.AuthScheduler}. It exists as a
+     * hop rather than the scheduler calling the store directly because
+     * {@link TokenStore} is neither public nor a {@code *Control}, and a
+     * feature's {@code *Control} is the only type another package may name
+     * (spec §4, enforced by {@code FeatureInternalsImportTest}).
+     *
+     * <p>No {@code @Transactional}: the store is in memory, no database is
+     * touched. Memory hygiene only — an expired entry is refused by the
+     * store's own expiry check whether or not it has been swept yet.
+     */
+    public void purgeExpiredTokens() {
+        tokenStore.purgeExpired();
+    }
+
+    /**
      * Constitution v1.5.1: verifies the current password, enforces the minimal
      * policy (≥ 8 — also contract-level bean validation), stores the new hash
      * and drops EVERY active token including the caller's — the old

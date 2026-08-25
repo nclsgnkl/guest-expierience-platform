@@ -14,9 +14,10 @@ is the working summary, not a replacement.
   `@Entity` types and their `*Mapper`). Everything that is not a business
   capability lives under the single package **`de.gxp.infrastructure`** —
   `http` (hand-written `ApiErrors`, the exception mappers, the response
-  filter), `web` (SPA fallback), `devseed` (dev-profile seeder),
-  `testsupport` (test scope). `de.gxp.api` is the OpenAPI generator's output
-  package and holds no hand-written source, so it exists only under
+  filter), `web` (SPA fallback), `scheduler` (the `@Scheduled` job triggers,
+  one class per domain — see "Scheduled work"), `devseed` (dev-profile
+  seeder), `testsupport` (test scope). `de.gxp.api` is the OpenAPI generator's
+  output package and holds no hand-written source, so it exists only under
   `target/` and needs no exclusion.
   A package is a **feature** when it owns state (a table) and/or a contract
   surface; `de.gxp.auth` qualifies on both counts and stays one.
@@ -31,15 +32,18 @@ is the working summary, not a replacement.
   and non-Control types in `.control` are `public` only because Java has no
   sub-package visibility — referencing them from outside `de.gxp.<feature>` is
   a violation, caught by the architecture tests, not by the compiler.
-  **Entities never leave their feature.** The four guards live in
+  **Entities never leave their feature.** The five guards live in
   `de.gxp.architecture`: `FeatureInternalsImportTest` (cross-feature
   references into `.entity`/`.control`/`.boundary`, wildcard imports, layout
   present), `EntityExposureTest` (entity types in public signatures, including
-  generics, supertypes and interfaces), `ControlPackageVisibilityTest`
-  (only `*Control` public in `.control`, only `*Resource` in `.boundary`) and
-  `PersistenceAccessTest` (who may reach the database — see below).
-  They derive the feature list from disk, so a new feature is covered the day
-  its directory exists.
+  generics, supertypes and interfaces), `ControlPackageVisibilityTest` (only
+  `*Control` public in `.control`, only `*Resource` in `.boundary`),
+  `PersistenceAccessTest` (who may reach the database — see below) and
+  `ScheduledJobInventoryTest` (every `@Scheduled` job, pinned as a literal
+  list with its cron — see "Scheduled work"). The first four derive the
+  feature list from disk, so a new feature is covered the day its directory
+  exists; the job inventory is pinned by hand on purpose, so a job cannot be
+  added, removed or re-timed silently.
 - Controls accept and return **generated API DTOs** and call the hand-written
   Mapper themselves. No mapping framework, no Lombok.
 - Data access uses Panache **repositories**; entities carry no persistence
@@ -114,10 +118,23 @@ is the working summary, not a replacement.
   (→ core `quarkus-scheduler`), mapping frameworks/Lombok/utility libs
   (→ plain Java).
 - **Scheduled work uses core `quarkus-scheduler`** (`@Scheduled`), approved
-  constitution v1.7.0. In-JVM, no job store, no cluster coordination — one box
-  needs none of that. A `@Scheduled` method belongs in a `.control` package
-  like any other collaborator, and does its work through the feature's Control
-  so the housekeeping and the request path share one code path.
+  constitution v1.7.0 — in-JVM, no job store, no cluster coordination.
+  **Scheduling is centrally managed in `de.gxp.infrastructure.scheduler`**
+  (owner decision 2026-08-25): one class per domain, holding only the
+  annotation and one delegating call into the feature's public `*Control` —
+  which is why a housekeeping method on a Control is `public`. Cadence is a
+  Quartz **cron**, never `every = …` (a relative interval restarts with the
+  process, and an on-premise box reboots with the building), plus
+  `concurrentExecution = SKIP`. **Never `@Scheduled` on a Boundary**:
+  `deny-unannotated-members` is class-scoped, so the job would run with no
+  identity and be denied at runtime with every test still green. Every job
+  catches `RuntimeException` and logs the exception's **class name only** via
+  `org.jboss.logging.Logger` — Quarkus logs an uncaught one with a full stack
+  trace and a `PSQLException` quotes statement text (principle 3); success
+  logs counts only, and only when the count > 0. `ScheduledJobInventoryTest`
+  pins what runs and how often, and
+  `%test.quarkus.scheduler.start-mode=halted` keeps jobs from firing during
+  the suite — tests call the Control method directly.
 - Schema changes are **Flyway versioned SQL** in
   `src/main/resources/db/migration/` — no Hibernate schema generation, in any
   profile. Migrations run at startup and must leave a fresh instance usable.

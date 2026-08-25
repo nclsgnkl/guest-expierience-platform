@@ -1,7 +1,18 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.7.0 | **Last amended:** 2026-08-25
+**Version:** 1.7.1 | **Last amended:** 2026-08-25
 
+> **1.7.1** — accuracy correction, not a new approval: the backend constraint
+> said the feature boundary is held by **three** dependency-free architecture
+> tests and named three. It has been **five** since the scheduler work of
+> 2026-08-25 — `PersistenceAccessTest` landed on 2026-08-25 (`89cd289`,
+> owner-approved) without an amendment, and `ScheduledJobInventoryTest` arrived
+> with the scheduled-housekeeping change. Both are named now. This is the
+> second time this exact sentence has drifted (v1.6.1 (c) corrected "two →
+> three"), and it drifted the same way: a guard was approved and shipped while
+> the sentence counting the guards was not touched. Recorded rather than
+> quietly fixed, per the v1.3.0 lesson.
+>
 > **1.7.0** — `quarkus-scheduler` added to the approved backend dependencies
 > (owner decision 2026-08-25). A **new approval**, not a correction: the
 > allow-list previously had no scheduler at all, and the code says so — the
@@ -197,15 +208,20 @@
   field that a Control outside `.entity` actually touches — but only those:
   the migration widened **58 of 97** fields and left 39 package-private, and
   that minimum is compiler-checkable. **The feature boundary is therefore held
-  by three dependency-free architecture tests in `de.gxp.architecture`, not by
+  by five dependency-free architecture tests in `de.gxp.architecture`, not by
   the compiler**: `FeatureInternalsImportTest` (nothing outside
   `de.gxp.<feature>` may reference that feature's `.entity`, `.control` or
   `.boundary` types, except its own `*Control`; no wildcard imports; the
   layout is actually present), `EntityExposureTest` (no public signature
   outside `.entity` may expose an entity type — including generic arguments,
-  array components, supertypes and interfaces) and
+  array components, supertypes and interfaces),
   `ControlPackageVisibilityTest` (only a `*Control` may be public in
-  `.control`, only a `*Resource` in `.boundary`). Those tests are part of the
+  `.control`, only a `*Resource` in `.boundary`), `PersistenceAccessTest`
+  (only entities and repositories reach the database) and
+  `ScheduledJobInventoryTest` (every `@Scheduled` job and its cron, pinned as
+  a literal list, so a job cannot be added, removed or re-timed silently).
+  The first four derive the feature list from disk; the job inventory is
+  pinned by hand on purpose. Those tests are part of the
   definition of done and must stay green. They are a strong regression net,
   not a proof: each records its known gaps in its own javadoc, and leaving one
   sub-package out of scope is exactly how a real leak survived review once. A library such as ArchUnit is **deliberately not used** (principle 4).

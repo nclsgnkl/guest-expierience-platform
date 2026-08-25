@@ -489,3 +489,42 @@ Owner answers D1–D4 → `lead` presents the exact wording for literal approval
 → `lead` writes the governed docs → `dev` works the table above step by step
 → `reviewer` after each block. Branch: currently `feature/backend`; a
 dedicated branch for this refactor is advisable before step 1.
+
+---
+
+## Appended 2026-08-25 (`dev`) — scheduled-housekeeping follow-up
+
+Branch unchanged (`refactor/bce-subpackages-and-boundary-security`), nothing
+committed. Follow-up to the review of the `quarkus-scheduler` work; the
+reviewer's Medium/Low findings and the owner's three approved `backend/CLAUDE.md`
+texts were applied.
+
+**Changed**
+
+| File | What |
+|---|---|
+| `backend/CLAUDE.md` | the three owner-approved texts, verbatim: the rewritten "Scheduled work" bullet (jobs live in `de.gxp.infrastructure.scheduler`, replacing the v1.7.0 wording that put them in `.control`), "four guards" → **five guards** incl. `ScheduledJobInventoryTest`, and `scheduler` added to the `de.gxp.infrastructure` sub-package list |
+| `application.properties` | `quarkus.scheduler.tracing.enabled=false` pinned with its rationale (the six OTel API/instrumentation jars; no SDK, no exporter, nothing emits) |
+| `de/gxp/infrastructure/scheduler/ScheduledJobExecutionTest.java` (new) | M1 — both job bodies now actually execute in the suite, on a separate thread inside a freshly activated request context (what `DefaultInvoker` does at 02:00); asserts the delegation, the `deleted > 0` log gate, and that a no-op sweep logs nothing |
+| `ScheduledJobInventoryTest.java` | L1 — the package prefix is asserted, not just the class-name suffix; L2 — sorted **lists**, not `TreeSet`s, so a repeated `@Scheduled` (it is `@Repeatable`) cannot collapse into a pass. Both verified by mutation |
+| `PairingRequestRepository.java` | `deleteExpired` javadoc now names both callers (opportunistic on create + daily sweep) instead of saying a sweep is "now permitted" |
+| `DeviceControl.java` | `confirmPairing` javadoc records the accepted residual race (review L4): a confirm can lose its row to a concurrent bulk delete between the TTL check and the dirty-check UPDATE → `StaleStateException`/500 instead of the deterministic 404 |
+
+**Build:** `./mvnw verify` green — **244 tests, 0 failures** (241 + 3 new).
+Environment: `JAVA_HOME=/tmp/gxp-jdk/jdk-21.0.12+8`, and every build must be
+wrapped in `sg docker -c "…"` (see the environment note above).
+
+**Not done, deliberately:** L3 (scan boilerplate duplicated across three guard
+files) — owner chose to skip it. No `pom.xml` change.
+
+**Known gap, recorded in the new test's javadoc:** the `catch (RuntimeException)`
+branch in both schedulers is still unexecuted — reaching it needs a mocking
+library (dependency, allow-list is closed) or a test-only failure hook in
+production code.
+
+**Open for the owner:** `V4__device_pairing.sql` still comments "Expired rows
+are deleted opportunistically on each create (no scheduler)". It is stale, but
+editing an applied migration changes its Flyway checksum — left untouched on
+purpose.
+
+**Next:** review, then the owner commits.
