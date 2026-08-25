@@ -295,20 +295,46 @@ Manager's browser ──HTTPS──▶ relay ──existing outbound tunnel─�
 Requirements:
 
 1. **The relay is a dumb pipe. TLS terminates on the box, not on the relay.**
-   This is the load-bearing requirement of Part D. A relay that terminates TLS
-   sees every property's door codes and guest names in plaintext, which
-   re-creates the central data store this architecture exists to avoid. A
-   compromised dumb pipe can deny service; it cannot read.
+   This is the load-bearing requirement of Part D, and it was re-examined on
+   2026-08-25 against the obvious alternative — a normal reverse proxy that
+   terminates TLS and handles rate limiting, WAF rules and blocklists at the
+   edge. **Rejected, and it should not be re-proposed without reopening this
+   paragraph.** The reasoning is not primarily technical:
+
+   - To rate-limit HTTP you must see HTTP; to see HTTP you must terminate TLS.
+     A terminating proxy therefore sees, for **every** property, the login
+     passwords, the bearer tokens, and the door codes, alarm codes, WiFi
+     passwords and guest names in every manager response. Nothing is stored
+     there — but one access-log setting, one debug flag or one compromised host
+     turns "sees" into "has".
+   - That re-creates the central target this architecture exists to avoid. The
+     blast-radius asymmetry (one box compromised = one property; the centre
+     compromised = all of them) is the single strongest argument for the
+     on-premises model, and terminating TLS at the edge silently gives it up.
+   - **It would also make the product's central claim untrue.** "Guest data
+     never leaves the building" cannot be said while all manager traffic flows
+     in plaintext through infrastructure we operate — and it would make us a
+     processor of that data, which is exactly the compliance surface the
+     on-premises model removes.
+
+   A compromised dumb pipe can deny service. It cannot read.
 2. The relay authenticates instances and routes to the right tunnel. It must not
    be possible for one instance to receive another's traffic, nor to enumerate
    siblings.
 3. **The originating client address must reach the application** — see A1.4.
-4. The application is unchanged by the relay's existence. **No "remote mode", no
+4. **Transport-level limits belong on the relay, because they need no
+   plaintext**: connections per source address, new-connection rate, bandwidth,
+   and an operator blocklist. These are worth having and cost nothing, but they
+   are **defence in depth, not a substitute for A1** — a relay cannot tell
+   `POST /api/manager/login` from `GET /api/manager/rooms`, so it cannot see a
+   *failed login* and cannot stop a patient attacker at one request per second.
+   Only the application knows the difference.
+5. The application is unchanged by the relay's existence. **No "remote mode", no
    second authentication path, no `if (remote)`.** The transport is a deployment
    concern beside the application; the moment the application knows where a
    request came from, there are two security models and one of them is weaker.
-5. Relay unavailability degrades to "no remote access" and nothing else (§2).
-6. Enrollment — how a box obtains its relay identity — should reuse the instance
+6. Relay unavailability degrades to "no remote access" and nothing else (§2).
+7. Enrollment — how a box obtains its relay identity — should reuse the instance
    identity from Part B rather than inventing a second one.
 
 **Not foreclosing the hybrid:** if cross-property features are ever needed (one
@@ -328,7 +354,7 @@ way that makes that impossible later. Building it now is out of scope.
 | A4 | Undetected or undisputable changes | Only useful if someone reads it |
 | B | Browser-warning fatigue; the pairing trust-on-first-use window | DNS credential compromise |
 | C | Permanently unpatched instances | The update channel itself becomes the target (§6) |
-| D | Exposing N boxes directly on the internet | Relay outage removes remote access for everyone |
+| D | Exposing N boxes directly on the internet; crude flooding (transport limits, D4) | Relay outage removes remote access for everyone; a patient low-rate attacker is A1's problem, not the relay's |
 
 **Explicitly not solved here:** backups (still open, `specification.md` §11
 item 7), a broken box nobody notices, and physical access to a kiosk in a guest
@@ -369,7 +395,8 @@ Parts B and C.
 | 8 | **Update cadence and consent** — automatic, or manager-approved? What time of day? (C) |
 | 9 | **Migration failure policy** — refuse the update, or apply and risk a partial schema? (C) |
 | 10 | **Who operates the relay**, and what its availability target is (D) |
-| 11 | **Booking/Airbnb import** — iCal URLs (outbound, read-only, no account credentials on the box) versus a partner API (credentials on every box). Recommendation: **iCal**, precisely because it keeps the credential count at zero |
+| 11 | **Client certificates at the relay** — should the relay require a client certificate before opening a tunnel at all? It gates *who may reach a box* without seeing any content, so `/api/manager/login` would not be reachable by anonymous callers on the internet at all — a bigger change to the threat model than any throttle. The cost is a certificate on every manager device, i.e. the VPN trade-off one layer down. Does not remove the need for A1 (the LAN path stays open) |
+| 12 | **Booking/Airbnb import** — iCal URLs (outbound, read-only, no account credentials on the box) versus a partner API (credentials on every box). Recommendation: **iCal**, precisely because it keeps the credential count at zero |
 
 ---
 
