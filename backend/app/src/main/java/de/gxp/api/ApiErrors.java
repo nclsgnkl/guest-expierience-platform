@@ -48,6 +48,10 @@ public final class ApiErrors {
         return withStatus(413, code, message, null);
     }
 
+    public static WebApplicationException serviceUnavailable(String code, String message) {
+        return withStatus(503, code, message, null);
+    }
+
     private static WebApplicationException withStatus(int status, String code, String message,
             List<ApiErrorDetail> details) {
         ApiError error = new ApiError().code(code).message(message);

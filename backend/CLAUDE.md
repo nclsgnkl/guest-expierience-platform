@@ -52,7 +52,15 @@ is the working summary, not a replacement.
   first and the generated interface only as a fallback (verified against
   3.33.3.1).
 - Controls build thrown non-2xx outcomes via `de.gxp.api.ApiErrors`, never
-  ad-hoc `Response` construction.
+  ad-hoc `Response` construction — and **never a bare `jakarta.ws.rs`
+  exception subclass** (`ServiceUnavailableException`, `NotFoundException`, …).
+  Those carry no entity: their `String` constructor sets the Java message, not
+  the response body, so the status goes out bodyless while the contract
+  declares an `ApiError` for it, and `ApiErrorMappers` passes an entity-less
+  `WebApplicationException` straight through. `ApiErrors` gained
+  `serviceUnavailable(...)` on 2026-08-25 for exactly this reason (the
+  readiness 503). The only legitimate entity-less throws are the ones where a
+  bodyless response IS the contract — e.g. the pairing poll's `202`.
 
 ## Contract-first
 
