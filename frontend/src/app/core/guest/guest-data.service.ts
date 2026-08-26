@@ -119,8 +119,9 @@ export class GuestDataService {
       let home: GuestHomeScreen | null = null;
       if (payload.occupancy === OccupancyState.Occupied) {
         try {
-          home = (await this.fetchHome()).payload;
-          this.homeEtag = this.pendingHomeEtag;
+          const homeResult = await this.fetchHome();
+          home = homeResult.payload;
+          this.homeEtag = homeResult.etag;
         } catch (error) {
           if (!isStatus(error, 409)) {
             throw error;
@@ -194,7 +195,7 @@ export class GuestDataService {
         try {
           const homeResult = await this.fetchHome(previousEtag);
           home = homeResult.notModified ? this.heldHome : homeResult.payload;
-          this.homeEtag = homeResult.notModified ? this.homeEtag : this.pendingHomeEtag;
+          this.homeEtag = homeResult.notModified ? this.homeEtag : homeResult.etag;
         } catch (error) {
           if (!isStatus(error, 409)) {
             throw error;
@@ -205,8 +206,10 @@ export class GuestDataService {
         }
       }
 
-      const changed =
-        vacantNow || !result.notModified || home !== this.heldHome || session !== this._session();
+      /* `session !== this._session()` used to be a fourth term here and was
+         dead: on a 304 line ~182 binds `session` to `this._session()` itself,
+         and otherwise `!result.notModified` already decides. */
+      const changed = vacantNow || !result.notModified || home !== this.heldHome;
       this.adopt(held, heldEtag, home, changed);
     } catch (error) {
       if (isStatus(error, 401)) {
@@ -319,23 +322,37 @@ export class GuestDataService {
     }
   }
 
-  /** The home response's ETag, captured beside the payload. */
-  private pendingHomeEtag: string | null = null;
-
+  /* Overloaded exactly like `fetchSession`: without an `If-None-Match` the
+     server cannot answer 304, so that caller needs no narrowing. The ETag
+     travels IN the result — an instance field would be shared mutable state
+     between concurrent calls, which nothing but the single-timer invariant
+     currently rules out. */
+  private async fetchHome(): Promise<{
+    payload: GuestHomeScreen;
+    etag: string | null;
+    notModified: false;
+  }>;
   private async fetchHome(
-    etag: string | null = null,
-  ): Promise<{ payload: GuestHomeScreen; notModified: false } | { notModified: true; payload: null }> {
+    etag: string | null,
+  ): Promise<
+    | { payload: GuestHomeScreen; etag: string | null; notModified: false }
+    | { notModified: true }
+  >;
+  private async fetchHome(etag: string | null = null) {
     try {
       const response = await firstValueFrom(
         this.withIfNoneMatch(etag, () => this.api.getGuestHomeScreen('response')).pipe(
           timeout(FETCH_TIMEOUT_MS),
         ),
       );
-      this.pendingHomeEtag = response.headers.get('etag');
-      return { payload: response.body as GuestHomeScreen, notModified: false };
+      return {
+        payload: response.body as GuestHomeScreen,
+        etag: response.headers.get('etag'),
+        notModified: false as const,
+      };
     } catch (error) {
       if (etag !== null && isStatus(error, 304)) {
-        return { notModified: true, payload: null };
+        return { notModified: true as const };
       }
       throw error;
     }
