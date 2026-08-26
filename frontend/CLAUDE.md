@@ -97,6 +97,13 @@ that is a design smell, not a test convenience.
 states and the staleness pill; it needs the dev backend and drives its state
 via the manager API (and restores it).
 
+**`src/test-setup.ts` runs before every spec** (`setupFiles` on the `test`
+target). It supplies `localStorage`/`sessionStorage`, because Node ≥ 26 defines
+those names on `globalThis` itself and Vitest then skips jsdom's — it installs
+only what is missing, so a future runtime that fixes this upstream silently
+wins. No other global state belongs in that file: a test double lives in the
+spec that needs it.
+
 **A service's collaborator is a DI double built from writable signals**
 (`{ provide: PreferencesService, useValue: { language } }`), not the real
 service with a stand-in gateway underneath it. `vi.mock` does not work here —
