@@ -252,7 +252,8 @@ public class UpdateControl {
         }
         byte[] signature = decodeSignature(signatureText.body());
         UpdateChannel row = store.load();
-        PublicKey signer = signature == null ? null : verifier.verify(manifest.body(), signature, trustedKeys(row));
+        List<PublicKey> current = trustedKeys(row);
+        PublicKey signer = signature == null ? null : verifier.verify(manifest.body(), signature, current);
         if (signer == null) {
             return record(UpdateCheckOutcome.INVALID_SIGNATURE, null); // before any parse
         }
@@ -269,8 +270,8 @@ public class UpdateControl {
         String rotateTo = null;
         if (parsed.trustedKeys() != null) {
             List<PublicKey> next = SigningKeyLoader.parseTokens(parsed.trustedKeys());
-            if (!SigningKeyLoader.contains(next, signer)) {
-                return record(UpdateCheckOutcome.MALFORMED, null); // a set that retires its own signer is a mistake, never applied
+            if (!rotationAllowed(current, next, signer)) {
+                return record(UpdateCheckOutcome.MALFORMED, null);
             }
             if (row.trustedKeysVersion == null
                     || SemanticVersion.parse(parsed.version()).compareTo(SemanticVersion.parse(row.trustedKeysVersion)) > 0) {
@@ -279,6 +280,24 @@ public class UpdateControl {
         }
         store.recordCheck(UpdateCheckOutcome.UPDATE_AVAILABLE, parsed, manifest.body(), signature, clock.instant(), rotateTo);
         return UpdateCheckOutcome.UPDATE_AVAILABLE;
+    }
+
+    /**
+     * The rotation rule (D23, review 06 #3). {@code next} may replace
+     * {@code current} when it contains its own signer (a set that retires its
+     * signer is a mistake), and — if it REMOVES any key of {@code current} —
+     * when the signer is a DORMANT key of {@code current}, i.e. not its first
+     * one (key 1 is the active, daily-use key; the dormant key lives offline,
+     * D-2). So a thief of the active key can add keys but never retire the
+     * dormant key that exists to survive exactly that theft; a rotation that
+     * only adds keys may be signed by any member.
+     */
+    static boolean rotationAllowed(List<PublicKey> current, List<PublicKey> next, PublicKey signer) {
+        if (!SigningKeyLoader.contains(next, signer)) {
+            return false;
+        }
+        boolean removes = current.stream().anyMatch(key -> !SigningKeyLoader.contains(next, key));
+        return !removes || !SigningKeyLoader.same(current.get(0), signer);
     }
 
     /**

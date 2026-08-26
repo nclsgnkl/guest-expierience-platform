@@ -98,7 +98,7 @@ assert_fails "quote inside a value" string_field "$WORK/manifest-quote.json" cha
 assert_eq "extra line is counted" 9 "$(line_count "$WORK/manifest-dup.json")"
 
 # ---------------------------------------------------------------- state-*.json — every outcome of Design §2 (+ in-progress, + a future schema)
-expected_states="none in-progress applied rolled-back rolled-back-with-restore rollback-failed backup-failed pull-failed artifact-mismatch downgrade-refused invalid-signature malformed"
+expected_states="none in-progress applied rolled-back rolled-back-with-restore rollback-failed backup-failed pull-failed artifact-mismatch downgrade-refused invalid-signature malformed config-failed"
 count=0
 for outcome in $expected_states; do
     S="$FIXTURES/state-$outcome.json"
@@ -113,7 +113,7 @@ for outcome in $expected_states; do
         assert_ok "state-$outcome $optional readable" optional_string_field "$S" "$optional"
     done
 done
-assert_eq "twelve outcome fixtures" 12 "$count"
+assert_eq "thirteen outcome fixtures (+ config-failed, review 06 #2)" 13 "$count"
 assert_eq "state-future-schema still reads the known keys" 2 "$(number_field "$FIXTURES/state-future-schema.json" schemaVersion)"
 assert_ok "state-future-schema outcome" checked "$FIXTURES/state-future-schema.json" outcome "$RE_CODE"
 assert_eq "state-applied lastRequestedAt" "2026-09-01T10:00:00Z" "$(optional_string_field "$FIXTURES/state-applied.json" lastRequestedAt)"
@@ -342,6 +342,66 @@ assert_fails "the fixture has no trustedKeys" raw_field "$FIXTURES/manifest.json
 # the rotation rule: newer than the remembered set → replace; equal or older → keep (replay)
 assert_fails "1.0.2 is not ≤ 1.0.1 → a 1.0.2 set replaces a 1.0.1 set" version_le 1.0.2 1.0.1
 assert_ok "1.0.1 ≤ 1.0.2 → a replayed 1.0.1 set is ignored" version_le 1.0.1 1.0.2
+
+# ---------------------------------------------------------------- review 06 #3: a removal must be signed by a DORMANT key
+P1="$(active_key "$P")"
+assert_eq "active_key = the first token of the set" "$T1" "$(active_key "$T1,$T2")"
+assert_ok "set_removes_key: {k1,k2} → {k2} removes" set_removes_key "$T1,$T2" "$T2"
+assert_fails "set_removes_key: {k1,k2} → {k1,k2,p1} adds only" set_removes_key "$T1,$T2" "$T1,$T2,$P1"
+assert_fails "set_removes_key: identical set" set_removes_key "$T1,$T2" "$T2,$T1"
+assert_fails "ACTIVE key 1 signs {key 1} (retires the dormant key 2) → refused" rotation_allowed "$T1,$T2" "$T1" "$T1"
+assert_ok "DORMANT key 2 signs {key 2} (retires the active key 1) → accepted" rotation_allowed "$T1,$T2" "$T2" "$T2"
+assert_ok "active key 1 signs {key 1, key 2, p1} (adds only) → accepted" rotation_allowed "$T1,$T2" "$T1,$T2,$P1" "$T1"
+assert_ok "dormant key 2 signs {key 1, key 2, p1} (adds only) → accepted" rotation_allowed "$T1,$T2" "$T1,$T2,$P1" "$T2"
+assert_fails "a set that retires its own signer → refused (dormant signer too)" rotation_allowed "$T1,$T2" "$T1" "$T2"
+assert_fails "the single key of a one-key set cannot be replaced by its own signature" rotation_allowed "$T2" "$T1" "$T2"
+assert_ok "after {k2} became the set, key 2 is the active key and may re-admit key 1 (add)" rotation_allowed "$T2" "$T2,$T1" "$T2"
+assert_fails "…but as the active key it may not retire p1 from {k2,p1}" rotation_allowed "$T2,$P1" "$T2" "$T2"
+assert_ok "…while the dormant p1 may retire key 2" rotation_allowed "$T2,$P1" "$P1" "$P1"
+# the rotation fixture (signed by key 2, {key 2}) passes under the test set
+assert_ok "rotation fixture: dormant-signed removal is allowed" rotation_allowed "$T1,$T2" "$T2" "$T2"
+
+# ---------------------------------------------------------------- review 06 #1: the bounded steps end on their own (a mock docker on PATH)
+mkdir -p -- "$WORK/bin"
+cat > "$WORK/bin/docker" <<'EOF'
+#!/usr/bin/env bash
+# mock: `docker pull` / `docker compose … exec -T db pg_dump …` hang for MOCK_HANG seconds, then answer
+sleep "${MOCK_HANG:-0}"
+case "$*" in
+    *pg_dump*) [[ -n "${MOCK_SILENT:-}" ]] || printf 'PGDMP-mock\n' ;;
+esac
+exit "${MOCK_EXIT:-0}"
+EOF
+chmod 0755 -- "$WORK/bin/docker"
+GXP_COMPOSE_DIR="$WORK" GXP_COMPOSE_PROJECT=mock
+started=$SECONDS
+assert_fails "pull_image ends by GXP_PULL_TIMEOUT when docker pull hangs" env PATH="$WORK/bin:$PATH" MOCK_HANG=20 GXP_PULL_TIMEOUT=1 bash -c '
+    GXP_UPDATER_LIBRARY_ONLY=1 source "$1"; pull_image ref@sha256:x' _ "$HERE/../gxp-updater.sh"
+assert_ok "…in about one second, not twenty" bash -c '(( $1 < 10 ))' _ "$((SECONDS - started))"
+assert_ok "pull_image succeeds when docker pull answers" env PATH="$WORK/bin:$PATH" bash -c '
+    GXP_UPDATER_LIBRARY_ONLY=1 source "$1"; pull_image ref@sha256:x' _ "$HERE/../gxp-updater.sh"
+assert_fails "pull_image fails when docker pull fails" env PATH="$WORK/bin:$PATH" MOCK_EXIT=1 bash -c '
+    GXP_UPDATER_LIBRARY_ONLY=1 source "$1"; pull_image ref@sha256:x' _ "$HERE/../gxp-updater.sh"
+started=$SECONDS
+assert_fails "dump_database ends by GXP_DUMP_TIMEOUT when pg_dump hangs" env PATH="$WORK/bin:$PATH" MOCK_HANG=20 GXP_DUMP_TIMEOUT=1 bash -c '
+    GXP_UPDATER_LIBRARY_ONLY=1 source "$1"; dump_database "$2"' _ "$HERE/../gxp-updater.sh" "$WORK/hung.dump"
+assert_ok "…in about one second" bash -c '(( $1 < 10 ))' _ "$((SECONDS - started))"
+[[ -e "$WORK/hung.dump" ]] && left=yes || left=no
+assert_eq "…and the partial dump is removed" no "$left"
+assert_ok "dump_database succeeds with a non-empty dump" env PATH="$WORK/bin:$PATH" bash -c '
+    GXP_UPDATER_LIBRARY_ONLY=1 source "$1"; dump_database "$2"' _ "$HERE/../gxp-updater.sh" "$WORK/good.dump"
+assert_eq "…dump content" "PGDMP-mock" "$(cat "$WORK/good.dump")"
+assert_fails "dump_database refuses an EMPTY dump" env PATH="$WORK/bin:$PATH" MOCK_SILENT=1 bash -c '
+    GXP_UPDATER_LIBRARY_ONLY=1 source "$1"; dump_database "$2"' _ "$HERE/../gxp-updater.sh" "$WORK/empty.dump"
+assert_ok "the pull argument list carries the timeout (by construction)" bash -c 'grep -q "^pull_image() {" "$1" && sed -n "/^pull_image() {/,/^}/p" "$1" | grep -q "bounded \"\$GXP_PULL_TIMEOUT\" docker pull"' _ "$HERE/../gxp-updater.sh"
+assert_eq "docker pull appears in ONE command line (pull_image), nowhere else" 1 "$(grep -cE '^[^#]*[^ #]+.*docker pull ' "$HERE/../gxp-updater.sh" || true)"
+assert_eq "pg_dump appears in ONE command line (dump_database)" 1 "$(grep -cE '^ *(if !|compose_t).*pg_dump ' "$HERE/../gxp-updater.sh" || true)"
+assert_eq "both pg_restore command lines are bounded (compose_t GXP_RESTORE_TIMEOUT)" 2 "$(grep -c 'compose_t "\$GXP_RESTORE_TIMEOUT"' "$HERE/../gxp-updater.sh" || true)"
+# the unit's TimeoutStartSec is above the sum of the defaults (arithmetic in the unit file: ~7080 s)
+unit_timeout="$(sed -n 's/^TimeoutStartSec=//p' "$HERE/../gxp-updater.service")"
+assert_eq "gxp-updater.service TimeoutStartSec" 3h "$unit_timeout"
+assert_ok "3 h (10800 s) > pull 1830 + dump 630 + config 300 + up 900 + stop 300 + restore 1500 + health 1560 + 60" \
+    bash -c '(( 10800 > 1830 + 630 + 300 + 900 + 300 + 1500 + 1560 + 60 ))'
 
 printf 'parse.sh: %d checks, %d failures\n' "$checks" "$failures"
 [[ $failures -eq 0 ]]

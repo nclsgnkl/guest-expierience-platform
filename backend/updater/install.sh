@@ -106,6 +106,17 @@ state_file="$(conf_value GXP_STATE_FILE)"
 [[ -n "$backup_dir" ]] || backup_dir=/var/lib/gxp/backups
 [[ -n "$state_file" ]] || state_file=/var/lib/gxp-updater/state.json
 [[ -f "$compose_dir/compose.yaml" ]] || { echo "no compose.yaml in GXP_COMPOSE_DIR=$compose_dir (edit $CONF)" >&2; exit 1; }
+# the updater reads the deployment through `docker compose config` as root with NO environment but the
+# conf: every variable compose.yaml requires (GXP_DB_PASSWORD, GXP_TLS_HOST, …) must be in that directory's
+# .env, or every run ends in a configuration error and the box never updates (review 06 #2)
+project="$(conf_value GXP_COMPOSE_PROJECT)"
+[[ -n "$project" ]] || project=gxp
+if ! compose_err="$(env -i PATH="$PATH" HOME=/root docker compose --project-directory "$compose_dir" --project-name "$project" config -q 2>&1)"; then
+    echo "REFUSED: \`docker compose config\` fails in $compose_dir — the updater would fail the same way on every run." >&2
+    echo "         Put every variable compose.yaml requires into $compose_dir/.env (README, \"First run\"). Compose said:" >&2
+    printf '         %s\n' "$compose_err" >&2
+    exit 1
+fi
 install -d -m 0700 -o root -g root -- "$backup_dir" "$(dirname -- "$state_file")"
 # ProtectHome=yes in the unit: a compose dir under /home is invisible to the updater
 [[ "$compose_dir" != /home/* && "$compose_dir" != /root/* ]] || { echo "GXP_COMPOSE_DIR=$compose_dir is under /home or /root — the unit runs with ProtectHome=yes; move the deployment (e.g. /opt/gxp/backend)" >&2; exit 1; }

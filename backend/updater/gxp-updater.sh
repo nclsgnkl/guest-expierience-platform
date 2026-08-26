@@ -62,6 +62,23 @@
 #   GXP_KEEP_BACKUPS     newest dumps kept                        (5)
 #   GXP_DB_USER / GXP_DB_NAME   what compose.yaml gives Postgres  (gxp / gxp)
 #   GXP_LOCK_FILE        flock path                               (/run/lock/gxp-updater.lock)
+#   GXP_PULL_TIMEOUT     seconds for `docker pull`                (1800) → pull-failed
+#   GXP_DUMP_TIMEOUT     seconds for pg_dump                      (600)  → backup-failed
+#   GXP_RESTORE_TIMEOUT  seconds for pg_restore (and its --list)  (600)  → the rung's health decides
+#
+# Every step that is not bounded by its own deadline runs under `timeout`
+# (review 06 #1): the three above, plus COMPOSE_TIMEOUT for `compose
+# config/up/stop` and the schema wipe and PROBE_TIMEOUT for each health probe
+# (`psql`, `curl` inside a container). A run therefore always ends, and the
+# unit's TimeoutStartSec is sized ABOVE the sum of these bounds (see
+# gxp-updater.service) — a kill by systemd mid-ladder would leave the box on
+# the unhealthy image with the request marked handled.
+#
+# A configuration error found AFTER the exchange directory is known (the
+# app's compose config unreadable — typically a `.env` missing a required
+# variable) is mirrored to the app as outcome `config-failed` with a fixed
+# code in `message`, so the manager API shows it instead of silence; the
+# updater's own state is not touched.
 #
 # Test seams (environment only, never set by the units; every one of them is
 # REFUSED when the script runs under systemd — INVOCATION_ID set):
@@ -89,8 +106,15 @@ GXP_KEEP_BACKUPS="${GXP_KEEP_BACKUPS:-5}"
 GXP_DB_USER="${GXP_DB_USER:-gxp}"
 GXP_DB_NAME="${GXP_DB_NAME:-gxp}"
 GXP_LOCK_FILE="${GXP_LOCK_FILE:-/run/lock/gxp-updater.lock}"
+GXP_PULL_TIMEOUT="${GXP_PULL_TIMEOUT:-1800}"
+GXP_DUMP_TIMEOUT="${GXP_DUMP_TIMEOUT:-600}"
+GXP_RESTORE_TIMEOUT="${GXP_RESTORE_TIMEOUT:-600}"
 GXP_REHEARSAL_AFTER_DUMP="${GXP_REHEARSAL_AFTER_DUMP:-}"
 GXP_REHEARSAL_LOCAL_IMAGE="${GXP_REHEARSAL_LOCAL_IMAGE:-}"
+# fixed bounds (not configuration): one compose command, one in-container probe; `timeout -k` grace
+readonly COMPOSE_TIMEOUT=300
+readonly PROBE_TIMEOUT=30
+readonly KILL_AFTER=30
 
 # ---------------------------------------------------------------- the regex table (Design §2)
 readonly RE_VERSION='^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]{1,32})?$'
@@ -423,19 +447,103 @@ finish() {
     exit 0
 }
 
+# ---------------------------------------------------------------- bounded commands (review 06 #1)
+# bounded SECONDS COMMAND... — the command and its process group are killed
+# after SECONDS (TERM, then KILL after KILL_AFTER); the exit status is the
+# command's, or 124 on a timeout — every caller treats both as "failed".
+bounded() {
+    timeout -k "$KILL_AFTER" -- "$@"
+}
+
+# compose_t SECONDS ARGS... / compose ARGS... — `docker compose` on the deployment unit, bounded
+compose_t() {
+    local seconds="$1"
+    shift
+    bounded "$seconds" docker compose --project-directory "$GXP_COMPOSE_DIR" --project-name "$GXP_COMPOSE_PROJECT" "$@"
+}
+compose() {
+    compose_t "$COMPOSE_TIMEOUT" "$@"
+}
+
+# pull_image REF → 0 when the pinned ref was pulled within GXP_PULL_TIMEOUT; 1 otherwise (timeout included)
+pull_image() {
+    bounded "$GXP_PULL_TIMEOUT" docker pull -q -- "$1" >/dev/null 2>&1
+}
+
+# dump_database OUT — pg_dump --format=custom into OUT within GXP_DUMP_TIMEOUT; a failed,
+# timed-out or empty dump removes OUT and returns 1
+dump_database() {
+    local out="$1"
+    if ! compose_t "$GXP_DUMP_TIMEOUT" exec -T db pg_dump -U "$GXP_DB_USER" -d "$GXP_DB_NAME" --format=custom > "$out" 2>/dev/null \
+        || [[ ! -s "$out" ]]; then
+        rm -f -- "$out"
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------- the rotation rule (review 06 #3)
+# active_key SET → the first token: key 1 of the set is the ACTIVE (daily-use)
+# key, every later one is dormant (kept offline, D-2).
+active_key() {
+    printf '%s' "${1%%,*}"
+}
+
+# set_removes_key OLD NEW → 0 when at least one token of OLD is absent from NEW
+set_removes_key() {
+    local old="$1" new="$2" token
+    local IFS=,
+    for token in $old; do
+        [[ ",$new," == *",$token,"* ]] || return 0
+    done
+    return 1
+}
+
+# rotation_allowed OLD NEW SIGNER → 0 when NEW may replace OLD given who signed it:
+# NEW must contain SIGNER (a set that retires its own signer is a mistake);
+# a NEW that REMOVES a key of OLD must be signed by a DORMANT key of OLD — never
+# by the active one — so a thief of the active key cannot retire the dormant
+# key that exists to survive exactly that theft. A NEW that only adds keys may
+# be signed by any member of OLD.
+rotation_allowed() {
+    local old="$1" new="$2" signer="$3"
+    [[ ",$new," == *",$signer,"* ]] || return 1
+    if set_removes_key "$old" "$new"; then
+        [[ "$signer" != "$(active_key "$old")" ]] || return 1
+    fi
+    return 0
+}
+
 if [[ "${GXP_UPDATER_LIBRARY_ONLY:-}" == "1" ]]; then
     return 0 2>/dev/null || exit 0
 fi
 
 # ---------------------------------------------------------------- configuration checks (exit non-zero, nothing touched)
+# fail_config [--code CODE] MESSAGE — logs, exits 2. Once the exchange directory
+# is known (EXCHANGE_STAGE validated), the error is also MIRRORED to the app as
+# outcome `config-failed` with CODE in `message` (review 06 #2: a box whose
+# `.env` lacks a compose variable must not fail silently). Mirror only — the
+# updater's own state (guard memory) is never rewritten by a configuration error.
 fail_config() {
+    local code=""
+    if [[ "${1:-}" == "--code" ]]; then
+        code="$2"
+        shift 2
+    fi
     log "configuration error: $*"
+    if [[ -n "${EXCHANGE_STAGE:-}" && -n "$code" ]]; then
+        local image
+        image="$(optional_string_field "$GXP_STATE_FILE" currentImage 2>/dev/null || true)"
+        [[ "$image" =~ $RE_ARTIFACT ]] || image="unknown"
+        CURRENT_IMAGE="$image" state_json config-failed false "$code" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 0 \
+            | place_file "$EXCHANGE" "$STATE_FILE" 0644 "$EXCHANGE_STAGE" || true
+    fi
     exit 2
 }
 
 [[ $EUID -eq 0 ]] || fail_config "must run as root (the volume mountpoint is root-only)"
 [[ "$GXP_COMPOSE_PROJECT" =~ $RE_IDENT ]] || fail_config "GXP_COMPOSE_PROJECT"
 [[ "$GXP_HEALTH_TIMEOUT" =~ $RE_INT && "$GXP_HEALTH_HOLD" =~ $RE_INT && "$GXP_KEEP_BACKUPS" =~ $RE_INT ]] || fail_config "timeouts"
+[[ "$GXP_PULL_TIMEOUT" =~ $RE_INT && "$GXP_DUMP_TIMEOUT" =~ $RE_INT && "$GXP_RESTORE_TIMEOUT" =~ $RE_INT ]] || fail_config "step timeouts"
 [[ "$GXP_DB_USER" =~ $RE_IDENT && "$GXP_DB_NAME" =~ $RE_IDENT ]] || fail_config "database names"
 [[ -f "$GXP_COMPOSE_DIR/compose.yaml" ]] || fail_config "no compose.yaml in GXP_COMPOSE_DIR"
 [[ -r "$GXP_PUBLIC_KEYS" ]] || fail_config "public key set not readable"
@@ -451,13 +559,9 @@ if [[ -n "$GXP_REHEARSAL_AFTER_DUMP" ]]; then
     hook_mode="$(stat -c %a -- "$GXP_REHEARSAL_AFTER_DUMP")"
     [[ ! "${hook_mode: -2:1}" =~ [2367] && ! "${hook_mode: -1}" =~ [2367] ]] || fail_config "GXP_REHEARSAL_AFTER_DUMP must not be group/world-writable"
 fi
-for tool in docker openssl base64 flock date stat mktemp; do
+for tool in docker openssl base64 flock date stat mktemp timeout; do
     command -v -- "$tool" >/dev/null 2>&1 || fail_config "missing tool: $tool"
 done
-
-compose() {
-    docker compose --project-directory "$GXP_COMPOSE_DIR" --project-name "$GXP_COMPOSE_PROJECT" "$@"
-}
 
 # ---------------------------------------------------------------- 0  one run at a time
 mkdir -p -- "$(dirname -- "$GXP_LOCK_FILE")"
@@ -525,7 +629,7 @@ ATTEMPTED_VERSION=""
 
 # the effective image right now = what a rollback returns to; read before any state is written
 CURRENT_IMAGE="$(compose config 2>/dev/null | awk '/^  app:$/ { in_app = 1; next } /^  [a-z]/ { in_app = 0 } in_app && /^    image: / { sub(/^    image: /, ""); gsub(/^["'"'"']|["'"'"']$/, ""); print; exit }' || true)"
-[[ "$CURRENT_IMAGE" =~ $RE_ARTIFACT ]] || fail_config "cannot read the app image from compose"
+[[ "$CURRENT_IMAGE" =~ $RE_ARTIFACT ]] || fail_config --code compose-config "cannot read the app image from compose (is every variable compose.yaml requires in $GXP_COMPOSE_DIR/.env?)"
 
 SNAPSHOT="$WORK/desired.json"
 if ! snapshot_file "$DESIRED" "$SNAPSHOT"; then
@@ -611,8 +715,9 @@ NEW_KEYS=""
 if raw_field "$WORK/manifest.json" trustedKeys >/dev/null 2>&1; then
     optional_lines=$((optional_lines + 1))
     NEW_KEYS="$(checked "$WORK/manifest.json" trustedKeys "$RE_KEY_SET" || true)"
-    # a set must parse, and must contain the key that signed this very manifest (retiring one's own signer is a mistake)
-    [[ -n "$NEW_KEYS" ]] && valid_key_set "$NEW_KEYS" && [[ ",$NEW_KEYS," == *",$SIGNER,"* ]] || manifest_ok=0
+    # a set must parse, must contain the key that signed this very manifest (retiring one's own signer is a
+    # mistake), and a set that REMOVES a key must be signed by a dormant key of the current set (review 06 #3)
+    [[ -n "$NEW_KEYS" ]] && valid_key_set "$NEW_KEYS" && rotation_allowed "$EFFECTIVE_KEYS" "$NEW_KEYS" "$SIGNER" || manifest_ok=0
 fi
 [[ "$optional_lines" == "$((lines - 8))" ]] || manifest_ok=0
 [[ -n "$VERSION" && -n "$ARTIFACT" && -n "$SHA" ]] || manifest_ok=0
@@ -643,9 +748,7 @@ log "applying version=$VERSION"
 mkdir -p -m 0700 -- "$GXP_BACKUP_DIR"
 BACKUP_FILE="pre-update-$VERSION-$(date -u +%Y%m%dT%H%M%SZ).dump"
 [[ "$BACKUP_FILE" =~ $RE_BACKUP ]] || finish backup-failed false ""
-dump_args=(exec -T db pg_dump -U "$GXP_DB_USER" -d "$GXP_DB_NAME" --format=custom)
-if ! compose "${dump_args[@]}" > "$GXP_BACKUP_DIR/$BACKUP_FILE" 2>/dev/null || [[ ! -s "$GXP_BACKUP_DIR/$BACKUP_FILE" ]]; then
-    rm -f -- "$GXP_BACKUP_DIR/$BACKUP_FILE"
+if ! dump_database "$GXP_BACKUP_DIR/$BACKUP_FILE"; then      # bounded by GXP_DUMP_TIMEOUT
     BACKUP_FILE=""
     finish backup-failed false ""
 fi
@@ -676,8 +779,8 @@ if [[ -n "$GXP_REHEARSAL_LOCAL_IMAGE" ]]; then
     IMAGE_ID="$(docker image inspect -f '{{.Id}}' -- "$PINNED" 2>/dev/null || true)"
     [[ "$IMAGE_ID" == "sha256:$SHA" ]] || finish artifact-mismatch false ""
 else
-    if ! docker pull -q -- "$PINNED" >/dev/null 2>&1; then
-        # offline: the digest-pinned ref may already be known locally
+    if ! pull_image "$PINNED"; then                            # bounded by GXP_PULL_TIMEOUT
+        # offline (or timed out): the digest-pinned ref may already be known locally
         docker image inspect -- "$PINNED" >/dev/null 2>&1 || finish pull-failed false ""
     fi
     IMAGE_ID="$(docker image inspect -f '{{.Id}}' -- "$PINNED" 2>/dev/null || true)"
@@ -712,25 +815,31 @@ start_app() {
 }
 
 app_container() {
-    compose ps -q app 2>/dev/null | head -n 1
+    compose_t "$PROBE_TIMEOUT" ps -q app 2>/dev/null | head -n 1
 }
 
-# healthy — sets HEALTH_MESSAGE on failure (health-timeout | flyway-failed | container-restarting)
+# healthy — sets HEALTH_MESSAGE on failure (health-timeout | flyway-failed | container-restarting).
+# The Flyway row is read BEFORE the restarting flag: with compose's
+# `restart: unless-stopped` a refused migration crash-loops, and the row is
+# the one signal that says why (the flag alone would say `container-restarting`
+# or nothing, depending on where in the back-off the probe lands). Each probe
+# is bounded by PROBE_TIMEOUT, so one wait overshoots the deadline by at most
+# two probes + 5 s.
 healthy() {
     local deadline=$((SECONDS + GXP_HEALTH_TIMEOUT)) cid row
     while (( SECONDS < deadline )); do
-        cid="$(app_container)"
-        if [[ -n "$cid" && "$(docker inspect -f '{{.State.Restarting}}' -- "$cid" 2>/dev/null || true)" == "true" ]]; then
-            HEALTH_MESSAGE=container-restarting
-            return 1
-        fi
-        row="$(compose exec -T db psql -U "$GXP_DB_USER" -d "$GXP_DB_NAME" -tAc \
+        row="$(compose_t "$PROBE_TIMEOUT" exec -T db psql -U "$GXP_DB_USER" -d "$GXP_DB_NAME" -tAc \
             'SELECT success FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 1' 2>/dev/null || true)"
         if [[ "$row" == "f" ]]; then
             HEALTH_MESSAGE=flyway-failed
             return 1
         fi
-        if [[ "$row" == "t" ]] && compose exec -T app curl -fsk https://localhost:8443/api/system/ready >/dev/null 2>&1; then
+        cid="$(app_container)"
+        if [[ -n "$cid" && "$(docker inspect -f '{{.State.Restarting}}' -- "$cid" 2>/dev/null || true)" == "true" ]]; then
+            HEALTH_MESSAGE=container-restarting
+            return 1
+        fi
+        if [[ "$row" == "t" ]] && compose_t "$PROBE_TIMEOUT" exec -T app curl -fsk https://localhost:8443/api/system/ready >/dev/null 2>&1; then
             return 0
         fi
         sleep 5
@@ -776,7 +885,7 @@ compose stop app >/dev/null 2>&1 || true
 # migration creates another schema or an extension) — but only for a dump
 # pg_restore can read; an unreadable dump is not one to wipe the schema for.
 restore_args=(exec -T db pg_restore -U "$GXP_DB_USER" -d "$GXP_DB_NAME")
-if compose exec -T db pg_restore --list < "$GXP_BACKUP_DIR/$BACKUP_FILE" >/dev/null 2>&1; then
+if compose_t "$GXP_RESTORE_TIMEOUT" exec -T db pg_restore --list < "$GXP_BACKUP_DIR/$BACKUP_FILE" >/dev/null 2>&1; then
     wipe_rc=0
     compose exec -T db psql -U "$GXP_DB_USER" -d "$GXP_DB_NAME" -v ON_ERROR_STOP=1 -q \
         -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public; ALTER SCHEMA public OWNER TO $GXP_DB_USER;" >/dev/null 2>&1 || wipe_rc=$?
@@ -786,8 +895,8 @@ else
     restore_args+=(--clean --if-exists)
 fi
 restore_rc=0
-compose "${restore_args[@]}" < "$GXP_BACKUP_DIR/$BACKUP_FILE" >/dev/null 2>&1 || restore_rc=$?
-log "pg_restore exit=$restore_rc"    # a number only; health decides
+compose_t "$GXP_RESTORE_TIMEOUT" "${restore_args[@]}" < "$GXP_BACKUP_DIR/$BACKUP_FILE" >/dev/null 2>&1 || restore_rc=$?
+log "pg_restore exit=$restore_rc"    # a number only (124 = GXP_RESTORE_TIMEOUT); health decides
 start_app || true
 if healthy_and_held; then
     finish rolled-back-with-restore true "$FAILURE"

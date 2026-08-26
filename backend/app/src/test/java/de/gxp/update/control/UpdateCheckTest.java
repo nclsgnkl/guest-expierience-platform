@@ -259,11 +259,18 @@ class UpdateCheckTest {
         assertEquals(KEY2 + "," + KEY1, store.load().trustedKeys);
         assertEquals("1.0.2", store.load().trustedKeysVersion);
 
-        // replaying the 1.0.1 {key 2} manifest is still a valid, available update — but its set is OLDER and stays ignored
+        // replaying the 1.0.1 {key 2} manifest: key 2 is now the ACTIVE key of {key 2, key 1} and the set would remove
+        // key 1 → refused as malformed (review 06 #3 — the removal rule is unconditional, on both sides), so the
+        // set is neither rolled back nor even considered; nothing is offered
         serveSignedBy(manifest("1.0.1", KEY2), TestSigningKeys.privateKey2());
-        assertEquals(UpdateCheckOutcome.UPDATE_AVAILABLE, control.runCheck());
+        assertEquals(UpdateCheckOutcome.MALFORMED, control.runCheck());
         assertEquals(KEY2 + "," + KEY1, store.load().trustedKeys, "a set cannot be rolled back by replay");
         assertEquals("1.0.2", store.load().trustedKeysVersion);
+
+        // a replayed OLDER set that removes nothing (1.0.1 with {key 2, key 1} again) is a valid update whose set is ignored
+        serveSignedBy(manifest("1.0.1", KEY2 + "," + KEY1), TestSigningKeys.privateKey2());
+        assertEquals(UpdateCheckOutcome.UPDATE_AVAILABLE, control.runCheck());
+        assertEquals("1.0.2", store.load().trustedKeysVersion, "an older set never replaces a newer one");
     }
 
     @Test
@@ -284,6 +291,30 @@ class UpdateCheckTest {
         serveSignedBy(manifest("0.9.0", KEY2), TestSigningKeys.privateKey2());
         assertEquals(UpdateCheckOutcome.NO_UPDATE, control.runCheck());
         assertNull(store.load().trustedKeys);
+    }
+
+    @Test
+    void aRotationThatRemovesAKeyMustBeSignedByTheDormantKeyWhileAnAdditionMayBeSignedByTheActiveOne() throws Exception {
+        // the ACTIVE key 1 (a thief's daily-use loot) signs {key 1}: retiring the dormant key 2 is refused, nothing offered
+        serveSignedBy(manifest("1.0.1", KEY1), TestSigningKeys.privateKey());
+        assertEquals(UpdateCheckOutcome.MALFORMED, control.runCheck(), "review 06 #3: the active key may not retire the dormant one");
+        assertNull(store.load().trustedKeys);
+        assertNull(store.load().availableVersion);
+
+        // the active key 1 signs {key 1, key 2, key 3}: an addition only → accepted, whoever of the set signs
+        java.security.KeyPair third = java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair();
+        String key3 = TestSigningKeys.token(third.getPublic());
+        serveSignedBy(manifest("1.0.1", KEY1 + "," + KEY2 + "," + key3), TestSigningKeys.privateKey());
+        assertEquals(UpdateCheckOutcome.UPDATE_AVAILABLE, control.runCheck());
+        assertEquals(KEY1 + "," + KEY2 + "," + key3, store.load().trustedKeys);
+
+        // the DORMANT key 2 signs {key 2}: retiring the active key 1 (and key 3) is the theft response → accepted
+        serveSignedBy(manifest("1.0.2", KEY2), TestSigningKeys.privateKey2());
+        assertEquals(UpdateCheckOutcome.UPDATE_AVAILABLE, control.runCheck());
+        assertEquals(KEY2, store.load().trustedKeys);
+        assertEquals("1.0.2", store.load().trustedKeysVersion);
+        ManifestServer.serveFixture();
+        assertEquals(UpdateCheckOutcome.INVALID_SIGNATURE, control.runCheck(), "key 1 is retired");
     }
 
     @Test

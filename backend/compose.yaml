@@ -42,6 +42,12 @@ services:
     build:
       context: ./app
       dockerfile: src/main/docker/Dockerfile.jvm
+    # The box reboots with the building (power cut): both services come back
+    # on their own, so the update timer's catch-up (Persistent=true) finds a
+    # running database. `unless-stopped` respects an explicit `compose stop`
+    # — the updater's own stop/start on the restore rung never fights it
+    # (owner decision 2026-08-26, review 06 #6).
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -91,6 +97,7 @@ services:
 
   db:
     image: postgres:17.11
+    restart: unless-stopped
     environment:
       POSTGRES_DB: gxp
       POSTGRES_USER: gxp

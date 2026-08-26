@@ -1,6 +1,7 @@
 # Specification: Remote Operations
 
-**Status:** Ratified 2026-08-25 — constitution v1.8.0 carries the principle-4
+**Status:** Ratified 2026-08-25; **Parts B and D parked 2026-08-26** (§13).
+Constitution v1.8.0 carries the principle-4
 amendment; every §10 item is decided in §12 (owner answers and delegated
 decisions). Parts A–D enter the pipeline in the §11 order.
 **Author:** drafted 2026-08-25 with the project owner
@@ -507,3 +508,35 @@ explicitly instead of working around it.
 - **QR rendering** stays out of the backend: enrollment returns the
   `otpauth://` URI and the secret; whoever builds the manager screen renders
   the QR client-side or shows the text. No dependency enters `pom.xml`.
+
+
+---
+
+## 13. Status 2026-08-26 — Parts A and C built, B and D parked
+
+| Part | Feature | State |
+|---|---|---|
+| A | `auth-hardening` | **Built**, 06_review PASS, committed `bf6b698` |
+| C | `update-channel` | **Built**, architect review closed, 06_review fix round in progress |
+| B | `instance-identity-and-certs` | **Parked** — planned through the 04_analyze gate, not started |
+| D | `remote-manager-access` | **Parked** — not planned |
+
+Owner decision: *"Wir bringen das update channel feature sauber zu Ende und
+danach stoppen wir erstmal. Die anderen bringen aktuell keinen Mehrwert."*
+Parts B and D pay off only once remote access is actually sold and the
+infrastructure we operate (domain and zone, enrollment/challenge service,
+relay) exists; none of that is decided. Building them against guessed
+conditions risks rework, so they wait. Two findings from the Part B planning
+are worth keeping in mind when this is reopened:
+
+- §5's claimed side effect — kiosks trusting the public certificate natively,
+  retiring the manual CA step — **does not hold** (Part B design D13): the
+  public name resolves to the relay, not to the box on the LAN, and no
+  LAN-side resolution exists that survives an uplink outage and rebind
+  protection. The kiosk path stays as today in both modes.
+- The ACME client would be `lego` from the OS package on the host, beside
+  the updater — nothing enters `pom.xml`.
+
+What A and C leave switched on for later: TOTP enrollment and the
+trusted-proxy attribution exist but are inert until a proxy is configured;
+the update channel needs only a static HTTPS host for the signed manifest.

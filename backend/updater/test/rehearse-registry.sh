@@ -69,6 +69,7 @@ assert_ok "the running image's RepoDigests carry $REGISTRY_REF@sha256:$DIGEST" b
 assert_eq "shadow.currentImageId is the local image ID" "$(docker inspect -f '{{.Image}}' -- "$cid")" "$(shadow currentImageId)"
 assert_eq "/api/system/ready" 200 "$(ready_status)"
 assert_eq "exactly one app start" 1 "$(app_starts "$T0")"
+assert_eq "the restart policy never restarted the new container (RestartCount)" 0 "$(app_restart_count)"
 assert_eq "marker intact" written-before-the-update "$(marker)"
 assert_eq "GET /api/manager/updates → updater.outcome" applied "$(manager_updater_outcome)"
 
@@ -102,6 +103,7 @@ assert_eq "state.currentVersion" 9.9.11 "$(state currentVersion)"
 assert_eq ".env GXP_IMAGE = the second pinned ref" "$PINNED2" "$(env_image)"
 assert_eq "running container image = the second pinned ref" "$PINNED2" "$(docker inspect -f '{{.Config.Image}}' -- "$(compose ps -q app)")"
 assert_eq "app starts (one more)" 2 "$(app_starts "$T0")"
+assert_eq "RestartCount of the second container" 0 "$(app_restart_count)"
 assert_eq "/api/system/ready" 200 "$(ready_status)"
 assert_eq "marker intact" written-before-the-update "$(marker)"
 

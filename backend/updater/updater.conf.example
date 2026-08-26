@@ -24,6 +24,14 @@ GXP_PUBLIC_KEYS=/etc/gxp/update-signing-public-keys.pem
 # second check (REQ-721).
 GXP_HEALTH_TIMEOUT=180
 GXP_HEALTH_HOLD=30
+# Bounds on the steps that have no deadline of their own (review 06 #1):
+# `docker pull` (a slow line: 1800 s ≈ 400 MB at 300 KB/s → pull-failed,
+# nothing swapped), pg_dump (→ backup-failed), pg_restore. The unit's
+# TimeoutStartSec=3h is sized above the sum of all bounds at these defaults —
+# raising one means checking that sum (arithmetic in gxp-updater.service).
+GXP_PULL_TIMEOUT=1800
+GXP_DUMP_TIMEOUT=600
+GXP_RESTORE_TIMEOUT=600
 # What compose.yaml hands PostgreSQL (POSTGRES_USER / POSTGRES_DB).
 GXP_DB_USER=gxp
 GXP_DB_NAME=gxp

@@ -2,7 +2,7 @@
 **Feature:** [index.md](../index.md) | **Design:** [02-design.md](02-design.md) | **TODO:** [03-todo.md](03-todo.md)
 **Status:** In Review (2026-08-26)
 
-Governed by constitution **v1.8.0** (principle 4, fourth bullet — *"Instances
+Governed by constitution **v1.8.2** (principle 4, fourth bullet — *"Instances
 are patched through an outbound, signed update channel"* — plus the survival
 invariant and the "remote access is separately sold" bullet), by
 `docs/backend/remote-operations.md` §2, §6, §11 (slug `update-channel`) and
@@ -135,10 +135,10 @@ feature deliberately builds for them.
 
 ## Acceptance criteria (testable)
 
-- REQ-701: Given `GXP_UPDATE_BASE_URL=https://u.example` and no channel variable, when the poll runs, then exactly two GETs are issued, to `/manifest/stable.json` and `/manifest/stable.json.sig`, and `netstat`/the code show no new listener. Given the variable is unset, the status reports `configured=false` and no request is made.
+- REQ-701: Given `GXP_UPDATE_BASE_URL=https://u.example` and no channel variable, when the poll runs, then exactly two GETs are issued, to `/manifest/stable.json` and `/manifest/stable.json.sig`, and no new listener exists (the compose `ports:` list is unchanged — `443:8443` only — and the update package opens no socket). Given the variable is unset, the status reports `configured=false` and no request is made. *(Amended 2026-08-26, review 06 #4: was "`netstat`/the code show".)*
 - REQ-702: Given a manifest signed by `sign-manifest.sh`, when any single byte of the manifest body is changed (including whitespace), then verification fails.
 - REQ-703: Given a manifest signed with a different Ed25519 key, when the check runs, then `lastCheckOutcome = invalid-signature`, no `available` is stored, no desired file exists, and the only log line contains no manifest content. The verification happens before JSON parsing (a syntactically invalid body with a bad signature yields `invalid-signature`, not a parse outcome).
-- REQ-704: Given `src/main/resources/update/signing-public-key.pem` is deleted, when `./mvnw verify` runs, then `SigningKeyResourceTest` fails; given it is replaced by the test public key, the same test fails.
+- REQ-704: Given `src/main/resources/update/signing-public-keys.pem` (the trust **set**, D23) is deleted, when `./mvnw verify` runs, then `SigningKeyResourceTest` fails; given it holds fewer than two distinct keys, or any of the test keys, the same test fails. *(Amended 2026-08-26, review 06 #4: was the singular `signing-public-key.pem` and "the test public key".)*
 - REQ-705: A manifest with `channel=beta` under channel `stable` → `wrong-channel`; `version` equal to the running version → `no-update`; `minimumFromVersion` above the running version → `minimum-from-version-not-met`; a 70 KiB body → `too-large`; base URL `http://` in the default profile → `insecure-base-url` and no request.
 - REQ-706: Given the base URL points at a closed port, when the check runs, then it returns within 15 s with `unreachable`, and a concurrent `GET /api/guest/session` and `GET /api/manager/property` succeed unchanged.
 - REQ-707/708: `ScheduledJobInventoryTest`'s pinned list contains exactly the two new entries with their crons and the existing three; the jobs never fire in the suite.

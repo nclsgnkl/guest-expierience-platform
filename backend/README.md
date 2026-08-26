@@ -40,23 +40,31 @@ Maven wrapper for building.
 # 1. Build the application (also regenerates contract artifacts)
 cd backend/app && ./mvnw verify
 
-# 2. FIRST start — GXP_DB_PASSWORD and GXP_TLS_HOST are required on every
-#    start; GXP_ADMIN_PASSWORD is required only here, for this one boot
+# 2. The deployment's `.env` — REQUIRED, next to compose.yaml (it is
+#    .gitignored). GXP_DB_PASSWORD and GXP_TLS_HOST are read on every start;
+#    the host-side updater reads the unit as root under systemd with NO
+#    other environment, so a variable passed on the command line instead of
+#    in `.env` makes every updater run fail (`install.sh` refuses such a
+#    box). GXP_ADMIN_PASSWORD is needed for the FIRST boot only
 #    (GXP_ADMIN_USERNAME is optional — default "admin").
-cd .. \
-  && GXP_DB_PASSWORD='choose-a-db-password' \
-     GXP_ADMIN_PASSWORD='choose-the-initial-admin-password' \
-     GXP_TLS_HOST='192.168.1.10' \
-     docker compose up --build
+cd .. && (umask 077 && cat > .env <<'EOF'
+GXP_DB_PASSWORD=choose-a-db-password
+GXP_TLS_HOST=192.168.1.10
+GXP_ADMIN_PASSWORD=choose-the-initial-admin-password
+EOF
+)
 
-# 3. EVERY start after that — drop the admin password from the environment.
-cd .. \
-  && GXP_DB_PASSWORD='choose-a-db-password' \
-     GXP_TLS_HOST='192.168.1.10' \
-     docker compose up
+# 3. FIRST start
+docker compose up --build
+
+# 4. After the first start: remove the GXP_ADMIN_PASSWORD line from .env.
+#    Both services carry `restart: unless-stopped`, so after a reboot or a
+#    power cut the unit comes back on its own; `docker compose up -d` is the
+#    manual start.
+sed -i '/^GXP_ADMIN_PASSWORD=/d' .env && docker compose up -d
 ```
 
-**After the first start, do not pass `GXP_ADMIN_PASSWORD` again.** It is read
+**After the first start, remove `GXP_ADMIN_PASSWORD` from `.env`.** It is read
 once and ignored forever afterwards, but as long as it stays in the
 environment it is readable by anyone who can run `docker inspect` or read
 `/proc/<pid>/environ` — which needs Docker access, not root. Leaving it out
@@ -530,7 +538,18 @@ accept a set from a **newer** version, so a replayed older manifest cannot
 re-admit a retired key. The persisted set beats the image's whenever its
 version is newer than the running one — a rolled-back older image does not
 re-trust a retired key — and yields to the image's set otherwise (a
-hand-installed newer release carries its own). Playbooks:
+hand-installed newer release carries its own).
+
+**Who may sign a rotation (review 06 #3, owner decision 2026-08-26):** a
+set that only **adds** keys may be signed by any key of the current set; a
+set that **removes** a key must be signed by a **dormant** key of the
+current set — key 2 (or any later key), never key 1, the active one (both
+verifiers refuse it as `malformed`, nothing rotates, nothing is offered).
+The reasoning: key 1 is the daily-use key and the one a thief gets; with
+this rule a thief of key 1 can add keys but can never retire key 2, which
+lives offline (D-2) precisely to survive that theft — so the "stolen" playbook
+below always works. Order in the set is meaning: the first key is the active
+one. Playbooks:
 
 - **Key 1 lost:** sign the next release with key 2 (`sign-manifest.sh
   ~/.gxp/keys/signing-private-key-2.pem …`). Nothing on any box changes.
@@ -539,9 +558,11 @@ hand-installed newer release carries its own). Playbooks:
 - **Key 1 stolen:** generate key 3, build the release with
   `signing-public-keys.pem` = `{key 2, key 3}`, sign it with key 2 and
   `--trusted-keys backend/app/src/main/resources/update/signing-public-keys.pem`.
-  Every box that sees that manifest refuses key 1 from then on; the
-  downgrade guard means a thief who won the race with a higher version
-  number still needs a visit — rotate **before** that happens.
+  Every box that sees that manifest refuses key 1 from then on. The thief
+  cannot pre-empt this: a removal signed by key 1 is refused, so the worst
+  a thief can do is publish a high version number that only *adds* keys —
+  key 2's removal of key 1 still verifies on every box, provided its
+  version is higher still (the version-monotonic set rule).
 - **A box that must forget a rotation** (never routine): `install.sh
   --replace-key` reinstalls the resource's set and clears the shadow's
   rotated set; the app's persisted set is cleared with
@@ -603,7 +624,17 @@ sudo backend/updater/install.sh --uninstall   # timer, units, script, key set, c
 seeds the updater's own state so the host-side **downgrade refusal is armed
 from day one** (review A-9), not from the first applied update. The
 deployment directory must **not** be under `/home` or `/root` — the unit
-runs with `ProtectHome=yes` (`install.sh` refuses). The updater itself is
+runs with `ProtectHome=yes` (`install.sh` refuses). **`GXP_COMPOSE_DIR/.env`
+must hold every variable `compose.yaml` requires** (`GXP_DB_PASSWORD`,
+`GXP_TLS_HOST`; the optional `GXP_UPDATE_*` too, if used): the updater reads
+the unit through `docker compose config` as root under systemd with no other
+environment, so a value that only ever lived on a shell's command line is
+invisible to it. `install.sh` runs that same `compose config` with an empty
+environment and refuses when it fails; should a box get there anyway (a
+variable removed later), every run ends in a configuration error that the
+manager sees as `updater.outcome = config-failed` with `message =
+compose-config` (nothing is touched, the request stays pending, `journalctl
+-t gxp-updater` has the line). The updater itself is
 **not** updated through the channel: a new `gxp-updater.sh`, unit or key
 set reaches a box by re-running `install.sh` on it (recorded as the next
 feature — refreshing the updater from the verified image).
@@ -620,6 +651,17 @@ seam: the production branch is rehearsed by `test/rehearse-registry.sh`) →
 **Health** = `/api/system/ready` 200 **and** the newest
 `flyway_schema_history` row `success` **and** the container not restarting,
 within 180 s, then a 30 s hold and the same check again.
+
+**Every step is bounded, and the unit's `TimeoutStartSec` sits above their
+sum** (review 06 #1): `docker pull` by `GXP_PULL_TIMEOUT` (1800 s →
+`pull-failed`, nothing swapped), `pg_dump` by `GXP_DUMP_TIMEOUT` (600 s →
+`backup-failed`), `pg_restore` by `GXP_RESTORE_TIMEOUT` (600 s → the rung's
+health decides), every `compose` command by 300 s and every in-container
+probe by 30 s. The sum at the defaults is ≈ 118 min; the unit allows 3 h
+(the arithmetic is in `gxp-updater.service`). That order matters: a run
+killed by systemd mid-ladder would leave the box on the unhealthy image
+with the request marked handled, so the unit's deadline must never be the
+one that fires. Raising a `GXP_*_TIMEOUT` means re-checking that sum.
 
 ### What a rollback looks like
 
@@ -638,8 +680,13 @@ The ladder (D15): the new image fails health →
 
 Every outcome ends up in `GET /api/manager/updates` under `updater`
 (`outcome`, `message` = `health-timeout` / `flyway-failed` /
-`container-restarting` / `restore-failed`, `attemptedVersion`,
-`currentImage`, `previousImage`, `backupFile`). A failed version is **not**
+`container-restarting` / `restore-failed` / `compose-config`, `attemptedVersion`,
+`currentImage`, `previousImage`, `backupFile`). A refused migration usually
+reads **`health-timeout`**: PostgreSQL rolls a failed versioned migration
+back together with its own history row, so the app just never becomes
+ready; `flyway-failed` is the explicit message for the rarer case where a
+`success = f` row survives (a non-transactional migration or a manual
+repair — rehearsal B plants one). A failed version is **not**
 retried automatically; a manager's `POST /api/manager/updates/apply` (or the
 next release) is the retry.
 
@@ -696,12 +743,21 @@ sudo -E backend/updater/test/rehearse-registry.sh       # C: the PRODUCTION pull
 sudo -E backend/updater/test/rehearse-systemd.sh        # install.sh + the hardened unit under systemd (refuses if a real install exists), uninstall
 ```
 
-They use project `gxp-rehearsal` in `/tmp`, never `gxp`, and clean up. Smoke
+They use project `gxp-rehearsal` in a throwaway directory (`/tmp`, or `/opt`
+for the systemd one), never `gxp`, and clean up. Smoke
 and rollback use local tags without a registry digest, so they run the
 updater's **rehearsal-only** local-image path (`GXP_REHEARSAL_LOCAL_IMAGE=1`,
 refused under systemd together with the other test seams); scenario C runs
 the real `docker pull ref@sha256:…` branch with no seam (`registry:2` is a
-dev-box test image, not a product dependency). Run them after every change
+dev-box test image, not a product dependency). The "exactly one restart"
+counter is a live `docker events` stream captured for the whole rehearsal
+(`--since/--until` replays a bounded ring the health probes overflow —
+review 06 #5); each `start` is annotated at once with the container's
+`RestartCount`, and only starts at count 0 are counted — a Docker
+`restart: unless-stopped` policy restart (rehearsal B's crash loop) carries
+≥ 1, every start through the start API (a fresh container, `compose up`
+after `compose stop`) resets it to 0. Where a clean apply is claimed the
+running container's `RestartCount` is asserted 0 too. Run them after every change
 to `backend/updater/**`. `rehearse-systemd.sh` runs the real `install.sh`
 and the unit with every hardening line under systemd (a throwaway project
 under `/opt`, since `ProtectHome`/`PrivateTmp` hide `/home` and `/tmp`), then

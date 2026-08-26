@@ -1,7 +1,15 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.8.2 | **Last amended:** 2026-08-26
+**Version:** 1.8.3 | **Last amended:** 2026-08-26
 
+> **1.8.3** — accuracy correction, not a new approval: principle 4 said the
+> update signature is verified against *"a signing key compiled into the
+> image"*. What shipped (`update-channel`, architect finding A-1) is a
+> **rotatable trust set of two keys** — active and dormant — compiled into
+> the image and mirrored on the host, with in-band rotation so a lost or
+> stolen key never means a site visit. Reworded below; the property it
+> protects (nothing unsigned is ever applied) is unchanged.
+>
 > **1.8.2** — accuracy correction, not a new approval (the v1.7.1 precedent):
 > *"A password change **immediately invalidates every active bearer
 > token**"* was written for one shared credential. With named accounts
@@ -224,7 +232,8 @@
      Instances run in buildings we may have no access to, so the only way a
      fix reaches them is a channel the box itself polls: outbound only,
      nothing ever connects to the box, every artifact verified against a
-     signing key compiled into the image *before* it is applied, signing done
+     rotatable trust set of signing keys compiled into the image (v1.8.3)
+     *before* it is applied, signing done
      offline so a compromised update server can serve nothing a box accepts,
      and the updater living beside the application (it cannot replace its own
      container) with rollback on a failed health check. Still: prefer fewer

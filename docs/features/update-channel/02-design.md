@@ -2,7 +2,7 @@
 **Feature:** [index.md](../index.md) | **PRD:** [01-prd.md](01-prd.md) | **TODO:** [03-todo.md](03-todo.md)
 **Status:** In Review (2026-08-26)
 
-Governed by constitution **v1.8.0** (principle 4: the rewritten fourth
+Governed by constitution **v1.8.2** (principle 4: the rewritten fourth
 bullet, the survival invariant, "remote access is separately sold"),
 `docs/backend/remote-operations.md` §6 + §12 items 1/8/9, and
 `backend/CLAUDE.md`. Requirements are referenced as `REQ-7xx`, never
@@ -212,9 +212,13 @@ Absent values are the literal `null` (unquoted). `outcome` ∈ `applied`,
 `rolled-back`, `rolled-back-with-restore`, `rollback-failed`,
 `backup-failed`, `pull-failed`, `artifact-mismatch`, `downgrade-refused`,
 `invalid-signature`, `malformed`, `none` (installed, nothing attempted
-yet). `message` is one of a fixed set of codes (`health-timeout`,
-`flyway-failed`, `container-restarting`, `restore-failed`) or `null` —
-never log text.
+yet), `config-failed` (*added 2026-08-26, review 06 #2:* a configuration
+error found after the exchange directory is known — the app's compose
+config unreadable — is mirrored to the app with `message = compose-config`;
+the updater's own state is not touched and the request stays pending).
+`message` is one of a fixed set of codes (`health-timeout`,
+`flyway-failed`, `container-restarting`, `restore-failed`, `compose-config`)
+or `null` — never log text.
 
 Value regexes (shared by `ExchangeFiles`, `sign-manifest.sh` and the
 updater; a miss on either side is `malformed`):
@@ -222,7 +226,7 @@ updater; a miss on either side is `malformed`):
 | Field | Regex |
 |---|---|
 | version / attemptedVersion / currentVersion / minimumFromVersion | `^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]{1,32})?$` |
-| artifactRef / currentImage / previousImage | `^[a-z0-9][a-z0-9._-]{0,127}(:[0-9]{1,5})?(/[a-z0-9][a-z0-9._-]{0,127}){0,7}(:[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?(@sha256:[0-9a-f]{64})?$` (*amended 2026-08-26, T-20c:* the first component may carry a `:port` — the old shape refused `localhost:5000/gxp-backend:9.9.9`, i.e. every registry on a non-default port; path components are now one-per-slash, max 8) |
+| artifactRef / currentImage / previousImage | `^[a-z0-9][a-z0-9._-]{0,127}(:[0-9]{1,5})?(/[a-z0-9][a-z0-9._-]{0,127}){0,7}(:[A-Za-z0-9_][A-Za-z0-9._-]{0,127})?(@sha256:[0-9a-f]{64})?$` (*amended 2026-08-26, T-20c:* the first component may carry a `:port` — the old shape refused `localhost:5000/gxp-backend:9.9.9`, i.e. every registry on a non-default port; path components are now one-per-slash, max 8; *review 06 #7, documented:* the registry host is lower-case only and no IPv6 literal — Docker accepts upper-case domain parts and `[::1]:5000/…`, neither is needed for the intended registry, widen on all three sides + fixtures if one ever is) |
 | sha256 | `^[0-9a-f]{64}$` |
 | instants | `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$` (UTC, second precision, always `Z`) |
 | channel | `^[a-z0-9-]{1,32}$` |
@@ -263,9 +267,9 @@ Files (`backend/updater/`):
 | File | Role |
 |---|---|
 | `gxp-updater.sh` | the updater (below) |
-| `gxp-updater.service` | `Type=oneshot`, `ExecStart=/usr/local/lib/gxp/gxp-updater.sh`, `EnvironmentFile=/etc/gxp/updater.conf`, `ProtectSystem=full`, `PrivateTmp=yes` |
+| `gxp-updater.service` | `Type=oneshot`, `ExecStart=/usr/local/lib/gxp/gxp-updater.sh`, `EnvironmentFile=/etc/gxp/updater.conf`, `ProtectSystem=full`, `PrivateTmp=yes` (*as built, A-5 + review 06 #1:* plus `ProtectHome`, `PrivateDevices`, `ProtectKernelTunables/Modules`, `ProtectControlGroups`, `NoNewPrivileges`, `RestrictSUIDSGID`, `LockPersonality`, `RestrictRealtime`, `SystemCallArchitectures=native`; `TimeoutStartSec=3h`, sized above the sum of the script's own step bounds — the arithmetic is in the unit) |
 | `gxp-updater.timer` | `OnCalendar=*:0/5`, `Persistent=true`, `RandomizedDelaySec=60` |
-| `updater.conf.example` | `GXP_COMPOSE_DIR=/opt/gxp/backend` (the directory holding `compose.yaml`; the compose project name is `gxp`), `GXP_BACKUP_DIR=/var/lib/gxp/backups`, `GXP_PUBLIC_KEY=/etc/gxp/update-signing-public-key.pem`, `GXP_HEALTH_TIMEOUT=180`, `GXP_HEALTH_HOLD=30`, `GXP_KEEP_BACKUPS=5` |
+| `updater.conf.example` | `GXP_COMPOSE_DIR=/opt/gxp/backend` (the directory holding `compose.yaml`; the compose project name is `gxp`), `GXP_BACKUP_DIR=/var/lib/gxp/backups`, `GXP_PUBLIC_KEYS=/etc/gxp/update-signing-public-keys.pem` (the trust set, D23 — was the singular `GXP_PUBLIC_KEY`), `GXP_HEALTH_TIMEOUT=180`, `GXP_HEALTH_HOLD=30`, `GXP_KEEP_BACKUPS=5`, `GXP_PULL_TIMEOUT=1800`, `GXP_DUMP_TIMEOUT=600`, `GXP_RESTORE_TIMEOUT=600` (review 06 #1) |
 | `install.sh` | copies the script (`0755`, root), units, `updater.conf` (only if absent), the public key from `../app/src/main/resources/update/signing-public-key.pem` → `/etc/gxp/update-signing-public-key.pem` (`0644`); **refuses** when a host key exists and differs (`--replace-key` to override, printed loudly); `mkdir -p` the backup dir `0700`; `systemctl daemon-reload && systemctl enable --now gxp-updater.timer` |
 | `test/smoke-apply.sh`, `test/rehearse-rollback.sh`, `test/parse.sh`, `test/fixtures/…` | REQ-724 and the shared fixture |
 
@@ -318,8 +322,9 @@ Every value that reaches a command line (`$ARTIFACT`, `$VERSION`, `$SHA`,
 file names) has passed its regex in step 2/4 — the desired file is written
 by a lower-privileged process and is treated as hostile input. `set -euo
 pipefail`, no `eval`, arrays for every argument list, `--` before
-positional arguments. `state.json` is written via `$EXCHANGE/.state.json.tmp`
-+ `mv`. The script logs to the journal with fixed messages and the outcome
+positional arguments. `state.json` is written by `place_file` — staged under
+the volume's root-owned parent and `rename(2)`d in (D15a as amended; the
+earlier `$EXCHANGE/.state.json.tmp` + `mv` form is superseded). The script logs to the journal with fixed messages and the outcome
 code — no manifest content, no URLs.
 
 **Why ready + the Flyway row.** A failed migration aborts the Quarkus boot,
@@ -389,7 +394,22 @@ every manager token (in-memory store, already documented in the README).
   image's, else the image's own set (a rolled-back older image does not
   re-trust a retired key; a hand-installed newer image carries its own);
   updater = the shadow's set if one exists, else the file. A replayed older
-  manifest cannot roll the set back (version rule). Rejected: a separate
+  manifest cannot roll the set back (version rule). **Who may sign a rotation
+  (amended 2026-08-26, review 06 #3, owner decision via lead):** a set that
+  only *adds* keys may be signed by any member of the current set; a set
+  that *removes* a key must be signed by a **dormant** key of the current set
+  — any key but the first (key 1 is the active, daily-use key; order in the
+  set is meaning). Otherwise `malformed` on both sides (`UpdateControl.
+  rotationAllowed`, updater `rotation_allowed`), nothing rotates, nothing is
+  offered. Reasoning: the active key is the one a thief gets; under the plain
+  "contains its signer" rule that thief could publish a high-versioned set
+  `{key 1}` and retire key 2 on every box that merely checks, leaving the
+  recovery a version race. With this rule a thief of key 1 can add keys but
+  never retire key 2, which lives offline (D-2) precisely to survive that
+  theft; key 2's own removal of key 1 still verifies everywhere, provided
+  its version is higher. Rejected: two signatures on a removal (a second
+  `.sig` line on both sides for a case one ordered set already decides).
+  Rejected: a separate
   TUF-style rotation document (a second signed document type on both sides —
   the architect's own recommendation was to layer nothing beyond the set for
   v1; one optional line does the same with the existing readers).
@@ -544,7 +564,7 @@ in `pom.xml`, on the host, or in the image.
 | D11 | Reconcile cadence | every 15 min, `SKIP` | on write only (a box off at 04:00 would carry a stale `applyNotBefore` until the next hourly check) |
 | D12 | Apply window | 2 h (`applyWindowSeconds = 7200`), timer every 5 min | open-ended (an update could land at 11:00 after a long outage — a guest surprise) |
 | D13 | Hold rule | one attempt per request; a failed version is re-tried only by a manual apply | automatic retry next night (could restart the kiosk every night into the same failure) |
-| D14 | Health check | ready 200 + newest Flyway row `success` + not restarting, ≤ 180 s, then 30 s hold + re-check | ready only (no reason code); a longer soak (longer kiosk staleness) |
+| D14 | Health check | ready 200 + newest Flyway row `success` + not restarting, ≤ 180 s, then 30 s hold + re-check (*2026-08-26, review 06 #6:* the Flyway row is read before the restarting flag — with compose's `restart: unless-stopped` a refused migration crash-loops and the row is the signal that says why; each probe bounded by 30 s) | ready only (no reason code); a longer soak (longer kiosk staleness) |
 | D15 | Rollback ladder | image → image + restore → give up with the old image running | restore first (destroys manager edits unnecessarily when the old image is compatible) |
 | D15a | Updater memory (amendment 2026-08-26, lead, review R3-3) | The updater's **only** memory for the replay guard (`lastRequestedAt`) and the downgrade refusal (`currentVersion`) is a **root-owned shadow state** `GXP_STATE_FILE` (`/var/lib/gxp-updater/state.json`, 0600, one extra line `currentImageId`). The exchange `state.json` is a **mirror** written after it, for the app to read; the app may delete or replace the mirror without any effect on the updater. `lastRequestedAt` is carried forward on every outcome incl. `malformed` (an unusable request never erases the guard). *Amended 2026-08-26 (A-3, T-20b):* root **never opens a path inside the exchange directory for writing** — `place_file DIR NAME MODE STAGE` builds the file under STAGE (the volume's root-owned parent, same device — checked, else `fail_config`) via `mktemp` + `chmod`, then `mv -fT` = `rename(2)` (never follows the entry, refuses a directory); the shadow (root 0700 dir) stages in place. The shadow carries `currentImageId`, `trustedKeys`, `trustedKeysVersion` (17 lines); the mirror keeps 14. The desired file is snapshotted once (symlink / non-regular / > 64 KiB → `malformed`; entry and descriptor compared by device:inode, A-11) | the exchange file as the memory (deviation 24: under the app's control, so the host-side half of REQ-727 collapsed to the app's own refusal) |
 | D16 | Manifest server test on the dev box | none; JDK `HttpServer` in JVM tests + the shared fixture for the file contract | `%prod` plain-HTTP switch (a footgun on real boxes); trusting a self-signed manifest server (truststore config = more surface) |

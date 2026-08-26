@@ -113,7 +113,7 @@ class ExchangeFilesTest {
         try (Stream<Path> paths = Files.list(FIXTURES)) {
             fixtures = paths.filter(p -> p.getFileName().toString().startsWith("state-")).sorted().toList();
         }
-        assertEquals(13, fixtures.size(), "every outcome of Design §2, in-progress, and the future schema");
+        assertEquals(14, fixtures.size(), "every outcome of Design §2, in-progress, config-failed, and the future schema");
         for (Path fixture : fixtures) {
             Files.copy(fixture, directory.resolve("state.json"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             String name = fixture.getFileName().toString().replace("state-", "").replace(".json", "");

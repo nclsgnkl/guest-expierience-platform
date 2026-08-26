@@ -110,6 +110,7 @@ services:
     environment:
       QUARKUS_SCHEDULER_START_MODE: halted
 EOF
+    start_event_stream
     compose up -d --no-build --pull never >/dev/null
     wait_ready 360 || { echo "the base image never became ready within 360 s" >&2; exit 2; }
     EXCHANGE="$(docker volume inspect -f '{{.Mountpoint}}' -- "${PROJECT}_gxp-updates")"
@@ -187,10 +188,65 @@ env_image() {
     sed -n 's/^GXP_IMAGE=//p' -- "$COMPOSE_DIR/.env" | tail -n 1
 }
 
-# app_starts SINCE-EPOCH → number of `start` events of the project's app containers since then
+# The app-start counter (review 06 #5). `docker events --since/--until` replays
+# a bounded in-memory ring that the health probes' exec events overflow within
+# minutes, so a past start silently disappears. Instead a LIVE stream is opened
+# in prepare_project (`docker events` streams every event from now on, no
+# ring) and every `start` event is annotated AT ONCE with the container's
+# `docker inspect '{{.RestartCount}}'`, written to $EVENTS_LOG as
+# "<epoch> <container id> <action> <restart count | ->". `docker inspect`
+# alone cannot count afterwards: a compose recreate destroys the previous
+# container, so its start is gone.
+#
+# Counted are the starts the UPDATER causes (compose up / recreate / start
+# after stop). With `restart: unless-stopped` in compose.yaml a crash-looping
+# image (rehearsal B) is restarted by Docker's policy as well. The one thing
+# that tells the two apart is RestartCount at the moment of the start: a
+# policy restart increments it (>= 1), every start through the start API —
+# a fresh container, or `compose up` after `compose stop` — resets it to 0
+# (verified on Docker 28.5: "docker stop" mid-loop → rc=3, "docker start" →
+# rc=0). Event ORDER cannot tell them apart: a stop during a restart back-off
+# emits no stop/die of its own, so the compose start then follows a bare
+# `die` exactly like a policy restart would.
+EVENTS_LOG=""
+EVENTS_PID=""
+EVENTS_READER=""
+annotate_events() {
+    local t id action rc
+    while read -r t id action; do
+        rc=-
+        if [[ "$action" == start ]]; then
+            rc="$(docker inspect -f '{{.RestartCount}}' -- "$id" 2>/dev/null || printf '?')"
+        fi
+        printf '%s %s %s %s\n' "$t" "$id" "$action" "$rc"
+    done
+}
+start_event_stream() {
+    EVENTS_LOG="$WORK/app-events.log"
+    : > "$EVENTS_LOG"
+    mkfifo -- "$WORK/app-events.fifo"
+    docker events --filter type=container --filter event=create --filter event=start --filter event=die --filter event=stop \
+        --filter "label=com.docker.compose.project=$PROJECT" --filter label=com.docker.compose.service=app \
+        --format '{{.Time}} {{.Actor.ID}} {{.Action}}' > "$WORK/app-events.fifo" 2>/dev/null &
+    EVENTS_PID=$!
+    annotate_events < "$WORK/app-events.fifo" >> "$EVENTS_LOG" &
+    EVENTS_READER=$!
+    sleep 1   # the stream is attached before anything the rehearsal counts
+}
+stop_event_stream() {
+    [[ -z "$EVENTS_PID" ]] || { kill "$EVENTS_PID" 2>/dev/null || true; wait "$EVENTS_PID" 2>/dev/null || true; }
+    [[ -z "$EVENTS_READER" ]] || wait "$EVENTS_READER" 2>/dev/null || true   # EOF once the writer is gone
+    EVENTS_PID=""
+    EVENTS_READER=""
+}
+# app_starts SINCE-EPOCH → the compose-initiated app starts since then (start events with RestartCount 0)
 app_starts() {
-    docker events --since "$1" --until "$(date +%s)" --filter type=container --filter event=start \
-        --filter "label=com.docker.compose.project=$PROJECT" --filter label=com.docker.compose.service=app | wc -l
+    sleep 2   # let the last event pass the annotation
+    awk -v since="$1" '$3 == "start" && $1 >= since && $4 == "0" { n++ } END { print n + 0 }' "$EVENTS_LOG"
+}
+# app_restart_count → Docker's RestartCount of the running app container (0 = the policy never had to restart it)
+app_restart_count() {
+    docker inspect -f '{{.RestartCount}}' -- "$(compose ps -q app)" 2>/dev/null || printf 'no-container'
 }
 
 create_marker() {
@@ -221,6 +277,7 @@ untag_registry_refs() {
 
 cleanup() {
     say "cleanup"
+    stop_event_stream
     compose down -v --remove-orphans >/dev/null 2>&1 || true
     local image
     for image in "${DERIVED_IMAGES[@]}"; do

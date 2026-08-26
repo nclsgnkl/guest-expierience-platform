@@ -157,6 +157,31 @@ assert_eq "shadow.trustedKeys = {key 1, key 2}" "$T1,$T2" "$(shadow trustedKeys)
 write_desired 9.9.13 gxp-backend:does-not-exist "$ID" "$(utc -60)" "$(utc 60)"
 run_updater
 assert_eq "key 1 verifies again (pull-failed = past the signature, before docker)" pull-failed "$(state outcome)"
+
+say "review 06 #3: the ACTIVE key 1 signs 9.9.14 with {key 1} (retiring the dormant key 2) → malformed, set unchanged"
+SIGN_KEY="$TEST_PRIVATE_KEY" TRUSTED_KEYS_PEM="$TEST_PUBLIC_KEY_1" write_desired 9.9.14 gxp-backend:does-not-exist "$ID" "$(utc -60)" "$(utc 70)"
+run_updater
+assert_eq "exit code" 0 "$UPDATER_RC"
+assert_eq "state.outcome" malformed "$(state outcome)"
+assert_eq "shadow.trustedKeys still {key 1, key 2}" "$T1,$T2" "$(shadow trustedKeys)"
+assert_eq "shadow.trustedKeysVersion still 9.9.12" 9.9.12 "$(shadow trustedKeysVersion)"
+
+say "review 06 #2: a .env missing a variable compose requires → exit 2, the app sees config-failed, the shadow is untouched"
+sed -i '/^GXP_TLS_HOST=/d' "$COMPOSE_DIR/.env"
+write_desired 9.9.15 gxp-backend:does-not-exist "$ID" "$(utc -60)" "$(utc 80)"
+run_updater
+assert_eq "exit code (configuration error)" 2 "$UPDATER_RC"
+assert_eq "updater log names the cause" 1 "$(printf '%s\n' "$UPDATER_LOG" | grep -c 'configuration error: cannot read the app image from compose')"
+assert_eq "state.outcome (mirror)" config-failed "$(state outcome)"
+assert_eq "state.message (a fixed code)" compose-config "$(state message)"
+assert_eq "state.lastRequestedAt carried forward (the request is NOT marked handled)" "$(shadow lastRequestedAt)" "$(state lastRequestedAt)"
+assert_eq "state.currentImage = the shadow's" "$(shadow currentImage)" "$(state currentImage)"
+assert_eq "shadow.outcome untouched" malformed "$(shadow outcome)"
+assert_eq "GET /api/manager/updates → updater.outcome" config-failed "$(manager_updater_outcome)"
+printf 'GXP_TLS_HOST=localhost\n' >> "$COMPOSE_DIR/.env"
+run_updater
+assert_eq "…with the variable back the same request is handled (past the config check: pull-failed)" pull-failed "$(state outcome)"
 assert_eq "app starts unchanged by all of it" 1 "$(app_starts "$T0")"
+assert_eq "the restart policy never restarted the app (RestartCount)" 0 "$(app_restart_count)"
 
 verdict smoke-apply
