@@ -29,8 +29,10 @@ import jakarta.enterprise.context.ApplicationScoped;
  * {@code context.runBlocking(...)} because authentication may start on the
  * event loop and the lookup is blocking JDBC.
  *
- * <p>Manager identities carry the token hash (logout) and refreshed expiry
- * ({@code GXP-Token-Expires}); device identities carry deviceId/roomId and
+ * <p>Manager identities carry the USERNAME as principal name (auth-hardening
+ * REQ-612 — the audit trail attributes by it and "own" operations resolve
+ * the account from it), role {@code admin}, the token hash (logout) and the
+ * refreshed expiry ({@code GXP-Token-Expires}); device identities carry deviceId/roomId and
  * deliberately NO expiry attribute — device tokens do not slide, and the
  * expiry response filter skips them by that absence. No token material is
  * logged and failures carry no message (constitution principle 3).
@@ -58,10 +60,12 @@ class TokenIdentityProvider implements IdentityProvider<TokenAuthenticationReque
     @Override
     public Uni<SecurityIdentity> authenticate(TokenAuthenticationRequest request, AuthenticationRequestContext context) {
         String tokenHash = TokenStore.sha256Hex(request.getToken().getToken());
-        Instant refreshedExpiry = tokenStore.slide(tokenHash);
-        if (refreshedExpiry != null) {
+        TokenStore.Session session = tokenStore.slide(tokenHash);
+        if (session != null) {
+            String username = session.username();
+            Instant refreshedExpiry = session.expiry();
             return Uni.createFrom().item(QuarkusSecurityIdentity.builder()
-                    .setPrincipal((Principal) () -> ROLE_ADMIN)
+                    .setPrincipal((Principal) () -> username)
                     .addRole(ROLE_ADMIN)
                     .addAttribute(ATTRIBUTE_TOKEN_HASH, tokenHash)
                     .addAttribute(ATTRIBUTE_TOKEN_EXPIRY, refreshedExpiry)

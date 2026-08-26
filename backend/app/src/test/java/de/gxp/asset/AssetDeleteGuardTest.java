@@ -15,6 +15,7 @@ import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * Asset delete guard (T-16, REQ-324): deleting an asset referenced by the
@@ -26,10 +27,7 @@ import io.quarkus.test.junit.QuarkusTest;
 class AssetDeleteGuardTest {
 
     private static String token() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private static int upload(String token, String kind) {

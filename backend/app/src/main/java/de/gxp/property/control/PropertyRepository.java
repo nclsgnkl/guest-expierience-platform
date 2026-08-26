@@ -45,16 +45,25 @@ class PropertyRepository implements PanacheRepositoryBase<Property, Short> {
                 .setParameter("id", THE_ID).getResultList();
     }
 
-    /** Bulk deletes execute immediately — safe to re-insert the same PKs after. */
+    /**
+     * Bulk deletes execute immediately — safe to re-insert the same PKs after,
+     * PROVIDED no child row loaded earlier in this transaction is still
+     * managed (a bulk delete bypasses the persistence context, and the audit
+     * diff in {@code PropertyControl.update} reads the current children
+     * first). Hence: flush the pending changes to the property row, delete,
+     * clear the context, then persist the new children.
+     */
     void replaceChildren(List<PropertyTranslation> translations, List<PropertyLanguageOption> languages,
             List<PropertyAppearanceOption> appearances) {
         var em = getEntityManager();
+        em.flush();
         em.createQuery("delete from PropertyTranslation t where t.propertyId = :id").setParameter("id", THE_ID)
                 .executeUpdate();
         em.createQuery("delete from PropertyLanguageOption o where o.propertyId = :id").setParameter("id", THE_ID)
                 .executeUpdate();
         em.createQuery("delete from PropertyAppearanceOption o where o.propertyId = :id").setParameter("id", THE_ID)
                 .executeUpdate();
+        em.clear();
         translations.forEach(em::persist);
         languages.forEach(em::persist);
         appearances.forEach(em::persist);

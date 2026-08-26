@@ -1,10 +1,11 @@
-package de.gxp.auth.control;
+package de.gxp.user.control;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.util.Base64;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -17,8 +18,9 @@ import javax.crypto.spec.PBEKeySpec;
  * parameters: PBKDF2WithHmacSHA256, 600 000 iterations (OWASP 2023), 16-byte
  * random salt, 256-bit key. Stored self-describing as
  * {@code pbkdf2-sha256$<iterations>$<salt-b64>$<hash-b64>}, so verification
- * always uses the STORED iteration count — a later parameter bump simply
- * rehashes on the next successful login.
+ * always uses the STORED iteration count, so a later parameter bump keeps
+ * every existing hash verifiable (there is no rehash-on-login; a bump
+ * applies to newly stored hashes only).
  *
  * <p>The iteration count is configurable only so the test profile can keep
  * the suite fast on small hardware; the production default is the pinned
@@ -36,6 +38,8 @@ class Pbkdf2PasswordHasher {
 
     private final int iterations;
     private final SecureRandom random = new SecureRandom();
+    /** Test probe: how often {@link #verify} derived a key (proves the throttle rejects BEFORE PBKDF2). */
+    private final AtomicLong verifications = new AtomicLong();
 
     Pbkdf2PasswordHasher(
             @ConfigProperty(name = "gxp.auth.pbkdf2-iterations", defaultValue = "600000") int iterations) {
@@ -57,6 +61,7 @@ class Pbkdf2PasswordHasher {
      * {@code false} — never as an exception that could leak detail.
      */
     boolean verify(String password, String stored) {
+        verifications.incrementAndGet();
         if (stored == null) {
             return false;
         }
@@ -73,6 +78,11 @@ class Pbkdf2PasswordHasher {
         } catch (IllegalArgumentException e) {
             return false;
         }
+    }
+
+    /** Package-private test probe — the number of {@link #verify} calls so far. */
+    long verifyCount() {
+        return verifications.get();
     }
 
     private static byte[] derive(String password, byte[] salt, int iterations) {

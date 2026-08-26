@@ -42,8 +42,8 @@ export class ManagerAuthService extends BaseService {
     }
 
     /**
-     * Change the shared admin password
-     * Verifies the current password, enforces the minimal policy (at least 8 characters), stores the new hash and immediately drops EVERY active bearer token — including the caller\&#39;s.
+     * Change the caller\&#39;s own password
+     * Verifies the caller\&#39;s current password, enforces the minimal policy (at least 8 characters), stores the new hash and immediately drops the caller\&#39;s active bearer tokens — including the one presented.
      * @endpoint put /api/manager/password
      * @param passwordChangeRequest 
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -112,8 +112,8 @@ export class ManagerAuthService extends BaseService {
     }
 
     /**
-     * Log in with the shared admin password
-     * The only operation that ever sees the password. Success returns an opaque 256-bit bearer token with a sliding 10-minute idle expiry. Failure is a deliberately generic 401 (no oracle). Deliberately not throttled (owner decision 2026-08-24): no lockout, no rate limit, no concurrency gate — repeated failures accumulate no state and a correct password is never refused. Brute-force resistance rests on the password policy (minimum 8 characters).
+     * Log in with username and password
+     * The only operation that ever sees the password. Success returns an opaque 256-bit bearer token with a sliding 10-minute idle expiry and the username it was issued for. Failure is a deliberately generic 401 (no oracle): an unknown username, a deactivated user and a wrong password answer the same body and cost the same work. Failed attempts are budgeted per attributed source address (5 per 15 minutes, escalating block from 60 s up to 15 minutes): an exhausted address is answered 429 with Retry-After before any password work, every other address is unaffected, and no account is ever locked. Second factor (auth-hardening A3): a login arriving through the configured trusted proxy MUST carry totpCode or recoveryCode — without one it is answered 401 &#x60;second-factor-required&#x60; BEFORE the password is looked at (nothing is verified, nothing is counted). With one, password and code are verified together and every failure — wrong password, wrong or replayed code, spent recovery code, or an account without a confirmed factor — is the same generic 401 &#x60;invalid-credentials&#x60; and counts against the address. On the LAN the factor is never asked and both fields are ignored.
      * @endpoint post /api/manager/login
      * @param loginRequest 
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

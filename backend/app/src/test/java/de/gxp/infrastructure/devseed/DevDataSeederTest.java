@@ -39,7 +39,7 @@ class DevDataSeederTest {
         @Override
         public Map<String, String> getConfigOverrides() {
             Map<String, String> overrides = new java.util.HashMap<>();
-            // Fresh dev DB → the AdminPasswordSeeder needs a first-start password.
+            // Fresh dev DB → the FirstUserSeeder needs a first-start password.
             overrides.put("gxp.admin.password", "dev-seed-test-password-1");
             String mainUrl = System.getProperty("quarkus.datasource.jdbc.url");
             if (mainUrl == null) {

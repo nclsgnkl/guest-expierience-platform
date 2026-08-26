@@ -10,6 +10,18 @@
 
 
 export interface LoginRequest { 
+    /**
+     * Unique, lower-case account name.
+     */
+    username: string;
     password: string;
+    /**
+     * Current 6-digit TOTP code — required via the trusted proxy, ignored on the LAN.
+     */
+    totpCode?: string;
+    /**
+     * A single-use recovery code in place of totpCode — required via the trusted proxy, ignored on the LAN.
+     */
+    recoveryCode?: string;
 }
 

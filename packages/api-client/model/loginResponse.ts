@@ -14,6 +14,10 @@ export interface LoginResponse {
      * Opaque bearer token — keep in memory only.
      */
     token: string;
+    /**
+     * The account the token was issued for.
+     */
+    username: string;
     idleTimeoutSeconds: number;
     expiresAt: string;
 }

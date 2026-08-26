@@ -14,7 +14,12 @@ is the working summary, not a replacement.
   `@Entity` types and their `*Mapper`). Everything that is not a business
   capability lives under the single package **`de.gxp.infrastructure`** —
   `http` (hand-written `ApiErrors`, the exception mappers, the response
-  filter), `web` (SPA fallback), `scheduler` (the `@Scheduled` job triggers,
+  filter, and `ClientAttribution` — the request-scoped **one transport
+  fact** (attributed address + via-trusted-proxy, constitution v1.8.0). Only
+  a Control that decides on it may inject it (`AuthControl` today;
+  `UserControl`/`AuditControl` when they need it) and only inside a request:
+  a Control that needs an address outside a request is a bug, not a case to
+  paper over), `web` (SPA fallback), `scheduler` (the `@Scheduled` job triggers,
   one class per domain — see "Scheduled work"), `devseed` (dev-profile
   seeder), `testsupport` (test scope). `de.gxp.api` is the OpenAPI generator's
   output package and holds no hand-written source, so it exists only under
@@ -143,6 +148,14 @@ is the working summary, not a replacement.
 - The manager UI (later feature) enters the artifact via a **plain Maven copy**
   of its built `dist` into `META-INF/resources` — Quinoa stays rejected.
 - Shared packages (`packages/`) never live under `backend/`.
+- **Non-Java pieces of the backend live beside `app/`, never inside it:**
+  host-side scripts and their systemd units in `backend/updater/` (root-run,
+  bash, tested by `backend/updater/test/*.sh` against the shared fixtures in
+  `backend/updater/test/fixtures/`, which the JVM tests read too); release
+  tooling that never ships in the image in the top-level `tools/<area>/`
+  (today `tools/update/`). Both are `set -euo pipefail`, `LC_ALL=C`, no
+  `eval`, and every value that reaches a command line is regex-validated
+  first.
 
 ## Tests
 

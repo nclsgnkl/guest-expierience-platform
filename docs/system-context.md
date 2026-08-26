@@ -34,7 +34,7 @@ What this buys us, and what it costs:
 |---|---|
 | ✅ **Tenant isolation is physical — *between buildings*** | One instance holds one building's data; cross-*building* leakage is impossible. **Narrowed 2026-08-19:** inside a building the backend serves many rooms, so **room-level scoping is mandatory** — the room is derived from the authenticated device token, never from a client-supplied parameter, and every query touching room-scoped data is security-relevant (constitution v1.4.0, principle 4) |
 | ✅ **No internet dependency** | The app keeps working when the property's connection is down — which is exactly when a guest needs the WiFi password |
-| ⚠️ **No central patching** | A vulnerability persists until someone updates that box. This is the dominant long-term risk and the reason to keep the dependency count low |
+| ⚠️ **No central patching** | A vulnerability persists until someone updates that box. This is the dominant long-term risk and the reason to keep the dependency count low. *Note 2026-08-25 (constitution v1.8.0):* remote operations is now a separately sold capability with an opt-in, box-initiated relay (`docs/backend/remote-operations.md`); it does not change this row for a box that never enrols, and the dependency-minimisation posture stays regardless. *Note 2026-08-26 (`update-channel`):* every box now pulls its own updates — hourly outbound check of a signed manifest, host-side updater applies at night with dump + rollback (`backend/README.md` → "Updates"). Patching is no longer manual, but it is still per-box and still depends on the operator publishing a signed release; the updater itself is not channel-updated |
 | ⚠️ **Shared network** | The server sits on the same LAN as guest devices |
 | ⚠️ **Physical access** | The touchscreen stands in a guest-accessible space |
 
@@ -71,11 +71,18 @@ Still open, both operational rather than application code:
   browser chrome, no navigating away, no developer tools. This is device
   provisioning rather than application code, but it is part of the security
   story and nobody else will do it.`]`
-- `[NEEDS DECISION: how do instances get updated,` and who is responsible for
-  it? See the patching risk above. **Sharpened 2026-08-19:** the backend adds
-  a schema and a database to every update — the mechanics are decided (image
-  tag change + restart, Flyway pulls the schema forward), the *who and when*
-  are not.`]`
+- ~~How do instances get updated, and who is responsible?~~ — **Resolved
+  2026-08-26 by `update-channel`.** *How:* the app checks a signed manifest
+  hourly (outbound only), the host-side updater applies it in the night
+  window (default 04:00 local, manager-changeable, disable/apply-now via
+  `/api/manager/updates`) with a `pg_dump` first, one restart, ready + Flyway
+  health check and an automatic rollback ladder. *Who:* the release signer
+  (the owner, private key off-repo — D17); the manager only chooses when.
+  ~~Still open, handed to T-20: key rotation and the updater's own update.~~
+  *T-20 (architect, 2026-08-26):* key rotation is built — every box trusts a
+  **two-key set** (key 1 active, key 2 dormant) and a signed newer manifest
+  can rotate it in-band; the updater's own update stays `install.sh` on site
+  (tracked follow-up: refresh it from the verified image).
 
 ## Stack
 
@@ -171,9 +178,9 @@ first real code**, same rule as above (real files, not intent):
 |-----------|----------|-----------------|
 | `api/openapi.yaml` | repo root `api/` | **The API contract — source of truth.** OpenAPI 3.1; tag `system` with `getSystemHealth`/`getSystemReadiness`/`getSystemInfo` plus the shared `ApiError` shape. The Maven build generates both sides from it; editing it is how any API change starts |
 | Quarkus backend | `backend/app/` | Java 21, Quarkus 3.33 LTS (3.33.3.1), Maven wrapper, dependencies exactly the constitution v1.5.0 allow-list. Flyway `V1__foundation_baseline.sql` (single-row `instance_info` + seed) migrates at startup; Dev Services provisions `postgres:17.11` for dev/test; `%prod` reads the datasource from env vars. Fail-closed security (`quarkus.security.jaxrs.deny-unannotated-endpoints=true` — global, build-time, on the Boundary since v1.6.0; `deny-unannotated-members=true` stays on as a second line but is inert for the shipped app now that no Control carries an annotation) and no-SQL/no-access logging committed for all profiles |
-| `de.gxp.system` | `backend/app/src/main/java/de/gxp/system/` | **The BCE reference package** every later feature copies (spec §4 strict), and the first one migrated to the v1.6.0 sub-package layout: `boundary/SystemResource` (one delegating line per method, implements generated `SystemApi`, carries the security annotation), `control/SystemControl` (public Control, `@Transactional`; carries **no** security annotation since v1.6.0, speaks generated DTOs, throws the 503) and package-private `control/InstanceInfoRepository`, `entity/InstanceInfo` + `entity/InstanceInfoMapper` (hand-written; **public types, but their fields stayed package-private** — nothing outside `.entity` reads them). Every feature package now carries `boundary`/`control`/`entity`; the feature boundary is enforced by the three `de.gxp.architecture` guards, not by the compiler |
+| `de.gxp.system` | `backend/app/src/main/java/de/gxp/system/` | **The BCE reference package** every later feature copies (spec §4 strict), and the first one migrated to the v1.6.0 sub-package layout: `boundary/SystemResource` (one delegating line per method, implements generated `SystemApi`, carries the security annotation), `control/SystemControl` (public Control, `@Transactional`; carries **no** security annotation since v1.6.0, speaks generated DTOs, throws the 503) and package-private `control/InstanceInfoRepository`, `entity/InstanceInfo` + `entity/InstanceInfoMapper` (hand-written; **public types, but their fields stayed package-private** — nothing outside `.entity` reads them). Every feature package now carries `boundary`/`control`/`entity`; the feature boundary is enforced by the five `de.gxp.architecture` guards, not by the compiler |
 | `packages/api-client/` | repo root `packages/` | **Generated** TypeScript-Angular client — committed, never hand-edited, deterministic (no diff on unchanged contract); a diff there means the contract changed. Uses only `@angular/common/http` + `rxjs`; no npm manifest changed anywhere. Not yet consumed — that is `guest-frontend-integration`'s |
-| Compose unit | `backend/compose.yaml` | Deployment unit: `app` (JVM image) + `db` (`postgres:17.11`), named volumes `gxp-pgdata` + `gxp-tls` (backup = one `pg_dump` **plus** the TLS volume), required interpolation for `GXP_DB_PASSWORD`/`GXP_ADMIN_PASSWORD`/`GXP_TLS_HOST` (fails fast when unset). **Production-shaped since `device-pairing-and-guest-api`: HTTPS only, host 443 → container 8443, no plain listener, no redirect** |
+| Compose unit | `backend/compose.yaml` | Deployment unit: `app` (JVM image) + `db` (`postgres:17.11`), named volumes `gxp-pgdata` + `gxp-tls` (backup = one `pg_dump` **plus** the TLS volume), required interpolation for `GXP_DB_PASSWORD`/`GXP_TLS_HOST` (fails fast when unset); `GXP_ADMIN_USERNAME`/`GXP_ADMIN_PASSWORD` optional in compose (first start only, the seeder refuses a fresh boot without the password); `GXP_TRUSTED_PROXY_ENABLED`/`GXP_TRUSTED_PROXY` default off / `127.0.0.1/32`. **Production-shaped since `device-pairing-and-guest-api`: HTTPS only, host 443 → container 8443, no plain listener, no redirect** |
 
 Added by `docs/features/backend-domain-config/` (2026-08-19) — the domain
 model, every spec §5 invariant server-side, and the secured manager CRUD API
@@ -181,16 +188,19 @@ model, every spec §5 invariant server-side, and the secured manager CRUD API
 
 | Component | Location | Responsibility |
 |-----------|----------|-----------------|
-| Manager contract | `api/openapi.yaml` (tags `manager-*`) | Auth (`managerLogin`/`managerLogout`/`changeManagerPassword`), property, rooms, menu catalogue (read-only) + menu-config + action-cards (both scopes), stays, assets — every operation except login under the `bearerAuth` scheme. One generated interface per `manager-*` tag keeps one Boundary per BCE package |
-| `de.gxp.auth` | `backend/app/src/main/java/de/gxp/auth/` | Manager auth, isolated so the later per-user swap touches no other Boundary/Control: `AuthResource`/`AuthControl`, package-private `TokenStore` (in-memory, SHA-256 hashes, 600 s sliding idle), `Pbkdf2PasswordHasher` (JDK, 600k iterations, self-describing format), **no throttling at all** on login or password change (owner decision 2026-08-24, REQ-326 as amended): the failed-attempt lockout and the concurrency gate that briefly replaced it were both removed — each was itself a DoS vector — and the question is deferred until the production hardware is known; brute-force resistance rests on the ≥ 8 password policy alone. Accepted: an unauthenticated LAN caller can spend server CPU through PBKDF2. Also `AdminPasswordSeeder` (first-start seed from `GXP_ADMIN_PASSWORD`, refuse-to-start), and the SPI adapters `BearerAuthMechanism`/`TokenIdentityProvider`/`TokenExpiryResponseFilter` (`GXP-Token-Expires` on every authenticated response) |
+| Manager contract | `api/openapi.yaml` (tags `manager-*`) | Auth (`managerLogin` with `username`/`password`/optional `totpCode`/`recoveryCode`, `429` + `Retry-After`, `managerLogout`, `changeManagerPassword`), **`manager-users`** (list/create/deactivate/reactivate/password reset/second-factor reset; own second-factor enrol/confirm/status/disable + recovery-code regeneration), **`manager-audit`** (`listAuditEntries`, paged), property, rooms, menu catalogue (read-only) + menu-config + action-cards (both scopes), stays, assets, devices — every operation except login under the `bearerAuth` scheme (54 secured operations pinned by `ContractSecuredOperationsDeniedTest`). One generated interface per `manager-*` tag keeps one Boundary per BCE package |
+| `de.gxp.auth` | `backend/app/src/main/java/de/gxp/auth/` | Manager **sessions** only (auth-hardening A2, 2026-08-26): `AuthResource`/`AuthControl` (`login`/`logout`/own password change, no `@Transactional` on login — the one DB write of a login commits inside `UserControl.verifyLogin`), package-private `TokenStore` (in-memory, SHA-256 hashes, 600 s sliding idle, `removeAllOf(username)` on the `UserControl.CredentialsInvalidated` CDI event), **`LoginThrottle` per attributed address** (reopened REQ-326 on 2026-08-25: 5 failures / 15 min → block 60 s doubling per exhaustion, cap 900 s, success clears, ≤ 10 000 tracked addresses evicted after 1 h; `429 too-many-attempts` + `Retry-After` BEFORE any PBKDF2 or DB read; never global, never per account — the withdrawn 2026-08-24 mechanisms answered the correct password with 429), the **TOTP-via-proxy rule** (a via-trusted-proxy login without `totpCode`/`recoveryCode` → `401 second-factor-required` before password verification and uncounted; with one, password + factor verified together, every miss the generic `invalid-credentials`; on the LAN the code fields are ignored), and the SPI adapters `BearerAuthMechanism`/`TokenIdentityProvider`/`TokenExpiryResponseFilter` (`GXP-Token-Expires` on every authenticated response). Logs nothing on the login path (REQ-605, asserted) |
+| `de.gxp.user` | `.../de/gxp/user/` | Manager **accounts** (A2/A3): `manager_user` (V5 — the pre-existing `admin_credential` row is carried over as active user `admin`; `FirstUserSeeder` creates the first account from `GXP_ADMIN_USERNAME` (default `admin`) / `GXP_ADMIN_PASSWORD` only when no row exists, refuse-to-start otherwise), `Pbkdf2PasswordHasher` (moved here; JDK, 600k iterations, self-describing format, dummy-hash verification for unknown/deactivated names so all three misses cost one derivation), `UserResource`/`UserControl` (`manager-users`: create/deactivate/reactivate/reset password/reset factor by an admin — never on yourself, `409`; own enrol/confirm/status/disable/regenerate), TOTP RFC 6238 SHA-1/6 digits/30 s ±1 step with a per-user last-step replay guard and 10 SHA-256-at-rest recovery codes (V6), both consumed by **conditional UPDATEs** (one affected row → a code presented concurrently twice is accepted once). `Verdict(ok, username, matchedUsername)` — the matched name feeds the audit only, never the client. Every account change fires `CredentialsInvalidated(username)` (D14) |
+| `de.gxp.audit` | `.../de/gxp/audit/` | Append-only **audit trail** (A4, V7 `audit_entry`: occurred-at, actor nullable, attributed address, via-proxy, action, entity, entity id nullable, field nullable — **no value column exists, by schema**): `AuditControl.record(...)` called EXPLICITLY at all 25 manager mutation sites (`AuditCoverageTest` derives the set from every `@Transactional public` Control method against a pinned exemption list — no interceptor, every call site greppable), one row per changed field on update (`changedFields` = generated-DTO getter diff, names only) or one field-less row on create/delete/replace, in the caller's transaction (a rolled-back mutation leaves none); login outcomes in `REQUIRES_NEW` (success = username as actor + entity id; failure = matched canonical username or null, never the submitted text; the `429` and the code-less via-proxy `second-factor-required` 401 are never recorded — unthrottled paths must not write, 06_review 2026-08-26). `AuditResource` `GET /api/manager/audit?page&size` (admin, newest first, default 50, max 200, no update/delete). Retention 365 days via `AuditScheduler` |
+| `ClientAttribution` | `.../de/gxp/infrastructure/http/ClientAttribution.java` | Request-scoped, the **one** place the transport fact is read (constitution v1.8.0 allows exactly two consumers: the throttle bucket and the second-factor requirement): `Attribution(address, viaTrustedProxy)` from Quarkus `quarkus.http.proxy.*` — with `GXP_TRUSTED_PROXY_ENABLED=false` (default) every `Forwarded`/`X-Forwarded-*` header is ignored and the socket peer is the address; with it on, only the standard `Forwarded` header (`allow-x-forwarded` and `use-proxy-protocol` pinned off) and only from `GXP_TRUSTED_PROXY` (default `127.0.0.1/32`; a LAN range here would turn the throttle into a weapon on that range) is honoured, and `X-Forwarded-Trusted-Proxy: true` as stamped by Quarkus is the via-proxy signal. The relay must REPLACE the header with one `for=` element |
 | `de.gxp.text` | `.../de/gxp/text/` | `TemplateControl` — stateless raw-template validation (unknown/out-of-context placeholder → named 400) and server-side resolution (`\|time`/`\|date` in the property timezone + language locale). Consumed by property/menu now, by the guest API next feature |
 | `de.gxp.property` | `.../de/gxp/property/` | The single property row (`CHECK (id = 1)`, no create/delete API) incl. offered languages/appearances, brand primitives, asset refs (kind-checked) and raw greeting/standby templates |
 | `de.gxp.room` | `.../de/gxp/room/` | Rooms CRUD; unique non-empty code, overrides validated against the property's offered sets; delete = 409 naming stays, cascades the room's own config rows; hosts the per-room row lock stays serialize on |
 | `de.gxp.menu` | `.../de/gxp/menu/` | ONE consistency unit on purpose: catalogue reads (5 seeded kiosk sections; `einstellungen` deliberately not in it), per-field menu-config inheritance (room → property → catalogue default) — **except `enabled`, which resolves under the CEILING rule** (user decision 2026-08-19: `enabled(room, k) = enabled(property, k) AND room-override(default true)`; a property disable wins over any room enable — the guest API MUST resolve the same way), whole-set action cards (0–4), and invariants 1–3 incl. the affected-scope 409 listing every stranded card plus the ceiling guards (`item-disabled-at-property`, `menu-item-enabled-by-rooms`) |
 | `de.gxp.stay` | `.../de/gxp/stay/` | Stays CRUD; `BOOKED`/`CANCELLED` stored, "active" derived from the clock; invariant 5 (no overlap per room) under the room-row lock — concurrent writes serialize |
 | `de.gxp.asset` | `.../de/gxp/asset/` | PNG/JPEG only (content-verified by decoding), 10 MiB cap → 413, > 2560 px downscaled, sha-256 = strong ETag (304), payload-free metadata projection, delete guard naming referrers |
-| `de.gxp.api` | `.../de/gxp/api/` | Infrastructure: `ApiErrorMappers` (bean-validation + malformed JSON → the shared `ApiError` shape) and `ApiErrors` (the thrown non-2xx builders every Control uses) |
-| Flyway V2/V3 | `.../db/migration/` | `V2__domain_config.sql` (all domain tables + checks + `UNIQUE NULLS NOT DISTINCT` scopes + neutral seeds), `V3__admin_credential.sql` (single-row, seeded by code, not SQL). `V1`/`instance_info` untouched |
+| `de.gxp.infrastructure.http` (formerly listed as `de.gxp.api`) | `.../de/gxp/infrastructure/http/` | Infrastructure: `ApiErrorMappers` (bean-validation + malformed JSON → the shared `ApiError` shape) and `ApiErrors` (the thrown non-2xx builders every Control uses) |
+| Flyway V2/V3 | `.../db/migration/` | `V2__domain_config.sql` (all domain tables + checks + `UNIQUE NULLS NOT DISTINCT` scopes + neutral seeds), `V3__admin_credential.sql` (single-row, seeded by code, not SQL). `V1`/`instance_info` untouched. **auth-hardening (2026-08-26):** `V5__manager_user.sql` (carries the credential row over as user `admin`, drops `admin_credential`), `V6__second_factor.sql` (TOTP columns + `manager_recovery_code`), `V7__audit_entry.sql` |
 
 Added by `docs/features/device-pairing-and-guest-api/` (2026-08-19) — device
 identity, the kiosk-facing guest read model, and HTTPS with the instance CA
@@ -235,6 +245,19 @@ remains undesigned (no content built), but its layout space is reserved
 (`flex: 1`, empty) rather than collapsed — see "Open Structural Questions"
 below.
 
+Added by `docs/features/update-channel/` (2026-08-26) — the box updates
+itself from a signed manifest (constitution v1.8.0; `backend/README.md` →
+"Updates"):
+
+| Component | Location | Responsibility |
+|---|---|---|
+| Update contract | `api/openapi.yaml` (tag `manager-updates`) | `GET /api/manager/updates` (settings, last check outcome, available version, the updater's last state), `PUT …/settings` (`autoUpdateEnabled`, `applyAt HH:mm`), `POST …/apply` (202, or 409 with nothing available), `POST …/check` — all `admin`, all audited (`update`/`update-settings`, `update-apply`, `update-check`). Guest and pairing paths untouched |
+| `de.gxp.update` | `.../de/gxp/update/` | `UpdateControl` (the hourly check sequence: `https://` only, 64 KiB cap, verify **before** parse, `SemanticVersion` D6 compare, ≤ running version = no update; the reconcile algorithm that writes/moves/removes `desired-update.json`; manual apply/check), package-private `ManifestClient` (JDK `HttpClient`, `User-Agent: gxp-update/1`, no identity, class-name-only logging), `ManifestVerifier` (JDK `Signature("Ed25519")` against the **trust set** `update/signing-public-keys.pem` in the image — two keys, any verifies; a verified newer manifest's `trustedKeys` line rotates the set, persisted in V9 `trusted_keys`/`trusted_keys_version`), `ManifestParser`, `ExchangeFiles` (hand-built fixed-layout writer/reader, temp + rename, 64 KiB read cap), `UpdateStateStore` (`@Transactional`, instants truncated to seconds), entity `UpdateChannel` (V8, single row: settings, last check, the raw verified manifest bytes, the manual request) |
+| `backend/updater/` | host, not a container | `gxp-updater.sh` (root, `flock`, snapshots the hostile request file once, OpenSSL re-verifies — **the trust root** —, `pg_dump`, pull by registry digest, `.env` `GXP_IMAGE=` swap, one restart, ready + Flyway health, rollback ladder image → image + restore → `rollback-failed`), `gxp-updater.service`/`.timer` (every 5 min; `ProtectSystem=full`, `ProtectHome`, `PrivateTmp`, `PrivateDevices`, `ProtectKernelTunables/Modules`, `ProtectControlGroups`, `NoNewPrivileges`, `RestrictSUIDSGID`, `LockPersonality`, `RestrictRealtime`, `SystemCallArchitectures=native`, `TimeoutStartSec=30min` — all executed once on the dev box), `install.sh` (installs the **key set** `/etc/gxp/update-signing-public-keys.pem`, refuses a changed set without `--replace-key` and a single-key resource; `--current-version` seeds the shadow so the downgrade guard is armed from day one; `--uninstall`), `updater.conf.example`. Its **own memory** is `/var/lib/gxp-updater/state.json` (root 0600 — replay guard + downgrade refusal + the rotated trust set); `state.json` in the volume is a mirror for the app, written by `rename(2)` from the volume's root-owned parent — root never opens a path inside the app-owned directory for writing. Rung 2 of the rollback wipes `public` before the restore. Tests: `test/parse.sh` (shared fixtures with `ExchangeFilesTest`), `test/smoke-apply.sh` (incl. seed, downgrade refusal, rotation), `test/rehearse-rollback.sh A|B`, `test/rehearse-registry.sh` (scenario C: the production digest-pull branch against a local `registry:2`) against a throwaway compose project |
+| `tools/update/` | repo root | `gen-signing-key.sh [dir] [suffix]` (Ed25519 pairs outside any git tree, `$HOME/.gxp/keys`; key 1 and key 2), `sign-manifest.sh` (fixed-layout manifest + detached raw signature, self-verified; `--sha256` = the registry manifest digest from `docker buildx imagetools inspect … '{{println .Manifest.Digest}}'`; `--trusted-keys <pem>` writes a rotation) |
+| Volume `gxp-updates` | `backend/compose.yaml` → `/updates` in `app` (`185:root`, 0700) | The app ↔ updater exchange: `desired-update.json` (app → updater, hostile to the updater) and `state.json` (updater → app, mirror). No secrets, not part of the backup |
+| `UpdateScheduler` | `.../de/gxp/infrastructure/scheduler/` | The two `@Scheduled` triggers (hourly check at minute 17, reconcile every 15 min) — see "Scheduled housekeeping" |
+
 ## Cross-Cutting Concerns
 
 - **Scheduled housekeeping:** the only work this box does unattended. Core
@@ -243,10 +266,18 @@ below.
   **Scheduling is centrally managed in `de.gxp.infrastructure.scheduler`**
   (owner decision 2026-08-25), one class per domain holding only the
   annotation and a single delegating call into the feature's public
-  `*Control`; the logic stays in the feature. Two jobs today, both **daily at
-  02:00** (`cron = "0 0 2 * * ?"`, `concurrentExecution = SKIP`):
+  `*Control`; the logic stays in the feature. **Five jobs today**, all
+  `concurrentExecution = SKIP`. Three **daily at 02:00** (`cron = "0 0 2 * * ?"`):
   `DeviceScheduler` sweeps expired `pairing_request` rows, `AuthScheduler`
-  purges expired admin bearer-token hashes from the in-memory store. Cron, not
+  purges expired admin bearer-token hashes from the in-memory store, and
+  `AuditScheduler` (auth-hardening, 2026-08-26) deletes `audit_entry` rows
+  older than 365 days (`AuditControl.pruneOlderThan`). Two from
+  `update-channel` (2026-08-26) in `UpdateScheduler`: `checkForUpdate`
+  **hourly at minute 17** (`"0 17 * * * ?"`, plus 0–600 s jitter inside the
+  Control — an off-the-hour minute and jitter so a fleet never hits the
+  manifest server in step) and `reconcileDesiredUpdate` **every 15 min**
+  (`"0 */15 * * * ?"`, keeps the request file in the exchange volume
+  consistent with the settings and the next apply window). Cron, not
   `every = …`, because a relative interval restarts with the process and an
   on-premise box reboots with the building; the accepted residual is that a
   machine never powered on at 02:00 never sweeps, which is harmless since the
@@ -263,6 +294,22 @@ below.
   failure with a full stack trace and a `PSQLException` quotes statement text,
   so every job catches `RuntimeException` and logs the exception's class name
   only, and success logs counts only, and only when the count > 0.
+- **Update channel** (`update-channel`, 2026-08-26): the one outbound call
+  this box makes on its own — `GET <GXP_UPDATE_BASE_URL>/manifest/<channel>.json`
+  + `.sig`, hourly, `https://` only, carrying no identity and no telemetry
+  (`User-Agent: gxp-update/1`, `Accept`); unset base URL = channel off. The
+  manifest is verified twice (JDK in the app to decide "available", OpenSSL
+  in the root updater to decide "apply") against the same two-key trust set; the
+  updater treats everything the app wrote as hostile (snapshot, size cap,
+  regex per field, verified-manifest-only, no `eval`) and keeps its own
+  root-owned memory. Updates apply at night (04:00 local by default, 2 h
+  window, manager-changeable), one restart, dump first, automatic rollback;
+  a failed version is held until a manager acts. Key custody: two Ed25519
+  keys on the owner's machine (key 1 active, key 2 dormant), public halves
+  in the image; a signed newer manifest rotates the set on every box
+  (architect review T-20, 2026-08-26). Custody practice (passphrase, offline
+  backup, second medium) is an open operator task deferred by the owner to
+  the first customer; the updater's own update is a tracked follow-up.
 - **Design tokens:** CSS custom properties in two layers (primitive → semantic).
   Components reference semantic roles only. Full rationale and shape in
   `docs/design/tokens.md` → "Implementation". No Tailwind. As of
@@ -431,14 +478,27 @@ below.
     **nothing is logged** — the app has no logging convention yet and a failed
     preference write is not the place to invent one (constitution principle 3
     also applies: none of this may reach a log).
-- **Auth:** **implemented for the manager (2026-08-19, `backend-domain-config`)**
-  — shared admin password to `/api/manager/login` only (PBKDF2-hashed in
-  Postgres, seeded from `GXP_ADMIN_PASSWORD` on first start, rotated via
-  `PUT /api/manager/password`, every change drops all tokens), opaque 256-bit
-  bearer token with a 10-minute sliding idle expiry in an in-memory store
+- **Auth:** **implemented for the manager (2026-08-19, `backend-domain-config`;
+  hardened 2026-08-26, `auth-hardening`)** — **named manager accounts**
+  (`manager_user`, every one an admin; first account seeded from
+  `GXP_ADMIN_USERNAME`/`GXP_ADMIN_PASSWORD` on first start only, a pre-V5
+  instance's shared password carries over as user `admin`) log in with
+  username + password at `/api/manager/login` only (PBKDF2-hashed in
+  Postgres, own password rotated via `PUT /api/manager/password`, every
+  account change drops that account's tokens), opaque 256-bit bearer token
+  with a 10-minute sliding idle expiry in an in-memory store
   (`GXP-Token-Expires` on every authenticated response), fail-closed
-  `@RolesAllowed("admin")` on every manager Boundary (class-level where the whole surface is admin) since v1.6.0, 401 + `Bearer`
-  challenge for anyone else on the LAN.
+  `@RolesAllowed("admin")` on every manager Boundary (class-level where the
+  whole surface is admin) since v1.6.0, 401 + `Bearer` challenge for anyone
+  else on the LAN. **Login is throttled per attributed client address**
+  (5 failures / 15 min → 60 s block doubling to 900 s, `429` before any
+  PBKDF2, never global or per account — REQ-326 reopened). **A second factor
+  (TOTP + recovery codes) is required only for requests attributed to the
+  trusted proxy** (remote operations); on the LAN it is never asked for.
+  Every login outcome after the throttle and every manager mutation is
+  written to the **append-only audit trail** (no values, 365-day retention,
+  admin-readable at `GET /api/manager/audit`). Nothing is logged on the
+  login path.
   **Device tokens are live (2026-08-19, `device-pairing-and-guest-api`):**
   the SAME bearer path resolves a presented token first against the manager
   store, then against the device table by hash — role `device`, long-lived,
@@ -454,6 +514,11 @@ below.
   any 401 wipes token **and** content cache before the kiosk drops to the
   pairing screen. The poll secret exists only in a component-scoped service
   field while the pairing screen is on.
+- **Auth hardening — built (2026-08-26, `auth-hardening`, T-01…T-17):** the
+  component rows above (`de.gxp.auth`, `de.gxp.user`, `de.gxp.audit`,
+  `ClientAttribution`, the three schedulers) describe the code on disk;
+  decisions D1–D25 and the recorded deviations live in
+  `docs/features/auth-hardening/02-design.md` and `handoff.md`.
 - **Persistence (backend, 2026-08-19):** the domain schema is real — property
   (single row), rooms, menu catalogue/config, action cards, stays, assets
   (BYTEA) and the admin credential, all via Flyway V1–V3 with the seeds that

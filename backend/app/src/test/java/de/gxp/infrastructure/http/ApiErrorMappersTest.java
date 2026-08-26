@@ -20,7 +20,7 @@ class ApiErrorMappersTest {
     @Test
     void beanValidationFailureReturnsTheApiErrorShape() {
         given().contentType("application/json")
-                .body("{}") // password is required by the contract
+                .body("{}") // username and password are required by the contract
                 .when().post("/api/manager/login")
                 .then().statusCode(400)
                 .body("code", equalTo("validation-failed"))

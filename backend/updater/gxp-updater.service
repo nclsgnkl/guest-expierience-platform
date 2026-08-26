@@ -1,0 +1,37 @@
+# gxp-updater.service — one run of the host-side updater (update-channel
+# REQ-718, D19). Started by gxp-updater.timer; never enabled on its own.
+[Unit]
+Description=Guest Experience Platform updater (one run)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/gxp/updater.conf
+ExecStart=/usr/local/lib/gxp/gxp-updater.sh
+SyslogIdentifier=gxp-updater
+# Root on purpose (docker is root-equivalent anyway); the surface is kept
+# small instead: /usr, /boot, /etc read-only, a private /tmp, no /home or
+# /root (the compose dir must live elsewhere — install.sh refuses one under
+# /home), no devices, no kernel tunables/modules/cgroups, no setuid
+# escalation, native syscalls only (review A-5; every line proven by the
+# T-20c systemd run). CapabilityBoundingSet is deliberately NOT set: the
+# script needs chown/chmod/reading a 0700 uid-185 directory, and a wrong
+# set fails silently as a stale `updater` state.
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+# A run must end: the worst ladder is pull + dump + three boots of
+# (TIMEOUT + HOLD + TIMEOUT) ≈ 20 min at the defaults; a hung run would
+# otherwise hold the flock forever and every later tick would exit 0
+# (review R3-2).
+TimeoutStartSec=30min

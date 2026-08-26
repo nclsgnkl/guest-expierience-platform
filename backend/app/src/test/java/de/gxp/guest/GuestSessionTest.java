@@ -18,6 +18,7 @@ import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-22 (REQ-416..419, REQ-426): the session equals the seeded frontend
@@ -55,10 +56,7 @@ class GuestSessionTest {
     }
 
     private static String adminToken() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private io.restassured.response.ValidatableResponse session() {

@@ -17,10 +17,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * In-memory sliding bearer-token store (REQ-327). Deliberately in-memory: a
- * restart logs everyone out, which is acceptable and desirable (one instance,
- * one admin). Holds SHA-256 hex hashes of tokens, NEVER the raw value; the
- * raw token exists exactly once, in the login response.
+ * In-memory sliding bearer-token store (REQ-327; keyed by user since
+ * auth-hardening REQ-611/REQ-612, D13). Deliberately in-memory: a restart
+ * logs everyone out, which is acceptable and desirable (one instance). Holds
+ * SHA-256 hex hashes of tokens, NEVER the raw value; the raw token exists
+ * exactly once, in the login response. Each entry knows the username it was
+ * issued for, so one user's sessions can be dropped without touching
+ * anyone else's.
  *
  * <p>Pinned parameters: 32-byte {@link SecureRandom} tokens (base64url, no
  * padding), 600 s idle expiry slid by every authenticated request. The idle
@@ -35,7 +38,11 @@ class TokenStore {
     record IssuedToken(String rawToken, Instant expiresAt) {
     }
 
-    private final ConcurrentHashMap<String, Instant> expiryByTokenHash = new ConcurrentHashMap<>();
+    /** What the store keeps per token hash: whose session it is, and until when. */
+    record Session(String username, Instant expiry) {
+    }
+
+    private final ConcurrentHashMap<String, Session> sessionByTokenHash = new ConcurrentHashMap<>();
     private final SecureRandom random = new SecureRandom();
     private final Clock clock;
     private final Duration idleTimeout;
@@ -65,35 +72,42 @@ class TokenStore {
      * on the spot, so an entry that outlives its expiry in the map is already
      * dead as a credential.
      */
-    IssuedToken issue() {
+    IssuedToken issue(String username) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         Instant expiresAt = clock.instant().plus(idleTimeout);
-        expiryByTokenHash.put(sha256Hex(raw), expiresAt);
+        sessionByTokenHash.put(sha256Hex(raw), new Session(username, expiresAt));
         return new IssuedToken(raw, expiresAt);
     }
 
     /**
-     * Authenticated hit: slides the idle expiry forward and returns the new
-     * expiry, or {@code null} for an unknown or idled-out token (the expired
-     * entry is dropped).
+     * Authenticated hit: slides the idle expiry forward and returns the
+     * session with its new expiry, or {@code null} for an unknown or
+     * idled-out token (the expired entry is dropped).
      */
-    Instant slide(String tokenSha256Hex) {
+    Session slide(String tokenSha256Hex) {
         Instant now = clock.instant();
-        Instant slid = expiryByTokenHash.computeIfPresent(tokenSha256Hex,
-                (hash, expiry) -> expiry.isAfter(now) ? now.plus(idleTimeout) : null);
-        return slid;
+        return sessionByTokenHash.computeIfPresent(tokenSha256Hex,
+                (hash, session) -> session.expiry().isAfter(now)
+                        ? new Session(session.username(), now.plus(idleTimeout))
+                        : null);
     }
 
     /** Server-side drop of one token (logout). */
     void remove(String tokenSha256Hex) {
-        expiryByTokenHash.remove(tokenSha256Hex);
+        sessionByTokenHash.remove(tokenSha256Hex);
     }
 
-    /** Drops every active token — every password change calls this (v1.5.1). */
-    void clear() {
-        expiryByTokenHash.clear();
+    /**
+     * Drops every session of ONE user — the credential's owner on a password
+     * change or reset, the account on deactivation (REQ-611, D13). Other
+     * users' sessions are not that credential and stay. Replaces the
+     * store-wide {@code clear()} of v1.5.1, which was written for one shared
+     * password.
+     */
+    void removeAllOf(String username) {
+        sessionByTokenHash.values().removeIf(session -> session.username().equals(username));
     }
 
     /**
@@ -105,12 +119,12 @@ class TokenStore {
      */
     void purgeExpired() {
         Instant now = clock.instant();
-        expiryByTokenHash.values().removeIf(expiry -> !expiry.isAfter(now));
+        sessionByTokenHash.values().removeIf(session -> !session.expiry().isAfter(now));
     }
 
     /** Test probe (same package): how many entries the map currently holds. */
     int size() {
-        return expiryByTokenHash.size();
+        return sessionByTokenHash.size();
     }
 
     static String sha256Hex(String rawToken) {

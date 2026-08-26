@@ -442,3 +442,10 @@ FodyWeavers.xsd
 # node_modules) lets its bare @angular/rxjs imports resolve by node-walk.
 # Recreate after a fresh clone: ln -s ../frontend/node_modules packages/node_modules
 /packages/node_modules
+
+# update-channel (REQ-725): a release-signing PRIVATE key never enters the repo.
+# The TEST key pair under backend/app/src/test/resources/update/ is public by
+# definition (it signs fixtures only) and is explicitly re-included.
+*signing-private-key*
+!/backend/app/src/test/resources/update/test-signing-private-key.pem
+!/backend/app/src/test/resources/update/test-signing-private-key-2.pem

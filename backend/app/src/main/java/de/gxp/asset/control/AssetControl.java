@@ -12,6 +12,7 @@ import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.AssetMetadataDto;
 import de.gxp.asset.entity.Asset;
 import de.gxp.asset.entity.AssetMapper;
+import de.gxp.audit.control.AuditControl;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
@@ -45,10 +46,12 @@ public class AssetControl {
 
     private final AssetRepository repository;
     private final HttpHeaders requestHeaders;
+    private final AuditControl auditControl;
 
-    AssetControl(AssetRepository repository, HttpHeaders requestHeaders) {
+    AssetControl(AssetRepository repository, HttpHeaders requestHeaders, AuditControl auditControl) {
         this.repository = repository;
         this.requestHeaders = requestHeaders;
+        this.auditControl = auditControl;
     }
 
     @Transactional
@@ -90,7 +93,9 @@ public class AssetControl {
         asset.kind = kind.name();
         asset.data = stored.bytes();
         repository.persist(asset);
-        return AssetMapper.toDto(asset);
+        AssetMetadataDto created = AssetMapper.toDto(asset);
+        auditControl.record(AuditControl.ACTION_CREATE, AuditControl.ENTITY_ASSET, String.valueOf(created.getId()), null);
+        return created;
     }
 
     @Transactional
@@ -154,6 +159,7 @@ public class AssetControl {
                             .toList());
         }
         repository.delete(asset);
+        auditControl.record(AuditControl.ACTION_DELETE, AuditControl.ENTITY_ASSET, String.valueOf(assetId), null);
     }
 
     /**

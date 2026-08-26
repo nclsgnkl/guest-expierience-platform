@@ -24,7 +24,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
 /**
- * The two scheduled job BODIES actually run here (constitution v1.7.0, owner
+ * The scheduled job BODIES actually run here (constitution v1.7.0, owner
  * decision 2026-08-25) — this test exists because nothing else executes them.
  * The suite runs with {@code quarkus.scheduler.start-mode=halted} and
  * {@code PairingSweepTest} calls the Control directly, so without this class
@@ -32,7 +32,7 @@ import jakarta.persistence.EntityManager;
  * at 02:00 on a customer's box.
  *
  * <p><b>It lives in the same package as the jobs on purpose:</b>
- * {@code DeviceScheduler} and {@code AuthScheduler} are package-private beans
+ * {@code DeviceScheduler}, {@code AuthScheduler} and {@code AuditScheduler} are package-private beans
  * (nothing outside this package may name them), so this is the only place
  * from which they can be injected and invoked.
  *
@@ -74,6 +74,9 @@ class ScheduledJobExecutionTest {
 
     @Inject
     AuthScheduler authScheduler;
+
+    @Inject
+    AuditScheduler auditScheduler;
 
     @Inject
     EntityManager entityManager;
@@ -136,6 +139,21 @@ class ScheduledJobExecutionTest {
         assertTrue(logged.isEmpty(),
                 "the token purge must complete silently; anything logged here is the failure branch: "
                         + messages(logged));
+    }
+
+    /**
+     * The audit job (auth-hardening T-14, REQ-623) runs through the Control
+     * and, with nothing older than 365 days, is silent — the count gate. The
+     * retention arithmetic itself is {@code de.gxp.audit.AuditRetentionTest}.
+     */
+    @Test
+    void theAuditJobPrunesThroughTheControlAndIsSilentWhenNothingExpired() {
+        List<LogRecord> logged = runAsTheSchedulerWould(
+                AuditScheduler.class, auditScheduler::pruneExpiredEntries);
+
+        assertTrue(logged.isEmpty(),
+                "the audit prune must be silent when nothing is older than the retention; anything logged"
+                        + " here is the failure branch: " + messages(logged));
     }
 
     /**

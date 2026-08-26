@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.1",
+  "artifactRef": "ghcr.io/example/gxp-backend:1.0.1",
+  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "requestedAt": "2026-09-01T10:00:00Z",
+  "requestedBy": "auto",
+  "applyNotBefore": "2026-09-02T02:00:00Z",
+  "applyWindowSeconds": 7200,
+  "manifest": "ewogICJzY2hlbWFWZXJzaW9uIjogMSwKICAiY2hhbm5lbCI6ICJzdGFibGUiLAogICJ2ZXJzaW9uIjogIjEuMC4xIiwKICAiYXJ0aWZhY3RSZWYiOiAiZ2hjci5pby9leGFtcGxlL2d4cC1iYWNrZW5kOjEuMC4xIiwKICAic2hhMjU2IjogIjAxMjM0NTY3ODlhYmNkZWYwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWYiLAogICJwdWJsaXNoZWRBdCI6ICIyMDI2LTA5LTAxVDEwOjAwOjAwWiIKfQo=",
+  "signature": "/7KTPDwgzU7Uj1bMMIVgz0oh2ioc/0q1Iktrt6I7zIm/jkUTLfgI492NJjK5N3hhULoQ9TXDa1NTeWxFa5YIBw=="
+}

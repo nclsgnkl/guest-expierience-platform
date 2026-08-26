@@ -59,20 +59,23 @@ final class FeaturePackages {
      * resolution, no Boundary and no JPA type; other Controls inject it.
      * {@code de.gxp.guest} owns no table either: it is the read model that
      * composes six other features' Controls, and spec §4 makes that its whole
-     * job.
+     * job. {@code de.gxp.auth} joined the list with auth-hardening T-05
+     * (2026-08-26): the credential row moved to {@code de.gxp.user}, and
+     * what remains — sessions, the throttle, the SPI adapters — is in
+     * memory by design, so the package owns no table any more.
      *
      * <p>Named here rather than inferred, deliberately: if the check simply
      * skipped any feature without an {@code .entity} directory, a feature
      * that had not been split yet would pass silently, which is the one thing
      * these guards exist to prevent.
      */
-    private static final List<String> FEATURES_WITHOUT_ENTITIES = List.of("text", "guest");
+    private static final List<String> FEATURES_WITHOUT_ENTITIES = List.of("text", "guest", "auth");
 
     /**
      * Feature packages that legitimately have NO {@code .boundary} package.
      * Read through {@link #featuresWithoutBoundaries()}. {@code de.gxp.text}
-     * is the only one: it exposes no HTTP surface at all, so it has no
-     * {@code *Resource} to hold. Every other feature answers the contract.
+     * exposes no HTTP surface at all, so it has no {@code *Resource} to hold.
+     * Every other feature answers the contract.
      */
     private static final List<String> FEATURES_WITHOUT_BOUNDARIES = List.of("text");
 

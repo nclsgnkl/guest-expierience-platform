@@ -48,19 +48,35 @@ public final class ApiErrors {
         return withStatus(413, code, message, null);
     }
 
+    /**
+     * {@code 429} with a {@code Retry-After} header (seconds) — the one
+     * header-carrying builder; used by the per-address login throttle
+     * (auth-hardening REQ-602, D3). Deliberately a whole number of seconds
+     * and nothing else: no address, no count, no bucket detail.
+     */
+    public static WebApplicationException tooManyRequests(String code, String message, long retryAfterSeconds) {
+        return new WebApplicationException(responseWith(429, code, message, null)
+                .header("Retry-After", Long.toString(retryAfterSeconds))
+                .build());
+    }
+
     public static WebApplicationException serviceUnavailable(String code, String message) {
         return withStatus(503, code, message, null);
     }
 
     private static WebApplicationException withStatus(int status, String code, String message,
             List<ApiErrorDetail> details) {
+        return new WebApplicationException(responseWith(status, code, message, details).build());
+    }
+
+    private static Response.ResponseBuilder responseWith(int status, String code, String message,
+            List<ApiErrorDetail> details) {
         ApiError error = new ApiError().code(code).message(message);
         if (details != null && !details.isEmpty()) {
             error.details(details);
         }
-        return new WebApplicationException(Response.status(status)
+        return Response.status(status)
                 .type(MediaType.APPLICATION_JSON)
-                .entity(error)
-                .build());
+                .entity(error);
     }
 }

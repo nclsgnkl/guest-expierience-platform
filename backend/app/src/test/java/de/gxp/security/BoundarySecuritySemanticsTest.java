@@ -6,10 +6,8 @@ import static org.hamcrest.Matchers.equalTo;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.Test;
 
-import de.gxp.api.model.LoginRequest;
-import de.gxp.auth.control.AuthControl;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 import io.quarkus.test.junit.QuarkusTest;
-import jakarta.inject.Inject;
 
 /**
  * Pins the three Quarkus security semantics the Boundary-annotation model of
@@ -47,9 +45,6 @@ import jakarta.inject.Inject;
  */
 @QuarkusTest
 class BoundarySecuritySemanticsTest {
-
-    @Inject
-    AuthControl authControl;
 
     /**
      * Read, never hardcoded: the seeded credential is whatever this instance
@@ -109,7 +104,7 @@ class BoundarySecuritySemanticsTest {
     /** Claim 3b — and admits a valid admin token. */
     @Test
     void rolesAllowedOnTheBoundaryMethodAdmitsAValidAdminToken() {
-        String token = authControl.login(new LoginRequest().password(seededAdminPassword)).getToken();
+        String token = ManagerFixtures.login(ManagerFixtures.USERNAME, seededAdminPassword);
         given().header("Authorization", "Bearer " + token)
                 .when().get("/test/boundary-security/admin-only")
                 .then()

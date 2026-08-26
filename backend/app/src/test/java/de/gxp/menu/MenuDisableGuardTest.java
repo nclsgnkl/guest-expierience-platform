@@ -10,6 +10,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-21 — invariant 3's affected-scope matrix (REQ-314) under the CEILING
@@ -23,10 +24,7 @@ import io.quarkus.test.junit.QuarkusTest;
 class MenuDisableGuardTest {
 
     private static String token() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private static Map<String, Object> card(int sortIndex, String target, String titleDe) {

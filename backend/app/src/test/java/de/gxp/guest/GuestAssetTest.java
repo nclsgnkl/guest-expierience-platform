@@ -22,6 +22,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-23 (REQ-422): guest asset delivery — own-room artwork served with the
@@ -65,10 +66,7 @@ class GuestAssetTest {
 
     @BeforeEach
     void seed() {
-        adminToken = given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        adminToken = ManagerFixtures.login();
         roomId = ((Number) entityManager
                 .createNativeQuery("select id from room where code = '1'")
                 .getSingleResult()).longValue();

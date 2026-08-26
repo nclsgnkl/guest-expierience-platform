@@ -17,6 +17,7 @@ import de.gxp.infrastructure.testsupport.DeviceFixtures;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-21 (REQ-411, REQ-425): the two-devices/two-rooms matrix. Each device
@@ -38,10 +39,7 @@ class RoomScopingTest {
 
     @BeforeEach
     void seedTwoRoomsWithStaysAndDevices() {
-        adminToken = given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        adminToken = ManagerFixtures.login();
         roomA = createRoom("SCOPE-A", "Zimmer A");
         roomB = createRoom("SCOPE-B", "Zimmer B");
         createStay(roomA, "Gast Alpha", "de");

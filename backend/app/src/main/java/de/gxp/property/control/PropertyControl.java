@@ -18,6 +18,7 @@ import de.gxp.api.model.LanguageCode;
 import de.gxp.api.model.LanguageOptionDto;
 import de.gxp.api.model.PropertyDto;
 import de.gxp.asset.control.AssetControl;
+import de.gxp.audit.control.AuditControl;
 import de.gxp.property.entity.Property;
 import de.gxp.property.entity.PropertyMapper;
 import de.gxp.text.control.TemplateControl;
@@ -37,9 +38,12 @@ public class PropertyControl {
     private final PropertyRepository repository;
     private final AssetControl assetControl;
     private final TemplateControl templateControl;
+    private final AuditControl auditControl;
 
-    PropertyControl(PropertyRepository repository, AssetControl assetControl, TemplateControl templateControl) {
+    PropertyControl(PropertyRepository repository, AssetControl assetControl, TemplateControl templateControl,
+            AuditControl auditControl) {
         this.repository = repository;
+        this.auditControl = auditControl;
         this.assetControl = assetControl;
         this.templateControl = templateControl;
     }
@@ -50,8 +54,10 @@ public class PropertyControl {
                 repository.languageOptions(), repository.appearanceOptions());
     }
 
+    /** Audited (REQ-621, D18): one row per field whose stored value actually changed. */
     @Transactional
     public PropertyDto update(PropertyDto dto) {
+        PropertyDto before = get();
         validate(dto);
         assetControl.requireKind(dto.getLogoAssetId(), AssetKind.LOGO, "logoAssetId");
         assetControl.requireKind(dto.getArtworkAssetId(), AssetKind.ARTWORK, "artworkAssetId");
@@ -61,8 +67,12 @@ public class PropertyControl {
                 PropertyMapper.toTranslations(dto, property.id),
                 PropertyMapper.toLanguageOptions(dto, property.id),
                 PropertyMapper.toAppearanceOptions(dto, property.id));
-        return PropertyMapper.toDto(property, repository.translations(),
+        // replaceChildren clears the persistence context: property is detached from here on — read only
+        PropertyDto after = PropertyMapper.toDto(property, repository.translations(),
                 repository.languageOptions(), repository.appearanceOptions());
+        auditControl.record(AuditControl.ACTION_UPDATE, AuditControl.ENTITY_PROPERTY, String.valueOf(property.id),
+                AuditControl.changedFields(before, after));
+        return after;
     }
 
     /**

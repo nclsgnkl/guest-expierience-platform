@@ -151,21 +151,28 @@ class ContractSecuredOperationsDeniedTest {
      * otherwise be invisible here AND in the parameterized test, which only
      * ever asserts about operations it managed to derive. On 2026-08-24 the
      * contract carried 42 operations: 36 secured, 6 anonymous (pairing ×3,
-     * manager login, health, ready).
+     * manager login, health, ready). Auth-hardening T-07 (2026-08-26) raised
+     * both floors by the five {@code manager-users} operations: 47 / 41;
+     * T-09 (2026-08-26) by the six second-factor operations: 53 / 47;
+     * T-11 (2026-08-26) by the audit read: 54 / 48; update-channel T-03
+     * (2026-08-26) by the four {@code manager-updates} operations: 58 / 52.
      */
     @Test
     void theDerivationCoversTheWholeSecuredSurface() throws Exception {
         int totalOperations = allOperations().size();
-        assertTrue(totalOperations >= 42,
-                "the contract declares fewer operations than it did on 2026-08-24 (" + totalOperations
-                        + " of 42) — a path or method disappeared, or the parse regressed. If the removal "
+        assertTrue(totalOperations >= 58,
+                "the contract declares fewer operations than it did on 2026-08-26 (" + totalOperations
+                        + " of 58) — a path or method disappeared, or the parse regressed. If the removal "
                         + "is intentional, lower this floor deliberately.");
         List<String> operationIds = securedOperations().map(SecuredOperation::operationId).toList();
-        assertTrue(operationIds.size() >= 36,
-                "the contract secures fewer operations than it did on 2026-08-24 (" + operationIds.size()
+        assertTrue(operationIds.size() >= 52,
+                "the contract secures fewer operations than it did on 2026-08-26 (" + operationIds.size()
                         + ") — if that is intentional, lower this floor deliberately: " + operationIds);
         for (String pinned : List.of("getGuestSession", "putGuestPreferences", "listDevices", "revokeDevice",
-                "changeManagerPassword", "getSystemInfo")) {
+                "changeManagerPassword", "getSystemInfo", "createUser", "deactivateUser", "resetUserPassword",
+                "resetUserSecondFactor", "enrollOwnSecondFactor", "confirmOwnSecondFactor",
+                "disableOwnSecondFactor", "regenerateOwnRecoveryCodes", "listAuditEntries",
+                "getUpdateStatus", "updateUpdateSettings", "applyUpdateNow", "checkForUpdateNow")) {
             assertTrue(operationIds.contains(pinned), pinned + " is no longer derived as a secured operation");
         }
     }

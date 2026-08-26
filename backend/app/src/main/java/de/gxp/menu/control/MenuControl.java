@@ -12,6 +12,7 @@ import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.GuestMenuItem;
 import de.gxp.api.model.MenuItemConfigEntryDto;
 import de.gxp.api.model.MenuItemDefinitionDto;
+import de.gxp.audit.control.AuditControl;
 import de.gxp.menu.entity.ActionCardConfig;
 import de.gxp.menu.entity.ActionCardConfigTranslation;
 import de.gxp.menu.entity.MenuItemConfig;
@@ -44,11 +45,19 @@ public class MenuControl {
     private final MenuRepository repository;
     private final RoomControl roomControl;
     private final TemplateControl templateControl;
+    private final AuditControl auditControl;
 
-    MenuControl(MenuRepository repository, RoomControl roomControl, TemplateControl templateControl) {
+    MenuControl(MenuRepository repository, RoomControl roomControl, TemplateControl templateControl,
+            AuditControl auditControl) {
         this.repository = repository;
         this.roomControl = roomControl;
         this.templateControl = templateControl;
+        this.auditControl = auditControl;
+    }
+
+    /** The audit entity id of a scope: {@code property} or the room id (design A4). */
+    private static String scopeId(Long roomId) {
+        return roomId == null ? AuditControl.PROPERTY_SCOPE : String.valueOf(roomId);
     }
 
     // ------------------------------------------------------------ catalogue
@@ -86,6 +95,8 @@ public class MenuControl {
         for (MenuItemConfigEntryDto entry : entries) {
             repository.persistConfig(MenuMapper.toEntity(entry, roomId), MenuMapper.toTranslations(entry));
         }
+        // recorded BEFORE the invariant checks below: a 409 rolls the row back with the change (REQ-624)
+        auditControl.record(AuditControl.ACTION_REPLACE, AuditControl.ENTITY_MENU_CONFIG, scopeId(roomId), null);
         // affected scopes (design's pinned algorithm): property change hits
         // the property scope and every room that may inherit it
         List<Long> affectedScopes = new ArrayList<>();
@@ -152,6 +163,7 @@ public class MenuControl {
         for (ActionCardDto card : cards) {
             repository.persistCard(MenuMapper.toEntity(card, roomId), MenuMapper.toTranslations(card));
         }
+        auditControl.record(AuditControl.ACTION_REPLACE, AuditControl.ENTITY_ACTION_CARDS, scopeId(roomId), null);
         // ceiling amendment rule 4 (invariant 2 extended): a property-scope
         // card set is also validated against every room that INHERITS it (no
         // own card rows) — a local room opt-out of the target strands the

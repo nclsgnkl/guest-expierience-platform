@@ -7,6 +7,7 @@ import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.AssetKind;
 import de.gxp.api.model.RoomDto;
 import de.gxp.asset.control.AssetControl;
+import de.gxp.audit.control.AuditControl;
 import de.gxp.property.control.PropertyControl;
 import de.gxp.room.entity.Room;
 import de.gxp.room.entity.RoomMapper;
@@ -26,11 +27,14 @@ public class RoomControl {
     private final RoomRepository repository;
     private final PropertyControl propertyControl;
     private final AssetControl assetControl;
+    private final AuditControl auditControl;
 
-    RoomControl(RoomRepository repository, PropertyControl propertyControl, AssetControl assetControl) {
+    RoomControl(RoomRepository repository, PropertyControl propertyControl, AssetControl assetControl,
+            AuditControl auditControl) {
         this.repository = repository;
         this.propertyControl = propertyControl;
         this.assetControl = assetControl;
+        this.auditControl = auditControl;
     }
 
     @Transactional
@@ -47,6 +51,7 @@ public class RoomControl {
         Room room = new Room();
         RoomMapper.apply(dto, room);
         repository.persist(room);
+        auditControl.record(AuditControl.ACTION_CREATE, AuditControl.ENTITY_ROOM, String.valueOf(room.id), null);
         return RoomMapper.toDto(room);
     }
 
@@ -63,8 +68,12 @@ public class RoomControl {
         if (sameCode != null && !sameCode.id.equals(room.id)) {
             throw duplicateCode(dto.getCode());
         }
+        RoomDto before = RoomMapper.toDto(room);
         RoomMapper.apply(dto, room);
-        return RoomMapper.toDto(room);
+        RoomDto after = RoomMapper.toDto(room);
+        auditControl.record(AuditControl.ACTION_UPDATE, AuditControl.ENTITY_ROOM, String.valueOf(room.id),
+                AuditControl.changedFields(before, after));
+        return after;
     }
 
     @Transactional
@@ -90,6 +99,7 @@ public class RoomControl {
         }
         repository.deleteRevokedDevicesOf(roomId); // revoked rows go with the room (REQ-408)
         repository.delete(room); // menu/card overrides cascade in the DB
+        auditControl.record(AuditControl.ACTION_DELETE, AuditControl.ENTITY_ROOM, String.valueOf(roomId), null);
     }
 
     /**

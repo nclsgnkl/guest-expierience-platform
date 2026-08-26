@@ -73,7 +73,10 @@ class ScheduledJobInventoryTest {
      * a timer and how often" — keep it in sync deliberately, never by
      * pasting whatever the failure message printed without reading it.
      *
-     * <p>Both jobs are daily at 02:00, expressed as a QUARTZ-style cron
+     * <p>Five jobs: three daily at 02:00 (the audit retention joined on
+     * 2026-08-26, auth-hardening T-14 / REQ-623) and, since update-channel
+     * T-12 (REQ-707/708), the hourly manifest check at minute 17 and the
+     * 15-minute desired-file reconcile — all expressed as a QUARTZ-style cron
      * (seconds minutes hours day-of-month month day-of-week —
      * {@code quarkus.scheduler.cron-type} defaults to {@code quartz},
      * verified against Quarkus 3.33.3.1). Cron rather than
@@ -81,8 +84,11 @@ class ScheduledJobInventoryTest {
      * process, and a building's power cut restarts the process.
      */
     private static final List<String> PINNED_INVENTORY = List.of(
+            "de.gxp.infrastructure.scheduler.AuditScheduler#pruneExpiredEntries cron=\"0 0 2 * * ?\"",
             "de.gxp.infrastructure.scheduler.AuthScheduler#purgeExpiredTokens cron=\"0 0 2 * * ?\"",
-            "de.gxp.infrastructure.scheduler.DeviceScheduler#sweepExpiredPairingRequests cron=\"0 0 2 * * ?\"");
+            "de.gxp.infrastructure.scheduler.DeviceScheduler#sweepExpiredPairingRequests cron=\"0 0 2 * * ?\"",
+            "de.gxp.infrastructure.scheduler.UpdateScheduler#checkForUpdate cron=\"0 17 * * * ?\"",
+            "de.gxp.infrastructure.scheduler.UpdateScheduler#reconcileDesiredUpdate cron=\"0 */15 * * * ?\"");
 
     /** A class holding a {@code @Scheduled} method may not be named like these. */
     private static final List<String> FORBIDDEN_SUFFIXES = List.of("Control", "Resource", "Repository");

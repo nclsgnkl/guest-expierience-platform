@@ -25,6 +25,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-20 (REQ-403..407, REQ-409): the full pairing lifecycle over the real
@@ -43,10 +44,7 @@ class PairingFlowTest {
     EntityManager entityManager;
 
     private static String adminToken() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private long seededRoomId() {

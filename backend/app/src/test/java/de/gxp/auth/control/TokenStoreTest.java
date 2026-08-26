@@ -48,20 +48,21 @@ class TokenStoreTest {
 
     @Test
     void issuedTokenSlidesAndReturnsTheNewExpiry() {
-        TokenStore.IssuedToken issued = store.issue();
+        TokenStore.IssuedToken issued = store.issue("admin");
         assertEquals(clock.instant().plusSeconds(600), issued.expiresAt());
 
         clock.advance(Duration.ofSeconds(500));
-        Instant slid = store.slide(TokenStore.sha256Hex(issued.rawToken()));
+        TokenStore.Session slid = store.slide(TokenStore.sha256Hex(issued.rawToken()));
         assertNotNull(slid);
         // the expiry moved forward: now + 600, not the original expiry
-        assertEquals(clock.instant().plusSeconds(600), slid);
-        assertTrue(slid.isAfter(issued.expiresAt()));
+        assertEquals(clock.instant().plusSeconds(600), slid.expiry());
+        assertTrue(slid.expiry().isAfter(issued.expiresAt()));
+        assertEquals("admin", slid.username(), "the session knows whose it is (REQ-612)");
     }
 
     @Test
     void slidingKeepsATokenAliveBeyondTheOriginalWindow() {
-        TokenStore.IssuedToken issued = store.issue();
+        TokenStore.IssuedToken issued = store.issue("admin");
         String hash = TokenStore.sha256Hex(issued.rawToken());
         for (int i = 0; i < 3; i++) {
             clock.advance(Duration.ofSeconds(500)); // each within the window
@@ -72,7 +73,7 @@ class TokenStoreTest {
 
     @Test
     void idledOutTokenIsRejectedAndDropped() {
-        TokenStore.IssuedToken issued = store.issue();
+        TokenStore.IssuedToken issued = store.issue("admin");
         String hash = TokenStore.sha256Hex(issued.rawToken());
         clock.advance(Duration.ofSeconds(601));
         assertNull(store.slide(hash));
@@ -82,7 +83,7 @@ class TokenStoreTest {
 
     @Test
     void storeNeverContainsTheRawToken() {
-        TokenStore.IssuedToken issued = store.issue();
+        TokenStore.IssuedToken issued = store.issue("admin");
         // the raw value is not a key: presenting it as if it were the stored
         // hash misses; only its SHA-256 hits (REQ-327: hashes only)
         assertNull(store.slide(issued.rawToken()));
@@ -96,20 +97,33 @@ class TokenStoreTest {
 
     @Test
     void removeKillsExactlyThatToken() {
-        TokenStore.IssuedToken keep = store.issue();
-        TokenStore.IssuedToken drop = store.issue();
+        TokenStore.IssuedToken keep = store.issue("admin");
+        TokenStore.IssuedToken drop = store.issue("admin");
         store.remove(TokenStore.sha256Hex(drop.rawToken()));
         assertNull(store.slide(TokenStore.sha256Hex(drop.rawToken())));
         assertNotNull(store.slide(TokenStore.sha256Hex(keep.rawToken())));
     }
 
     @Test
-    void clearKillsEveryToken() {
-        TokenStore.IssuedToken a = store.issue();
-        TokenStore.IssuedToken b = store.issue();
-        store.clear();
-        assertNull(store.slide(TokenStore.sha256Hex(a.rawToken())));
-        assertNull(store.slide(TokenStore.sha256Hex(b.rawToken())));
+    void removeAllOfKillsEverySessionOfThatUserAndNobodyElses() {
+        // REQ-611 / D13: a password change or deactivation hits ONE user
+        TokenStore.IssuedToken adminOne = store.issue("admin");
+        TokenStore.IssuedToken adminTwo = store.issue("admin");
+        TokenStore.IssuedToken other = store.issue("other");
+        store.removeAllOf("admin");
+        assertNull(store.slide(TokenStore.sha256Hex(adminOne.rawToken())));
+        assertNull(store.slide(TokenStore.sha256Hex(adminTwo.rawToken())));
+        TokenStore.Session survivor = store.slide(TokenStore.sha256Hex(other.rawToken()));
+        assertNotNull(survivor, "another user's session is not that credential");
+        assertEquals("other", survivor.username());
+        assertEquals(1, store.size());
+    }
+
+    @Test
+    void removeAllOfAnUnknownUserIsANoOp() {
+        store.issue("admin");
+        store.removeAllOf("nobody");
+        assertEquals(1, store.size());
     }
 
     /**
@@ -124,9 +138,9 @@ class TokenStoreTest {
      */
     @Test
     void purgeExpiredDropsIdledOutEntries() {
-        TokenStore.IssuedToken stale = store.issue();
+        TokenStore.IssuedToken stale = store.issue("admin");
         clock.advance(Duration.ofSeconds(700));
-        TokenStore.IssuedToken fresh = store.issue();
+        TokenStore.IssuedToken fresh = store.issue("admin");
         assertEquals(2, store.size(), "both entries are still in the map — nothing purges on issue any more");
 
         store.purgeExpired();
@@ -143,7 +157,7 @@ class TokenStoreTest {
      */
     @Test
     void anUnpurgedExpiredEntryIsStillRefusedAndDropped() {
-        TokenStore.IssuedToken issued = store.issue();
+        TokenStore.IssuedToken issued = store.issue("admin");
         clock.advance(Duration.ofSeconds(700));
         assertEquals(1, store.size(), "the expired entry is still in the map until something purges it");
 
@@ -153,7 +167,7 @@ class TokenStoreTest {
 
     @Test
     void rawTokensAreBase64UrlWithoutPadding() {
-        TokenStore.IssuedToken issued = store.issue();
+        TokenStore.IssuedToken issued = store.issue("admin");
         // 32 bytes -> 43 base64url chars, no '=', no '+', no '/'
         assertEquals(43, issued.rawToken().length());
         assertTrue(issued.rawToken().matches("[A-Za-z0-9_-]{43}"));

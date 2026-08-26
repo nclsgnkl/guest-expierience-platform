@@ -19,6 +19,7 @@ import de.gxp.api.model.DeviceDto;
 import de.gxp.api.model.DeviceUpdateRequest;
 import de.gxp.api.model.PairingCompleted;
 import de.gxp.api.model.PairingRequestCreated;
+import de.gxp.audit.control.AuditControl;
 import de.gxp.device.entity.Device;
 import de.gxp.device.entity.DeviceMapper;
 import de.gxp.device.entity.PairingRequest;
@@ -58,22 +59,24 @@ public class DeviceControl {
     private final RoomControl roomControl;
     private final String caPemPath;
     private final Clock clock;
+    private final AuditControl auditControl;
 
     /** Throttles the per-device last-seen write (REQ-413) — in-memory, like the token store. */
     private final ConcurrentHashMap<Long, Instant> lastSeenWriteByDeviceId = new ConcurrentHashMap<>();
 
     @Inject
     DeviceControl(DeviceRepository deviceRepository, PairingRequestRepository pairingRequestRepository,
-            RoomControl roomControl,
+            RoomControl roomControl, AuditControl auditControl,
             @ConfigProperty(name = "gxp.tls.ca-pem-path", defaultValue = "/tls/ca.pem") String caPemPath) {
-        this(deviceRepository, pairingRequestRepository, roomControl, caPemPath, Clock.systemUTC());
+        this(deviceRepository, pairingRequestRepository, roomControl, auditControl, caPemPath, Clock.systemUTC());
     }
 
     DeviceControl(DeviceRepository deviceRepository, PairingRequestRepository pairingRequestRepository,
-            RoomControl roomControl, String caPemPath, Clock clock) {
+            RoomControl roomControl, AuditControl auditControl, String caPemPath, Clock clock) {
         this.deviceRepository = deviceRepository;
         this.pairingRequestRepository = pairingRequestRepository;
         this.roomControl = roomControl;
+        this.auditControl = auditControl;
         this.caPemPath = caPemPath;
         this.clock = clock;
     }
@@ -232,6 +235,8 @@ public class DeviceControl {
                 ? "Kiosk " + deviceRepository.roomCodeOf(request.getRoomId())
                 : request.getDeviceName();
         pairing.confirmedAt = now;
+        // the device row does not exist until the kiosk polls — the pairing request id is the reference
+        auditControl.record(AuditControl.ACTION_CONFIRM, AuditControl.ENTITY_DEVICE, String.valueOf(pairing.id), null);
     }
 
     // ------------------------------------------------------------ devices (manager)
@@ -250,6 +255,7 @@ public class DeviceControl {
         }
         Device device = require(deviceId);
         device.name = request.getName();
+        auditControl.record(AuditControl.ACTION_RENAME, AuditControl.ENTITY_DEVICE, String.valueOf(deviceId), null);
         return DeviceMapper.toDto(device, deviceRepository.roomCodeOf(device.roomId));
     }
 
@@ -260,6 +266,7 @@ public class DeviceControl {
         if (device.revokedAt == null) {
             device.revokedAt = clock.instant();
         }
+        auditControl.record(AuditControl.ACTION_REVOKE, AuditControl.ENTITY_DEVICE, String.valueOf(deviceId), null);
     }
 
     // ------------------------------------------------------------ auth-internal

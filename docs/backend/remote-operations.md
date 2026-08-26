@@ -1,6 +1,8 @@
 # Specification: Remote Operations
 
-**Status:** Proposed — not ratified, nothing here is approved for implementation
+**Status:** Ratified 2026-08-25 — constitution v1.8.0 carries the principle-4
+amendment; every §10 item is decided in §12 (owner answers and delegated
+decisions). Parts A–D enter the pipeline in the §11 order.
 **Author:** drafted 2026-08-25 with the project owner
 **Governs:** how a deployed instance is patched, and how a manager reaches it
 from outside the building
@@ -352,6 +354,17 @@ Requirements:
    be possible for one instance to receive another's traffic, nor to enumerate
    siblings.
 3. **The originating client address must reach the application** — see A1.4.
+
+   **Relay obligation (binding, 2026-08-26, from the auth-hardening review):**
+   the relay MUST strip every client-supplied `Forwarded`, `X-Forwarded-*`
+   and `X-Forwarded-Trusted-Proxy` header and set **exactly one**
+   `Forwarded: for=<client-ip>` element — it never appends its element to
+   what the client sent. The application (Quarkus 3.33.3.1, pinned by
+   `TrustedProxyLoginTest`) honours the **first** `for=` element, so an
+   appending relay would let the remote client choose its own throttle
+   bucket, audit address and second-factor attribution. The element must be
+   an IP literal: a non-IP token (RFC 7239's `_hidden`) is answered
+   `400 unattributable-address` by the application.
 4. **Transport-level limits belong on the relay, because they need no
    plaintext**: connections per source address, new-connection rate, bandwidth,
    and an operator blocklist. These are worth having and cost nothing, but they
@@ -458,3 +471,39 @@ Four features in dependency order, each small enough to survive `04_analyze`.
 
 `auth-hardening` is worth starting even if the rest is deferred indefinitely:
 every requirement in it improves the product on a LAN-only deployment too.
+
+---
+
+## 12. Decisions — 2026-08-25
+
+The owner answered items 2, 3, 8 and 12 directly and delegated the rest to
+the lead ("decide as much as possible yourself"). Every row below is binding
+for the four features in §11; a planner that disagrees reopens the row
+explicitly instead of working around it.
+
+| # | Decision | By |
+|---|---|---|
+| 1 | **Ratified as constitution v1.8.0.** Principle 4's fourth bullet rewritten; survival invariant (§2) and "remote access is separately sold" (§7) added as bullets of the same principle. REQ-326 reopened there too | lead |
+| 2 | **No roles beyond `admin` for now.** Any admin can add users; every account carries role `admin`. The role attribute stays on the identity so a later role costs no mechanism change | owner |
+| 3 | **Second factor is not asked on the LAN.** It is required for every login that arrives through the trusted proxy (the relay), which is the same transport-level attribution A1.4 already needs — so this adds no second signal and no "remote mode". A user without an enrolled factor **cannot log in through the proxy at all** (a clear, non-oracle error) and enrolls on the LAN first | owner + lead |
+| 4 | **Recovery codes** (a batch of single-use codes, shown once, stored hashed) **plus the LAN path**: because the LAN never asks for the factor, a user who lost the device logs in on site and re-enrolls; another admin can also reset a user's factor. A site visit is therefore only ever needed when *nobody* can reach the LAN, which is the same situation as a dead box | lead |
+| 5 | **Audit retention 365 days**, pruned by a daily job in `de.gxp.infrastructure.scheduler` (existing 02:00 pattern, pinned in `ScheduledJobInventoryTest`). No size cap — one row per changed field on a box with one manager is small; revisit if measurement says otherwise | lead |
+| 6 | **Instance identity = an Ed25519 key pair generated on the box at first start** (JDK `KeyPairGenerator("Ed25519")`, no dependency), kept on the `gxp-tls` volume beside the CA. The public key *is* the identity; the opaque instance **name** (`<id>.props.<our-domain>`) is assigned by our enrollment service when the box first enrolls and bound to that key. Hardware replacement = restore the volume (it is already part of the backup); a lost key = re-enroll under a new name, with the old name revoked by us. A box that never enrolls has a key and no name, and works fully | lead |
+| 7 | **§5's recommendation is ratified**: the DNS credential lives only with us; the box asks a challenge-publishing endpoint of ours to publish `_acme-challenge.<its own name>`, authenticated by its instance key. One endpoint, no token on any box | lead |
+| 8 | **Automatic updates are on by default**, applied at a manager-chosen time of day (default **04:00** local property time — no guest reads house rules then), and the manager can **disable** automatic updates, **change the time**, and **start an available update now**. All three are backend functionality under `/api/manager/**`; the manager screen is out of scope. Consent model: automatic for the security channel; the manual trigger exists so a manager can pull an update early, not so they can block one indefinitely — a disabled auto-update still surfaces "an update is available" in the API | owner + lead |
+| 9 | **Refuse-and-roll-back.** The updater dumps the database (`pg_dump`) before starting the new image; if the new image fails its health check — which includes Flyway having completed — the previous image is restarted. Postgres DDL is transactional, so a failed migration leaves the schema at the previous version and the old image is compatible with it; the dump is the belt for the case where a migration *succeeded* but the app is unhealthy for another reason and the old image cannot read the new schema. An update is never applied partially | lead |
+| 10 | **We operate the relay**, best effort, no availability target for the first release — §2 says an outage costs remote access and nothing else, and remote access is sold as a convenience. Revisit with the first paying remote customer | lead |
+| 11 | **No client certificates at the relay for now.** Recorded as the next hardening step if credential-stuffing through the relay is ever observed; the owner consistently defers hardening whose deployment context is unknown, and A1–A3 already carry the threat model here | lead |
+| 12 | **Ignored** — no external API is integrated by this specification. iCal stays the recommendation for whenever a booking import is planned | owner |
+
+**Two derived clarifications**
+
+- **D5 ("no `if (remote)`") is reconciled with A1.4 and item 3 as follows:**
+  the application consumes exactly one transport-level fact, the attributed
+  client address and whether it came through the configured trusted proxy.
+  That fact drives the throttle bucket and the second-factor requirement,
+  and nothing else — no separate endpoints, no second token type, no
+  different authorization. This wording is now in constitution v1.8.0.
+- **QR rendering** stays out of the backend: enrollment returns the
+  `otpauth://` URI and the secret; whoever builds the manager screen renders
+  the QR client-side or shows the text. No dependency enters `pom.xml`.

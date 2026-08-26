@@ -15,6 +15,7 @@ import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-19 (REQ-306, REQ-307, REQ-311, REQ-321): the seeded catalogue equals the
@@ -30,10 +31,7 @@ class MenuCatalogueAndConfigTest {
     EntityManager entityManager;
 
     private static String token() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     @Test

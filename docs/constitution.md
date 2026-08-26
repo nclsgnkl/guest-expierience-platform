@@ -1,7 +1,41 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.8.0 | **Last amended:** 2026-08-26
+**Version:** 1.8.2 | **Last amended:** 2026-08-26
 
+> **1.8.2** — accuracy correction, not a new approval (the v1.7.1 precedent):
+> *"A password change **immediately invalidates every active bearer
+> token**"* was written for one shared credential. With named accounts
+> (`auth-hardening`, REQ-611) a password change, reset or deactivation drops
+> **that user's** tokens — every other user's sessions survive, which is the
+> whole point of per-user accounts. The sentence below is reworded; the
+> intent (the old credential never survives into another idle window) is
+> unchanged.
+>
+> **1.8.1** — **principle 4's fourth consequence turns from a statement of
+> fact into a decision** (owner decision 2026-08-25, ratifying
+> `docs/backend/remote-operations.md` §10 item 1). *"It cannot be patched
+> centrally"* was written as helplessness and the whole
+> dependency-minimisation posture was derived from it. It now reads:
+> instances **are patched through an outbound, signed update channel** — the
+> box asks, nothing ever connects to the box, the signature is verified
+> against a key compiled into the image before anything is applied, and the
+> component that applies the update lives *beside* the application, not in
+> it. **The dependency-minimisation posture stays regardless**: a dependency
+> is still code we must keep updating in the field, only now there is a
+> channel to do it through, which makes the channel itself the
+> highest-value target associated with the product. Two further bullets are
+> added under the same principle, both derived from the remote-operations
+> specification: the **survival invariant** (the product keeps working when
+> everything we operate is gone — guest screens and the LAN manager UI never
+> depend on the relay, the update server, or our company) and the rule that
+> **remote access is a separately sold, optional capability** the
+> application never branches on. Also recorded here: the owner reopened
+> **REQ-326** — login throttling returns, per source address, never global
+> (the reason for the 2026-08-24 deferral, "a LAN threat model", expires the
+> moment the endpoint is internet-reachable). A major-feeling minor, the
+> v1.4.0 precedent: a previously approved sentence is rewritten, nothing
+> approved is contradicted in spirit.
+>
 > **1.8.0** — the "nothing scrolls" constraint now states its **scope**
 > (owner decision 2026-08-26, wording approved verbatim). A **clarification
 > with real consequences**, recorded as a minor rather than a patch because it
@@ -184,11 +218,32 @@
      devices, and possibly with neighbours. Anything reachable over HTTP is
      reachable by anyone on that network — "not linked in the UI" is never a
      protection.
-   - **It cannot be patched centrally.** Instances run in buildings we may have
-     no access to, so an unpatched vulnerability can persist for a long time.
-     Prefer fewer dependencies, and prefer platform features over libraries. A
-     dependency is not just code you add, it is code you must keep updating in
-     the field.
+   - **Instances are patched through an outbound, signed update channel; the
+     dependency-minimisation posture stays regardless** (rewritten in v1.8.1
+     — this bullet previously read *"It cannot be patched centrally"*).
+     Instances run in buildings we may have no access to, so the only way a
+     fix reaches them is a channel the box itself polls: outbound only,
+     nothing ever connects to the box, every artifact verified against a
+     signing key compiled into the image *before* it is applied, signing done
+     offline so a compromised update server can serve nothing a box accepts,
+     and the updater living beside the application (it cannot replace its own
+     container) with rollback on a failed health check. Still: prefer fewer
+     dependencies, and prefer platform features over libraries. A dependency
+     is not just code you add, it is code you must keep updating in the
+     field — the channel makes that possible, not free.
+   - **The product keeps working when everything we operate is gone** (added
+     in v1.8.1). Guest screens and the manager UI on the LAN never depend on
+     the relay, the update server, the internet or our company's continued
+     existence; what any central component adds is convenience, never
+     function. A design that breaks that row is wrong, not the invariant.
+   - **Remote access is an optional, separately sold capability** (added in
+     v1.8.1). A box must be fully functional having never enrolled, enrollment
+     must be possible later without a reinstall and reversible without loss,
+     and security updates must never be gated behind it. The application
+     never branches on where a request came from — the single transport-level
+     fact it may consume is the attributed client address (trusted only from
+     the configured proxy), which feeds the per-address login budget and the
+     second-factor requirement, and nothing else.
 5. **Components reference semantic design tokens only.** Never a raw hex value,
    never a raw pixel size. Raw values live once, in the token layer
    (`docs/design/tokens.md`), which is what makes theming and per-property
@@ -279,8 +334,29 @@
   Control. **Password lifecycle (v1.5.0):** the environment variable seeds the
   password on **first start only**; from then on it lives hashed in Postgres
   and the manager changes it through an authenticated manager-UI endpoint. A
-  password change **immediately invalidates every active bearer token** — the
-  old credential must never survive into another idle window.
+  password change **immediately invalidates every active bearer token of
+  that user** (v1.8.2: per user, not per instance) — the old credential must
+  never survive into another idle window.
+  **Authentication hardening (v1.8.1, owner decisions 2026-08-25 — supersedes
+  the "one shared admin password" and "no per-user audit trail" wording above
+  as the `auth-hardening` feature ships):** the single credential row becomes
+  **named user accounts**, all with role `admin` for now (no further roles;
+  any admin may create, deactivate and reset other accounts; the first-start
+  seed creates the first account from the environment and still refuses to
+  start without it); deactivation drops that user's tokens and takes effect
+  on the next request. **Login is throttled per attributed source address,
+  never globally** — an exhausted budget rejects *that address* before any
+  PBKDF2 derivation and never locks an account; the attributed address is
+  the socket peer unless the request arrives from the configured trusted
+  proxy, whose forwarded address is then honoured (and from nobody else).
+  **A second factor (RFC 6238 TOTP, JDK `Mac` only, recovery codes stored
+  hashed) is required for every login that arrives through the trusted
+  proxy and is never asked on the LAN** — a user without an enrolled factor
+  cannot log in remotely at all, and enrolls on the LAN; the LAN path is the
+  documented recovery route. **An append-only audit trail** records who,
+  when, from which address, which entity and which field — and **never a
+  value** of a guest-sensitive field (principle 3); retention is 365 days,
+  pruned by the daily scheduler.
 - **The manager UI enters the Quarkus artifact via a plain Maven copy step**
   of the built Angular `dist` into `META-INF/resources` (v1.5.0, owner
   decision). Quinoa is rejected: a Quarkiverse community extension is one more

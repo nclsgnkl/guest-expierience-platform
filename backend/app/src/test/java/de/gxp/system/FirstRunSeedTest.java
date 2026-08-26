@@ -10,12 +10,13 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-24 (REQ-334): a fresh database + GXP_ADMIN_PASSWORD yields a USABLE
  * instance with zero manual database work — neutral property, offered
  * languages/appearances with defaults, the 5-item catalogue, one default
- * room, and a seeded admin credential (the login below IS the credential
+ * room, and a seeded first account (the login below IS the credential
  * proof). Everything is asserted through the real API, authenticated the
  * way a first manager session would be.
  */
@@ -24,13 +25,8 @@ class FirstRunSeedTest {
 
     @Test
     void aFreshInstanceIsCompletelyUsable() {
-        // 1. the seeded credential logs in (AdminPasswordSeeder ran on boot)
-        String token = given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200)
-                .body("token", notNullValue())
-                .extract().path("token");
+        // 1. the seeded account logs in (the user feature's FirstUserSeeder ran on boot)
+        String token = ManagerFixtures.login();
 
         // 2. neutral property with the pinned defaults (nothing property-
         //    specific — principle 1: placeholder copy the manager edits)

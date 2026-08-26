@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "channel": "stable",
+  "version": "1.0.2",
+  "artifactRef": "ghcr.io/example/gxp-backend:1.0.2",
+  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "publishedAt": "2026-09-08T10:00:00Z",
+  "trustedKeys": "MCowBQYDK2VwAyEA5FpWGmImNw5uU1BFq8aZwU7dtQP19l1r1832hII8HyQ="
+}

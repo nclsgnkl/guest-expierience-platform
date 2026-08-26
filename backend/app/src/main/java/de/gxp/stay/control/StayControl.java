@@ -6,6 +6,7 @@ import java.util.List;
 import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ApiErrorDetail;
 import de.gxp.api.model.StayDto;
+import de.gxp.audit.control.AuditControl;
 import de.gxp.property.control.PropertyControl;
 import de.gxp.room.control.RoomControl;
 import de.gxp.stay.entity.Stay;
@@ -26,11 +27,14 @@ public class StayControl {
     private final StayRepository repository;
     private final RoomControl roomControl;
     private final PropertyControl propertyControl;
+    private final AuditControl auditControl;
 
-    StayControl(StayRepository repository, RoomControl roomControl, PropertyControl propertyControl) {
+    StayControl(StayRepository repository, RoomControl roomControl, PropertyControl propertyControl,
+            AuditControl auditControl) {
         this.repository = repository;
         this.roomControl = roomControl;
         this.propertyControl = propertyControl;
+        this.auditControl = auditControl;
     }
 
     @Transactional
@@ -47,6 +51,7 @@ public class StayControl {
         Stay stay = new Stay();
         StayMapper.apply(dto, stay);
         repository.persist(stay);
+        auditControl.record(AuditControl.ACTION_CREATE, AuditControl.ENTITY_STAY, String.valueOf(stay.id), null);
         return StayMapper.toDto(stay);
     }
 
@@ -61,13 +66,18 @@ public class StayControl {
         validate(dto);
         roomControl.lockForStayWrite(dto.getRoomId());
         requireNoOverlap(dto, stay.id);
+        StayDto before = StayMapper.toDto(stay);
         StayMapper.apply(dto, stay);
-        return StayMapper.toDto(stay);
+        StayDto after = StayMapper.toDto(stay);
+        auditControl.record(AuditControl.ACTION_UPDATE, AuditControl.ENTITY_STAY, String.valueOf(stay.id),
+                AuditControl.changedFields(before, after));
+        return after;
     }
 
     @Transactional
     public void delete(Long stayId) {
         repository.delete(require(stayId));
+        auditControl.record(AuditControl.ACTION_DELETE, AuditControl.ENTITY_STAY, String.valueOf(stayId), null);
     }
 
     /**
