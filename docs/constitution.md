@@ -1,7 +1,19 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.7.1 | **Last amended:** 2026-08-25
+**Version:** 1.8.0 | **Last amended:** 2026-08-26
 
+> **1.8.0** — the "nothing scrolls" constraint now states its **scope**
+> (owner decision 2026-08-26, wording approved verbatim). A **clarification
+> with real consequences**, recorded as a minor rather than a patch because it
+> permits something the previous wording read as forbidden: the rule binds the
+> *document*, and a bounded sub-component may scroll its own content. It was
+> written for full-screen routes and had been read — by me, in planning
+> `modular-menu-catalogue` — as a component-level ban, which produced a
+> recommendation against a scrolling overflow popover on constitutional
+> grounds that did not exist. The owner corrected the reading and chose the
+> popover. Nothing about page-level overflow changes, and `overflow: hidden`
+> at screen level stays forbidden.
+>
 > **1.7.1** — accuracy correction, not a new approval: the backend constraint
 > said the feature boundary is held by **three** dependency-free architecture
 > tests and named three. It has been **five** since the scheduler work of
@@ -322,6 +334,11 @@
   fix), never by `overflow: hidden`, which hides the regression instead of
   preventing it. Checkable at review time: on every route,
   `scrollWidth <= clientWidth` and `scrollHeight <= clientHeight`.
+  **The scope is the document** (v1.8.0): no route may produce a page-wide
+  scrollbar. A bounded sub-component — an overlay panel, a popover, a list
+  inside a card — may scroll its own content, as long as it stays inside the
+  viewport and therefore never grows the document. `overflow: hidden` at
+  screen level remains forbidden.
 - **Approved dependencies:** `@angular/cdk` (overlay, dialog, menu, focus trap,
   a11y — used unstyled), `@ng-icons/core` + `@ng-icons/phosphor-icons`
   (Phosphor icon set), **`vitest` + `jsdom`** (unit tests — the Angular CLI
