@@ -1,7 +1,24 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.8.3 | **Last amended:** 2026-08-26
+**Version:** 1.9.0 | **Last amended:** 2026-08-27
 
+> **1.9.0** — owner decision 2026-08-27, wording approved verbatim before it
+> was written. The kiosk cache clause was an absolute prohibition on caching
+> door codes, key-box codes, alarm codes and WiFi passwords. It is replaced by
+> a threat-model boundary: the cache may hold what the manager deliberately put
+> on a guest-facing screen, and must never hold anything that extends reach
+> beyond the device. Rationale, in the owner's terms: a value displayed to the
+> guest can be photographed or written down, so purging it later removes
+> nothing an attacker has — while withholding the WiFi password or the door
+> code from the cache denies them to exactly the guest who needs them when the
+> backend is unreachable. What we secure is what we control; physical loss of a
+> device is disclosed to the operator, not defended against speculatively. The
+> same amendment concretises stale rendering: a prolonged loss of contact
+> escalates the discreet staleness hint to a prominent banner, for
+> **operational** reasons — on a box with no remote access a guest complaint is
+> the only alerting channel there is. The threshold is deliberately not fixed
+> here; it lives with the feature that implements it.
+>
 > **1.8.3** — accuracy correction, not a new approval: principle 4 said the
 > update signature is verified against *"a signing key compiled into the
 > image"*. What shipped (`update-channel`, architect finding A-1) is a
@@ -386,11 +403,35 @@
   (→ core `quarkus-scheduler`; this box needs neither persistence nor
   cluster coordination for its jobs), any mapping framework / Lombok /
   utility libraries (→ plain hand-written Java).
-- **The kiosk's last-known-good cache never holds guest-sensitive values** —
-  no door codes, key-box codes, alarm codes or WiFi passwords, ever, because
-  the kiosk stands in a guest-accessible room (principle 3 applied to
-  persistence, not just logs). The kiosk may render its last successful
-  response when the backend is unreachable, with a discreet staleness hint.
+- **The kiosk's last-known-good cache may hold any guest-facing content the
+  current guest is entitled to see** (amended 2026-08-27) — the WiFi password,
+  door and key-box codes, alarm codes and host contact details included. The
+  boundary is **what the manager deliberately chose to display**: a value the
+  property put on a guest-facing screen is, by that act, a value the guest may
+  read, photograph or write down. Caching it adds no exposure, and purging it
+  removes none. The former absolute prohibition bought nothing and contradicted
+  principle 3's own statement that the app deliberately holds exactly these
+  values. The kiosk may render its last successful response when the backend is
+  unreachable, with a discreet staleness hint. After a prolonged loss of
+  contact that hint escalates to a prominent banner naming the situation and
+  directing the guest to their host; content keeps rendering, because a guest
+  whose backend is unreachable is precisely the guest who still needs the door
+  code. The escalation is an **operational** requirement, not a security one —
+  on a box with no remote access, a guest complaint is the only alerting
+  channel that exists. The threshold itself lives with the feature that
+  implements it, not here.
+- **What the cache must never hold is anything that extends reach beyond the
+  device itself** — no device token, session token, key material or any
+  credential that could address the backend, another room, or another guest's
+  data. That is the line, and it is not negotiable: a stolen kiosk may expose
+  what its own room's guest already knew, and must never become a key to
+  anything else.
+- **Physical loss of a kiosk is an operator responsibility, and the product
+  discloses it.** A missing device is assumed to expose every value it last
+  held; the operator documentation states that door, key-box and alarm codes
+  are to be rotated when a device goes missing. We implement the controls we
+  own and disclose the ones we do not — we do not build speculative defences
+  against the physical world.
 - **Second frontend: the manager UI is a second Angular app**
   (`backend/manager-ui/`), shipped inside the Quarkus artifact,
   dependency-lean: no component library, plain CSS, native form controls. The
