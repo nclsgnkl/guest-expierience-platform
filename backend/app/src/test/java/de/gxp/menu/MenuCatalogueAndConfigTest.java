@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -16,6 +17,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import de.gxp.infrastructure.testsupport.ManagerFixtures;
+import de.gxp.infrastructure.testsupport.MenuFixtures;
 
 /**
  * T-19 (REQ-306, REQ-307, REQ-311, REQ-321): the seeded catalogue equals the
@@ -23,6 +25,11 @@ import de.gxp.infrastructure.testsupport.ManagerFixtures;
  * inheritance under the CEILING rule (design amendment 2026-08-19: a room can
  * only offer what the property offers), and the NULL-scope uniqueness holds
  * in the DB.
+ *
+ * <p>Since sidebar-catalogue-overflow the catalogue is 13 rows: the five real
+ * kiosk sections plus V10's eight disposable placeholder fixtures. The
+ * {@code @AfterEach} restores D5's property-scope opt-out rows, which this
+ * class's whole-set config replacements delete (02-design.md §3.3).
  */
 @QuarkusTest
 class MenuCatalogueAndConfigTest {
@@ -34,12 +41,22 @@ class MenuCatalogueAndConfigTest {
         return ManagerFixtures.login();
     }
 
+    /**
+     * Every test here replaces the property-scope config, which deletes V10's
+     * opt-out rows. Restore them so the shared database is handed on in the
+     * state the migration left it (02-design.md §3.3).
+     */
+    @AfterEach
+    void restoreCatalogueOptOut() {
+        MenuFixtures.restoreCatalogueOptOut(entityManager);
+    }
+
     @Test
-    void catalogueEqualsTheFiveFrontendTuples() {
+    void catalogueListsTheFiveRealSectionsFirstThenTheFixtures() {
         given().header("Authorization", "Bearer " + token())
                 .when().get("/api/manager/menu/catalogue")
                 .then().statusCode(200)
-                .body("$", hasSize(5))
+                .body("$", hasSize(13))
                 .body("[0].key", equalTo("home"))
                 .body("[0].route", equalTo(""))
                 .body("[0].defaultIcon", equalTo("phosphorHouse"))

@@ -67,6 +67,26 @@ public class DevDataSeeder {
                     "standby_headline", "{property.name}",
                     "standby_message", "Welcome"));
 
+    /**
+     * The placeholder catalogue keys {@code V10__catalogue_expansion.sql}
+     * introduces. The migration writes them as property-scope
+     * {@code enabled = false} rows (owner decision D5, REQ-908) so a release
+     * never puts new sections on a running property's guest screens behind the
+     * manager's back; {@code %dev} turns them straight back on, so overflow,
+     * the popover and promotion are the DEFAULT developer and review
+     * experience instead of something that must be configured first
+     * (REQ-906, 02-design.md §3.4).
+     *
+     * <p>An explicit key list, deliberately NOT a join on
+     * {@code introduced_release}: that column stays inert (D5's rejected
+     * alternative). These rows are disposable fixtures — see the migration's
+     * header; this constant and {@code MenuFixtures} are the only other places
+     * a key may appear.
+     */
+    private static final List<String> CATALOGUE_FIXTURE_KEYS = List.of(
+            "wlan", "anreise", "hausordnung", "muell",
+            "aerztliches", "parken", "gastronomie", "aktivitaeten");
+
     /** sortIndex, icon, targetKey, de title, de description, en title, en description. */
     private record Card(int sortIndex, String icon, String targetKey,
             String titleDe, String descriptionDe, String titleEn, String descriptionEn) {
@@ -170,7 +190,24 @@ public class DevDataSeeder {
                     .setParameter("standbyMessage", fields.get("standby_message"))
                     .executeUpdate();
         }
+        enableCatalogueFixtures();
         seedActionCards();
+    }
+
+    /**
+     * REQ-906: flip V10's property-scope opt-out rows to {@code enabled = true}.
+     * Runs only inside {@link #seedIfMissing()}'s {@code devDeviceExists()}
+     * early return, so the seeder keeps its stated contract — never overwrite
+     * what a developer changed since. Recorded consequence: a developer whose
+     * dev database already carries the dev device sees the fixtures disabled
+     * until the Dev Services volume is dropped or the rows are flipped through
+     * the manager API.
+     */
+    private void enableCatalogueFixtures() {
+        entityManager.createNativeQuery("update menu_item_config set enabled = true"
+                + " where room_id is null and menu_item_key in (:keys)")
+                .setParameter("keys", CATALOGUE_FIXTURE_KEYS)
+                .executeUpdate();
     }
 
     /** Property-scope cards, only when none exist (0 cards is a valid config). */

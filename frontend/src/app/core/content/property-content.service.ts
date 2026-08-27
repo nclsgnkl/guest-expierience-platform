@@ -32,8 +32,13 @@ import type {
  *     every consumer of the throwing signals behind this.
  *   - `branding` — nullable (an invalid wire brand was rejected at the
  *     boundary, REQ-512); `App` applies it only when present.
+ *   - `locale` — the active language's `Intl` locale, resolved from the
+ *     property's OWN offered options (REQ-925/926). It lives here because it
+ *     *is* language resolution, which this service already owns, and because
+ *     having it here is what keeps `SidebarComponent` a pure input-driven
+ *     view rather than a consumer of content.
  *
- * `settingsConfig()`/`property()` **throw when nothing is loaded**: every
+ * `settingsConfig()`/`property()`/`locale()` **throw when nothing is loaded**: every
  * route that renders them sits behind the guards (pairing/connection screens
  * deliberately read no property data), so a throw here is a routing bug
  * surfacing loudly, not a state to design around.
@@ -58,6 +63,25 @@ export class PropertyContentService {
   readonly property: Signal<ResolvedPropertyConfig> = computed(() =>
     resolveProperty(requireConfig(this.raw()), this.preferences.language()),
   );
+
+  /**
+   * The active language's `Intl` locale — `'de-DE'`, not `'de'` — taken from
+   * the property's own option list, falling back to the bare language code
+   * when the property offers no matching entry (REQ-925). Re-runs on a
+   * language switch and fetches nothing: it reads data already held
+   * (REQ-926).
+   *
+   * `StalenessPillComponent` and `StatusBarComponent` still perform this
+   * lookup inline; moving them onto this signal is a recorded follow-up
+   * (02-design.md §11), deliberately not done here.
+   */
+  readonly locale: Signal<string> = computed(() => {
+    const language = this.preferences.language();
+    return (
+      requireConfig(this.raw()).settingsConfig.languages.find((option) => option.code === language)
+        ?.locale ?? language
+    );
+  });
 
   /**
    * Resolves a `targetSectionId` (e.g. an `ActionCard`'s) to the route the

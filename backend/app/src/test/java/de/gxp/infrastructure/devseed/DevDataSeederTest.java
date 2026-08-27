@@ -63,9 +63,12 @@ class DevDataSeederTest {
     @Inject
     EntityManager entityManager;
 
+    private static final String PROPERTY_SCOPE_ENABLED =
+            "select count(*) from menu_item_config where room_id is null and enabled = true";
+
     @Test
     void seedsExactlyOneAuthenticatingDeviceAndTheExampleContent() {
-        assertEquals(1L, count("select count(*) from device"),
+        assertEquals(1L, scalar("select count(*) from device"),
                 "the dev seed must create exactly one device");
 
         given().header("Authorization", "Bearer " + DevDataSeeder.DEV_DEVICE_TOKEN)
@@ -76,7 +79,10 @@ class DevDataSeederTest {
                 .body("property.brand.primary", equalTo("#f45aa8"))
                 .body("property.brand.primaryDeep", equalTo("#cc49af"))
                 .body("property.brand.secondary", equalTo("#8a5cf6"))
-                .body("menu.items", hasSize(5))
+                // REQ-906: the whole catalogue, V10's placeholder fixtures
+                // included — %dev flips their property-scope opt-out rows on,
+                // so overflow and the popover are the default dev experience.
+                .body("menu.items", hasSize(13))
                 .body("standby.headline.de", equalTo("Meine Unterkunft"));
 
         given().header("Authorization", "Bearer " + DevDataSeeder.DEV_DEVICE_TOKEN)
@@ -92,18 +98,49 @@ class DevDataSeederTest {
 
     @Test
     void reseedingIsAFullNoOp() {
-        long devices = count("select count(*) from device");
-        long stays = count("select count(*) from stay");
-        long cards = count("select count(*) from action_card_config");
+        long devices = scalar("select count(*) from device");
+        long stays = scalar("select count(*) from stay");
+        long cards = scalar("select count(*) from action_card_config");
+        long enabledConfigs = scalar(PROPERTY_SCOPE_ENABLED);
 
-        QuarkusTransaction.requiringNew().run(seeder::seedIfMissing);
+        // Arrange a developer turning one section off after the first seed.
+        // Without it this case could not fail: enableCatalogueFixtures() is an
+        // idempotent UPDATE … SET enabled = true, so the count below is
+        // identical whether or not it ran. The row is chosen key-free via
+        // min(id) — REQ-903 forbids a test depending on a fixture key.
+        long turnedOff = scalar("select min(id) from menu_item_config"
+                + " where room_id is null and enabled = true");
+        assertEquals(1, setEnabled(turnedOff, false),
+                "the arrangement must turn exactly one property-scope row off");
+        assertEquals(enabledConfigs - 1, scalar(PROPERTY_SCOPE_ENABLED),
+                "the arrangement must be visible before re-seeding");
+        try {
+            QuarkusTransaction.requiringNew().run(seeder::seedIfMissing);
 
-        assertEquals(devices, count("select count(*) from device"), "device seed must be idempotent");
-        assertEquals(stays, count("select count(*) from stay"), "stay seed must be idempotent");
-        assertEquals(cards, count("select count(*) from action_card_config"), "card seed must be idempotent");
+            assertEquals(devices, scalar("select count(*) from device"), "device seed must be idempotent");
+            assertEquals(stays, scalar("select count(*) from stay"), "stay seed must be idempotent");
+            assertEquals(cards, scalar("select count(*) from action_card_config"), "card seed must be idempotent");
+            assertEquals(enabledConfigs - 1, scalar(PROPERTY_SCOPE_ENABLED),
+                    "re-seeding must not re-enable what a developer turned off — the"
+                            + " catalogue-fixture enablement sits inside the devDeviceExists()"
+                            + " early return");
+        } finally {
+            // Restore the exact row, so the other case in this class still sees
+            // the full %dev catalogue whichever order the two run in.
+            setEnabled(turnedOff, true);
+        }
     }
 
-    private long count(String sql) {
+    /** Single numeric result of a native query. */
+    private long scalar(String sql) {
         return ((Number) entityManager.createNativeQuery(sql).getSingleResult()).longValue();
+    }
+
+    private int setEnabled(long configId, boolean enabled) {
+        return QuarkusTransaction.requiringNew().call(() -> entityManager
+                .createNativeQuery("update menu_item_config set enabled = :enabled where id = :id")
+                .setParameter("enabled", enabled)
+                .setParameter("id", configId)
+                .executeUpdate());
     }
 }

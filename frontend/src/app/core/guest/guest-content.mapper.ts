@@ -48,7 +48,20 @@ export class GuestContentMappingError extends Error {
 }
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const MAX_MENU_ITEMS = 5;
+/**
+ * The two array bounds `api/openapi.yaml` declares — `GuestMenu.items.maxItems`
+ * and `GuestHomeScreen.actionCards.maxItems`. Both are boundary validation of an
+ * untrusted wire, and both reject rather than truncate.
+ *
+ * `MAX_MENU_ITEMS` was `5` until REQ-901, and that was the bug: the number was
+ * invented here and its message cited a contract bound that did not exist, so a
+ * legitimate sixth section was rejected. The contract now really declares
+ * `maxItems: 50`, so the check is back at the real number and its message is
+ * true. 50 is payload sanity, not layout — how many items the sidebar shows is
+ * decided in `layout/sidebar/`, and no guest-visible behaviour changes if this
+ * number moves.
+ */
+const MAX_MENU_ITEMS = 50;
 const MAX_CARDS = 4;
 
 /**

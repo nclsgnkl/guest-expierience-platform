@@ -24,6 +24,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import de.gxp.infrastructure.testsupport.ManagerFixtures;
+import de.gxp.infrastructure.testsupport.MenuFixtures;
 
 /**
  * T-22 (REQ-419, REQ-420, REQ-421): vacant → 409 room-vacant; templates
@@ -60,6 +61,11 @@ class GuestHomeScreenTest {
                     "delete from menu_item_config where menu_item_key = 'home'").executeUpdate();
         });
         // card sets are cleared through the API in the tests that create them
+        // This class replaces the property-scope menu config (a whole-set
+        // replace), which deletes V10's eight `enabled = false` opt-out rows.
+        // Restore them, or the placeholder catalogue fixtures arrive ENABLED
+        // at whatever class runs next in the shared database (02-design.md §3.3).
+        MenuFixtures.restoreCatalogueOptOut(entityManager);
     }
 
     private static String adminToken() {

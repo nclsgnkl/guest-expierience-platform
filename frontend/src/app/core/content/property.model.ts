@@ -30,9 +30,13 @@ import type { AppearanceMode } from '../preferences/preference-gateway';
  *   - assets are ids (`logoAssetId`, `artworkAssetId`) fetched with the
  *     device token via `GuestAssetService` — never a bare `<img src>`
  *     (REQ-513).
- *   - `menuItems` is 0–5 and `home.cards` 0–4, server-resolved and
- *     server-ordered (REQ-511/515) — the old "exactly 5 / exactly 4" arms
- *     are gone.
+ *   - `menuItems` and `home.cards` are server-resolved and server-ordered
+ *     (REQ-511/515) — the old "exactly 5 / exactly 4" arms are gone. Their
+ *     counts are bounded by the contract's own `maxItems`
+ *     (`GuestMenu.items` 50, `GuestHomeScreen.actionCards` 4), which is a
+ *     WIRE bound for payload sanity — not a layout one. How many menu items
+ *     the sidebar shows is a layout decision and lives in
+ *     `layout/sidebar/`, never here (REQ-901).
  *   - `branding` is nullable: an invalid brand hex is rejected at the
  *     boundary and the token-layer defaults stay in force (REQ-512).
  */
@@ -104,7 +108,9 @@ interface PropertyConfigShape<TText> {
   propertyName: string; // never translated (a name)
   logoAssetId: number | null; // absent → the bundled placeholder
   branding: PropertyBranding | null; // null = invalid/rejected → token-layer defaults stay
-  menuItems: MenuItemShape<TText>[]; // 0–5, resolved-enabled, server-ordered — REQ-515
+  // resolved-enabled, server-ordered — REQ-515. Count bounded by the
+  // contract's GuestMenu.items.maxItems (a wire bound, not a layout one).
+  menuItems: MenuItemShape<TText>[];
   settings: MenuItemShape<TText>; // the fixed Einstellungen chrome (server settingsEntry) — unremovable
   settingsConfig: PropertySettingsConfig; // offered options + resolved defaults — REQ-119
   standbyHeadline: TText; // server-resolved standby texts — REQ-517

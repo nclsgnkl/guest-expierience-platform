@@ -137,20 +137,56 @@ describe('mapGuestContent', () => {
     expect(config.home?.cards).toEqual([]);
   });
 
-  it('rejects more than 5 items / 4 cards as a contract violation', () => {
+  it('rejects more than 4 cards as a contract violation', () => {
+    const home = homeFixture();
+    home.actionCards = Array.from({ length: 5 }, () => home.actionCards[0]!);
+    expect(() => mapGuestContent(sessionFixture(), home)).toThrow(GuestContentMappingError);
+  });
+
+  it('maps a catalogue larger than the sidebar without dropping or rejecting any item', () => {
+    // REQ-901: the mapper used to reject a 6th item, citing a contract bound
+    // that did not exist. The bound it enforces now is the one the contract
+    // really declares (`GuestMenu.items.maxItems: 50`), and how many fit down
+    // the side of the screen is the sidebar's business — a 13-row catalogue is
+    // what %dev serves.
     const session = sessionFixture();
-    session.menu.items = Array.from({ length: 6 }, (_, i) => ({
+    session.menu.items = Array.from({ length: 12 }, (_, i) => ({
       key: `k${i}`,
-      label: { de: 'X' },
+      label: { de: `Eintrag ${i}`, en: `Entry ${i}` },
       icon: 'phosphorInfo',
       route: `/k${i}`,
       sortIndex: i,
     }));
-    expect(() => mapGuestContent(session, null)).toThrow(GuestContentMappingError);
 
-    const home = homeFixture();
-    home.actionCards = Array.from({ length: 5 }, () => home.actionCards[0]!);
-    expect(() => mapGuestContent(sessionFixture(), home)).toThrow(GuestContentMappingError);
+    const config = mapGuestContent(session, null);
+
+    expect(config.menuItems).toHaveLength(12);
+    expect(config.menuItems.map((i) => i.id)).toEqual(
+      Array.from({ length: 12 }, (_, i) => `k${i}`),
+    );
+  });
+
+  it('maps exactly maxItems menu items and rejects one more', () => {
+    // REQ-901's acceptance criterion: the rejection message names a bound that
+    // actually exists — `api/openapi.yaml` declares `GuestMenu.items.maxItems: 50`.
+    const itemsOfLength = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        key: `k${i}`,
+        label: { de: `Eintrag ${i}`, en: `Entry ${i}` },
+        icon: 'phosphorInfo',
+        route: `/k${i}`,
+        sortIndex: i,
+      }));
+
+    const atTheBound = sessionFixture();
+    atTheBound.menu.items = itemsOfLength(50);
+    expect(mapGuestContent(atTheBound, null).menuItems).toHaveLength(50);
+
+    const overTheBound = sessionFixture();
+    overTheBound.menu.items = itemsOfLength(51);
+    expect(() => mapGuestContent(overTheBound, null)).toThrow(
+      /menu\.items exceeds the contract's 0–50/,
+    );
   });
 
   it('rejects a localized map missing the default-language entry', () => {

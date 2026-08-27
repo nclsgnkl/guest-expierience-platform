@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import de.gxp.infrastructure.testsupport.DeviceFixtures;
 import de.gxp.infrastructure.testsupport.ManagerFixtures;
+import de.gxp.infrastructure.testsupport.MenuFixtures;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
@@ -113,6 +114,13 @@ class AuditCoverageTest {
         QuarkusTransaction.requiringNew().run(() -> entityManager
                 .createNativeQuery("delete from audit_entry where id > :mark").setParameter("mark", mark)
                 .executeUpdate());
+        // This class replaces the property-scope menu config (a whole-set
+        // replace), which deletes V10's eight `enabled = false` opt-out rows.
+        // Restore them, or the placeholder catalogue fixtures arrive ENABLED
+        // at whatever class runs next in the shared database (02-design.md §3.3).
+        // Database hygiene only — this class's assertions and its
+        // NOT_A_MANAGER_MUTATION list are deliberately untouched (REQ-911).
+        MenuFixtures.restoreCatalogueOptOut(entityManager);
     }
 
     // ------------------------------------------------------------ the grep guard

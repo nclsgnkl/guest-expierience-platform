@@ -48,13 +48,21 @@ class MigrationTest {
     }
 
     @Test
-    void flywayHeadIsV9UpdateChannelTrustedKeys() {
-        // update-channel (REQ-709, D23/T-20a): V8 + V9 applied, nothing beyond; auth-hardening's V5-V7 below; V4 ships no seeds
+    void flywayHeadIsV10CatalogueExpansion() {
+        // The head is pinned as a LITERAL on purpose: a migration cannot be
+        // added silently, and updating this line is the conscious step.
+        // sidebar-catalogue-overflow (REQ-903, REQ-910) moved it from V9 to
+        // V10 — data only, no DDL. What V10 actually inserts is asserted in
+        // de.gxp.menu.CatalogueExpansionTest, not here: this class shares the
+        // suite's database and has no @AfterEach, so an enablement assertion
+        // would be order-dependent (02-design.md §3.3).
+        // Still pinned below: update-channel's V8+V9, auth-hardening's V5-V7,
+        // and V4 shipping no seeds.
         String head = (String) entityManager
                 .createNativeQuery("SELECT version FROM flyway_schema_history"
                         + " WHERE success = true ORDER BY installed_rank DESC LIMIT 1")
                 .getSingleResult();
-        assertEquals("9", head, "Flyway head must be V9 (update channel trusted keys)");
+        assertEquals("10", head, "Flyway head must be V10 (catalogue expansion)");
         Number trustedKeyColumns = (Number) entityManager
                 .createNativeQuery("SELECT count(*) FROM information_schema.columns"
                         + " WHERE table_name = 'update_channel'"

@@ -1,9 +1,14 @@
 import {
   phosphorArrowRight,
+  phosphorCar,
   phosphorCaretDown,
   phosphorCheck,
   phosphorCircle,
+  phosphorClock,
+  phosphorDotsThree,
   phosphorFileText,
+  phosphorFirstAid,
+  phosphorForkKnife,
   phosphorGearSix,
   phosphorGlobe,
   phosphorHouse,
@@ -12,8 +17,11 @@ import {
   phosphorLightbulbFilament,
   phosphorMapPin,
   phosphorMoon,
+  phosphorPersonSimpleHike,
+  phosphorRecycle,
   phosphorShoppingBag,
   phosphorSun,
+  phosphorWifiHigh,
   phosphorWifiSlash,
 } from '@ng-icons/phosphor-icons/regular';
 // The heading sparkle is the one glyph rendered in the `fill` weight: the
@@ -45,13 +53,36 @@ import { phosphorSparkleFill } from '@ng-icons/phosphor-icons/fill';
  *   - `phosphorWifiSlash` — the connection screen's glyph
  *     (docs/design/screens-inhouse/connection.md).
  *   - `phosphorCircle` — the neutral fallback for unknown wire icon names.
+ *
+ * Additions for sidebar-catalogue-overflow (REQ-904):
+ *   - the `default_icon` of every row `V10__catalogue_expansion.sql` adds —
+ *     `phosphorWifiHigh`, `phosphorClock`, `phosphorRecycle`,
+ *     `phosphorFirstAid`, `phosphorCar`, `phosphorForkKnife`,
+ *     `phosphorPersonSimpleHike` (`phosphorFileText` was already here).
+ *     Registering them is what makes those names valid WIRE content: an
+ *     unregistered name renders `CONTENT_FALLBACK_ICON` rather than failing,
+ *     so a popover full of identical neutral glyphs would look like a design
+ *     problem instead of a missing registration. Those rows are disposable
+ *     fixtures — removing them is that migration reversed plus these seven
+ *     lines, and nothing else (REQ-903).
+ *   - `phosphorDotsThree` — the sidebar's overflow trigger, app chrome rather
+ *     than wire content (02-design.md §7.1).
+ *
+ * `phosphorWifiSlash` is deliberately NOT reused for the WLAN fixture: it is
+ * the connection screen's offline glyph, and a Wi-Fi page marked with a
+ * struck-out Wi-Fi symbol reads as "no connection".
  */
 export const REGISTERED_ICONS = {
   phosphorArrowRight,
+  phosphorCar,
   phosphorCaretDown,
   phosphorCheck,
   phosphorCircle,
+  phosphorClock,
+  phosphorDotsThree,
   phosphorFileText,
+  phosphorFirstAid,
+  phosphorForkKnife,
   phosphorGearSix,
   phosphorGlobe,
   phosphorHouse,
@@ -60,9 +91,12 @@ export const REGISTERED_ICONS = {
   phosphorLightbulbFilament,
   phosphorMapPin,
   phosphorMoon,
+  phosphorPersonSimpleHike,
+  phosphorRecycle,
   phosphorShoppingBag,
   phosphorSparkleFill,
   phosphorSun,
+  phosphorWifiHigh,
   phosphorWifiSlash,
 };
 

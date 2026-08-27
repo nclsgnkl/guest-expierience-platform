@@ -121,6 +121,30 @@ describe('PropertyContentService', () => {
     expect(before.defaultLanguage).toBe('de');
   });
 
+  it('locale() resolves from the offered language options, not the bare code (REQ-925)', () => {
+    const { service } = setup('de');
+    expect(service.locale()).toBe('de-DE');
+  });
+
+  it('locale() follows a language switch and fetches nothing (REQ-926)', () => {
+    const { service, language, config } = setup('de');
+    expect(service.locale()).toBe('de-DE');
+    const configReadsBefore = config();
+
+    language.set('en');
+
+    expect(service.locale()).toBe('en-GB');
+    // the same held config answered both — nothing was re-fetched or replaced
+    expect(config()).toBe(configReadsBefore);
+  });
+
+  it('locale() falls back to the bare language code when the property offers no match', () => {
+    const { service, language } = setup('de');
+    language.set('fr');
+
+    expect(service.locale()).toBe('fr');
+  });
+
   it('branding() and loaded() reflect the held config', () => {
     const { service } = setup();
     expect(service.loaded()).toBe(true);
