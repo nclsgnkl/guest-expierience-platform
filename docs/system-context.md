@@ -145,14 +145,15 @@ section-aware one:
 
 | Component | Location | Responsibility |
 |-----------|----------|-----------------|
-| `PropertyContentService` | `frontend/src/app/core/content/` | Supplies per-property/guest content via DI (constitution principle 2), including sidebar `menuItems`/`settings` (the Einstellungen nav entry — **not** the settings *config*, which is the separate `settingsConfig` below) and each card's `targetSectionId` → route resolution (`getSectionRoute()`); backed by static TS today, swappable for the future Quarkus backend. **Two signals:** `property()` resolves every localized field into the active language (falling back to the property's `defaultLanguage`), and `settingsConfig()` exposes the language-independent settings slice — the offered options and the property's defaults — which is what `PreferencesService.applyPropertyDefaults()` consumes. Validates the raw config at construction |
+| `PropertyContentService` | `frontend/src/app/core/content/` | Supplies per-property/guest content via DI (constitution principle 2), including sidebar `menuItems`/`settings` (the Einstellungen nav entry — **not** the settings *config*, which is the separate `settingsConfig` below) and each card's `targetSectionId` → route resolution (`getSectionRoute()`); backed by static TS today, swappable for the future Quarkus backend. **Two signals:** `property()` resolves every localized field into the active language (falling back to the property's `defaultLanguage`), and `settingsConfig()` exposes the language-independent settings slice — the offered options and the property's defaults — which is what `PreferencesService.applyPropertyDefaults()` consumes; a third, `locale()`, resolves the active language's `Intl` locale from the property's own option list (falling back to the bare language code) and is what the sidebar's popover collates with. Validates the raw config at construction. *(`StalenessPillComponent` and `StatusBarComponent` still perform that same lookup inline; moving them onto `locale()` is a recorded follow-up.)* |
 | `ShellComponent` | `frontend/src/app/layout/shell/` | App-wide shell rendered on every route: mesh-gradient background + `SidebarComponent` + `<router-outlet>` for the routed main content |
-| `SidebarComponent` | `frontend/src/app/layout/sidebar/` | Config-driven nav — 5 `menuItems` (Home, Info, Umgebung, Smart Home, Services) + 1 structurally-fixed `settings` entry (`MenuIcons`), active state from current route |
+| `SidebarComponent` | `frontend/src/app/layout/sidebar/` | Config-driven nav with **5 fixed slots on every viewport**, plus 1 structurally-fixed `settings` entry (`MenuIcons`); active state from the current route, and it is the only component that decides it. At or below 5 delivered `menuItems` it renders exactly the nav that shipped — no trigger in the DOM at all. Above 5: ranks 1–3 fixed, slot 4 **rotating**, slot 5 an **overflow trigger** opening a `@angular/cdk/menu` popover (the `StatusBarMenuComponent` pattern, right of the trigger and vertically centred on it) holding every remaining section, alphabetically by the label in the active language. Choosing one — or reaching one by an action card, a deep link or browser back — promotes it into slot 4, so the active section is always visible in the sidebar. The promotion is **per-session view state**: never `localStorage`, never the wire. Panel spec: [`docs/design/screens-inhouse/menu-overflow.md`](design/screens-inhouse/menu-overflow.md) |
+| `layout/sidebar/menu-split.ts` | `frontend/src/app/layout/sidebar/` | **A file, not a service.** Exported pure functions — the `resolveProperty` precedent — holding `splitMenu`, `routeMatches`/`itemForRoute`, `sortByLabel` and a memoised `collatorFor`. **The single place `SIDEBAR_SLOTS = 5` lives.** No injectable and no state beyond one module-level `Map<string, Intl.Collator>` |
 | `HomeContentComponent` | `frontend/src/app/features/home/` | Home's main-content region only (heading block, hero artwork, 4 action cards, reserved empty widget-column space) — composed inside `ShellComponent`'s router-outlet, not the sidebar/background |
 | `HeroArtworkComponent` | `frontend/src/app/features/home/hero-artwork/` | Renders the no-artwork fallback (no image; background now lives in `ShellComponent`) |
 | `HeadingBlockComponent` | `frontend/src/app/features/home/heading-block/` | Subtitle, headline, paragraph — from `PropertyContentService`; property-level content, not per-guest |
 | `ActionCardComponent` | `frontend/src/app/features/home/action-card/` | `GlassPanel` action card; resolves its destination from `targetSectionId` via `PropertyContentService.getSectionRoute()`, keyboard- and touch-activatable |
-| `SectionPlaceholderComponent` | `frontend/src/app/features/section-placeholder/` | Shared main-content stub, rendered inside `ShellComponent`, for the **4** sections with no design yet (Info, Umgebung, Smart Home, Services). Einstellungen left this set on 2026-08-18 — it has a real screen now |
+| `SectionPlaceholderComponent` | `frontend/src/app/features/section-placeholder/` | Shared main-content stub, rendered inside `ShellComponent`, for **every** section with no design yet. It is no longer "the 4 sections": `app.routes.ts` carries one `:sectionKey` child (declared **after** `einstellungen`, which keeps its real screen) plus a `**` fallback **as the shell's last child**, so every route the catalogue can name resolves by construction — including on a cold, offline boot, because the table is a static constant. The component reads the path reactively from `ActivatedRoute.url` (not `snapshot`, so a parameter change re-resolves under a reused instance) and matches the delivered menu **by `route`, not by key**, through `menu-split.ts`'s shared `itemForRoute()`. An unclaimed route renders a defined `section.unavailable` state — no redirect |
 
 Added by `docs/features/appearance-and-language/` (2026-08-18). Same rule as
 above: these are real files under `frontend/src/`, not intent.
@@ -277,32 +278,45 @@ on, so §5's "kiosks trust natively" claim is withdrawn and `GET
 exists for the instance name only (Part D's need). Sixth scheduled job:
 `InstanceScheduler#reconcileServedCertificate` every 15 min at minute 5.
 
-Planned by [`docs/features/sidebar-catalogue-overflow/`](features/sidebar-catalogue-overflow/02-design.md)
-(2026-08-27, `04_analyze` PASS, implementation pending). **No new component** —
-this is the rare feature that adds capability by changing four existing rows,
-which is itself the reason it was split out of `modular-menu-catalogue`. Listed
-here so the next feature plans against the intended shape; the rows below are
-folded into the tables above when `dev` lands them (TODO T-21):
+Added by [`docs/features/sidebar-catalogue-overflow/`](features/sidebar-catalogue-overflow/02-design.md)
+(2026-08-27). **No new component** — the rare feature that adds capability by
+changing four existing rows, which is itself why it was split out of
+`modular-menu-catalogue`. Those four rows (`SidebarComponent`,
+`layout/sidebar/menu-split.ts`, `SectionPlaceholderComponent`,
+`PropertyContentService`) are folded into the real-code tables above; what
+follows is only what has no row of its own.
 
-| Component | Change |
-|---|---|
-| `SidebarComponent` | Stops being "5 `menuItems`". Becomes **5 fixed slots on every viewport**: with ≤ 5 delivered sections it renders exactly today's nav; above that, ranks 1–3 fixed, slot 4 **rotating**, slot 5 an **overflow trigger** opening a `@angular/cdk/menu` popover (the `StatusBarMenuComponent` pattern) that holds every remaining section, alphabetically by the label in the active language via a memoised `Intl.Collator`. Choosing one — or reaching one by an action card or a deep link — promotes it into slot 4, so the active section is always visible in the sidebar. The promotion is **per-session view state**: never `localStorage`, never the wire. Panel spec: [`docs/design/screens-inhouse/menu-overflow.md`](design/screens-inhouse/menu-overflow.md) |
-| `layout/sidebar/menu-split.ts` *(new file, not a service)* | Exported pure functions — the `resolveProperty` precedent — holding the split, the promotion rule and the collation. **The single place `n = 5` lives.** No injectable, no state beyond a module-level collator map |
-| `SectionPlaceholderComponent` | No longer "the 4 sections". `app.routes.ts` replaces the four hard-coded section children with one `:sectionKey` route (after `einstellungen`) plus a `**` fallback **as the shell's last child**, so every route the catalogue can name resolves by construction — including on a cold, offline boot, because the table is a static constant. The component matches the delivered menu **by `route`, not by key**, and renders a defined "not available" state for an unclaimed route |
-| `PropertyContentService` | Gains a `locale` signal — the active language's `Intl` locale from the property's own option list. `StalenessPillComponent` and `StatusBarComponent` still do that lookup inline; moving them onto it is a recorded follow-up, not part of that feature |
-
-Binding facts recorded there: `GuestMenu.items` gains a declared
-`maxItems` (payload sanity at the boundary, **not** a design limit — the popover
-has no capacity ceiling); a Flyway `V10` adds eight **disposable placeholder**
-catalogue rows whose only job is to exercise overflow, promotion and umlaut
-collation, and which arrive **property-disabled** so a migration delivered by the
-v1.8.1 update channel changes nothing a guest sees on a running property; and
-`menu_item_definition` stays release data, not writable through any API
+Binding facts: `GuestMenu.items` carries a declared `maxItems: 50` (payload
+sanity, enforced at the kiosk boundary by `guest-content.mapper.ts` — **not** a
+design limit; the popover has no capacity ceiling and the sidebar splits at 5
+regardless); a Flyway `V10` adds eight **disposable placeholder** catalogue rows
+whose only job is to exercise overflow, promotion and umlaut collation, and
+which arrive **property-disabled** so a migration delivered by the v1.8.1 update
+channel changes nothing a guest sees on a running property (`%dev` overrides
+them to enabled, so overflow is the default developer and review experience);
+and `menu_item_definition` stays release data, not writable through any API
 (`docs/backend/specification.md` §3 decision 5, confirmed by the owner
-2026-08-27). Known limitation recorded with it: `PUT /api/manager/menu-config`
-is a **whole-set replace**, so a partial submit deletes those opt-out rows and
+2026-08-27). Only three properties of the placeholder set may be relied on
+anywhere — count ≥ 12, one umlaut-initial label, alphabetical order ≠
+`default_sort_index` order — and removing it is that migration reversed plus one
+edit to `core/icons/registered-icons.ts` and one edit to
+`frontend/tools/measure.mjs`'s `ROUTES` list, which walks every route the `%dev`
+catalogue can name. Those are the four sanctioned sites; the migration's own
+header predates the fourth and names three.
+
+Known limitation recorded with it: `PUT /api/manager/menu-config` is a
+**whole-set replace**, so a partial submit deletes those opt-out rows and
 absence resolves back to enabled — a future manager UI must round-trip the whole
-set.
+set. Pinned by `CatalogueExpansionTest.partialConfigReplaceReEnablesTheFixtures`
+and, for the shared test database, by
+`MenuFixtures.restoreCatalogueOptOut()` in an `@AfterEach` of every class that
+replaces the property scope.
+
+The popover's keyboard model is `role="menu"`'s **linear** contract, kept
+deliberately: `CdkMenu.orientation` is `'vertical'`, so ←/→ are inert, and
+REQ-919's row-major grid fill is what makes ↑/↓ walk the tiles in reading order.
+Faking spatial traversal under `role="menu"` would make the announced semantics
+and the behaviour disagree.
 
 ## Cross-Cutting Concerns
 

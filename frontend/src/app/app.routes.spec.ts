@@ -139,10 +139,38 @@ describe('app.routes', () => {
 
       expect(el.querySelector('.shell')).toBeTruthy();
       expect(el.querySelector('app-sidebar')).toBeTruthy();
-      expect(el.querySelector('app-section-placeholder')).toBeTruthy();
-      expect(el.textContent).toContain(expectedLabel);
+      const placeholder = el.querySelector('app-section-placeholder');
+      expect(placeholder).toBeTruthy();
+      /* Scoped to the placeholder, not to the whole shell: the sidebar renders
+         the same label, so an unscoped assertion would pass even if the
+         placeholder resolved nothing (sidebar-catalogue-overflow REQ-912). */
+      expect(placeholder!.textContent).toContain(expectedLabel);
     });
   }
+
+  it('resolves any other single-segment route through :sectionKey, inside the shell', async () => {
+    setup({});
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/nicht-im-menu', ShellComponent);
+    const el: HTMLElement = harness.routeNativeElement!;
+
+    /* The route table no longer enumerates sections, so a route the delivered
+       menu does not claim still lands in the shell and renders the
+       unavailable state — it does not 404 and does not redirect (REQ-912). */
+    expect(el.querySelector('.shell')).toBeTruthy();
+    expect(el.querySelector('app-section-placeholder')).toBeTruthy();
+    expect(TestBed.inject(Router).url).toBe('/nicht-im-menu');
+  });
+
+  it('resolves a deeper unknown path through the shell-scoped ** child', async () => {
+    setup({});
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/info/tiefer/noch-tiefer', ShellComponent);
+    const el: HTMLElement = harness.routeNativeElement!;
+
+    expect(el.querySelector('.shell')).toBeTruthy();
+    expect(el.querySelector('app-section-placeholder')).toBeTruthy();
+  });
 
   it('resolves /einstellungen to the Settings screen, inside the shared shell', async () => {
     setup({});

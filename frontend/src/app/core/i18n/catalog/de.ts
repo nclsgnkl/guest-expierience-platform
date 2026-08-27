@@ -14,7 +14,15 @@
  */
 export const de = {
   'nav.aria': 'Hauptnavigation',
+  /* sidebar-catalogue-overflow (REQ-934): the overflow trigger's visible
+     label, the popover's accessible name, and the state a route the delivered
+     menu does not claim renders in (02-design.md §8; the screen spec's
+     Content table). `nav.more` is visible, so the trigger carries no
+     aria-label — one would override its own name. */
+  'nav.more': 'Mehr',
+  'nav.more.aria': 'Weitere Bereiche',
   'section.comingSoon': 'Bald verfügbar.',
+  'section.unavailable': 'Dieser Bereich ist nicht verfügbar',
   'statusBar.language.aria': 'Sprache wählen',
   'statusBar.appearance.aria': 'Darstellung wählen',
   'statusBar.time.aria': 'Aktuelle Uhrzeit',

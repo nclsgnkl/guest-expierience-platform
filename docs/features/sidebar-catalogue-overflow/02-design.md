@@ -528,10 +528,16 @@ precedent). Panel padding `--space-4`, grid gap `--space-2`.
 
 Panel width = `2 × 0.75 + C × 5.25 + (C − 1) × 0.375` rem:
 
-| Columns | Panel width | at 1024×768 (root 12.8px) | Available right of the sidebar |
-|---|---|---|---|
-| 5 | 29.25rem | **374 px** | ≈ 890 px |
-| 6 | 34.875rem | **446 px** | ≈ 890 px |
+| Columns | Panel content+padding | Border box (what a browser reports) | at 1024×768 | at 1280×832 |
+|---|---|---|---|---|
+| 5 | 29.25rem | 29.25rem + 2px | **376 px** | **470 px** |
+| 6 | 34.875rem | 34.875rem + 2px | **448 px** | **560 px** |
+
+The `+ 2px` is `--border-glass`'s 1 px hairline on each side. It is deliberately
+not expressible in `rem` — `docs/constitution.md` → Styling exempts hairline
+borders and blur radii from the rem rule — which is why the rem column and a
+measured `getBoundingClientRect().width` differ by exactly 2 px and always will.
+Measured 2026-08-27: 376 px / 470 px.
 
 Tile at 1024×768 = 5.25rem × 12.8 = **67.2 px**, against `--size-touch-min`
 2.75rem = 35.2 px. ✓ (`--size-touch-min` — `--size-touch-target` does not exist.)

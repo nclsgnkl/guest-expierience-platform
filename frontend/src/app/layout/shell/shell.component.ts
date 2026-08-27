@@ -38,6 +38,9 @@ export class ShellComponent {
   private readonly router = inject(Router);
 
   protected readonly property = this.content.property;
+  /* The sidebar stays input-driven and injects no content service, so the
+     popover's collation locale is passed in like everything else (REQ-925). */
+  protected readonly locale = this.content.locale;
   protected readonly activeRoute = signal(this.router.url);
 
   /** Object URL when the property has a logo and it has arrived; else the placeholder. */

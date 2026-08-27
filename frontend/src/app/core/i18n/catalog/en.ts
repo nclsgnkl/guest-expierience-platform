@@ -6,7 +6,10 @@ import type { TranslationCatalog } from '../translation.model';
  */
 export const en: TranslationCatalog = {
   'nav.aria': 'Main navigation',
+  'nav.more': 'More',
+  'nav.more.aria': 'More sections',
   'section.comingSoon': 'Coming soon.',
+  'section.unavailable': 'This section is not available',
   'statusBar.language.aria': 'Choose language',
   'statusBar.appearance.aria': 'Choose appearance',
   'statusBar.time.aria': 'Current time',
@@ -20,7 +23,8 @@ export const en: TranslationCatalog = {
   'settings.appearance.hint': 'Light or dark appearance, often easier on the eyes at night.',
   'settings.selected.aria': 'Selected',
   'pairing.title': 'Pair this device',
-  'pairing.instruction': 'Confirm this code in the management area to assign this device to a room.',
+  'pairing.instruction':
+    'Confirm this code in the management area to assign this device to a room.',
   'pairing.waiting': 'Waiting for confirmation …',
   'pairing.renewing': 'Requesting a new code …',
   'pairing.offline': 'No connection to the server. Reconnecting automatically.',

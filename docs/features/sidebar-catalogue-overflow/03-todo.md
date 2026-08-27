@@ -1,6 +1,6 @@
 # TODO: Sidebar & Catalogue Overflow
 **Feature:** [index.md](../index.md) | **PRD:** [01-prd.md](01-prd.md) | **Design:** [02-design.md](02-design.md)
-**Status:** Phases 1–3 implemented (T-01…T-09). Phase 4 next, after review.
+**Status:** All 21 tasks implemented. T-01…T-09 committed (`33f745a`) after a `06_review` PASS + fix round; T-10…T-21 are in the working tree, uncommitted. Ready for `06_review`.
 
 > Every design decision is in [02-design.md](02-design.md) and is referenced by
 > section, never re-decided here. Screen spec:
@@ -86,16 +86,32 @@ exists; phase 5 is the only one that cannot be split further.
     `…/de/gxp/menu/MenuDisableGuardTest.java`, `…/de/gxp/menu/ActionCardTest.java`,
     `…/de/gxp/guest/GuestHomeScreenTest.java`, `…/de/gxp/audit/AuditCoverageTest.java`,
     `…/de/gxp/system/FirstRunSeedTest.java`
-  - Validate: the whole backend suite green, **run twice**, and once with a
-    genuinely different class order —
-    `-Djunit.jupiter.testclass.order.default='org.junit.jupiter.api.ClassOrderer$Random'`
-    plus a recorded `-Djunit.jupiter.execution.order.random.seed=…`.
-    **`-Dsurefire.runOrder` does not work here**: Quarkus' profile-aware orderer
-    overrides Surefire's, and the class order comes out byte-identical (measured
-    2026-08-27). Record the order the seed produced, and check a property-scope
+  - Validate: the whole backend suite green, **run twice in its natural order**
+    (`./mvnw verify`), plus **one adverse-order run over the menu subset**:
+    ```
+    ./mvnw test -Dtest='AuditCoverageTest,ActionCardTest,CatalogueExpansionTest,\
+    MenuCatalogueAndConfigTest,MenuDisableGuardTest,MigrationTest,GuestSessionTest,\
+    GuestHomeScreenTest,FirstRunSeedTest' \
+      -Djunit.quarkus.orderer.secondary-orderer='org.junit.jupiter.api.ClassOrderer$Random' \
+      -Djunit.jupiter.execution.order.random.seed=<recorded>
+    ```
+    Record the seed **and** the order it produced, and check a property-scope
     writer really preceded `GuestSessionTest` — the point is that its
     `menu.items hasSize(5)`/`hasSize(4)` no longer depend on class order.
-
+    **Three measured facts about the flags, so none of them is tried a third
+    time (all 2026-08-27):**
+    (a) `-Dsurefire.runOrder=…` is **inert** — Quarkus' profile-aware orderer
+    overrides Surefire's and the 76-class order comes out byte-identical.
+    (b) `-Djunit.jupiter.testclass.order.default=…` **aborts the whole suite**:
+    *"Critical failure. Quarkus tests would fail with corrupted application
+    errors … the Quarkus JUnit configuration has been overridden"*, `Tests run:
+    0`, `BUILD FAILURE`. It only appeared to work in the fix round because that
+    was a nine-class subset with no `@TestProfile` class in it.
+    (c) `-Djunit.quarkus.orderer.secondary-orderer=…$Random` **does** randomize —
+    but it also randomizes `@TestProfile` classes **relative to** default-profile
+    ones, where the natural order groups all six of them last. **Scope it to a
+    `-Dtest=` subset that contains no `@TestProfile` class.** The nine classes
+    above qualify.
 - [x] **T-04** `CatalogueExpansionTest`
   — *REQ-903, REQ-908, REQ-909, REQ-910*
   - `@BeforeEach restoreCatalogueOptOut()` — this class *asserts* the D5 state,
@@ -183,7 +199,7 @@ exists; phase 5 is the only one that cannot be split further.
 
 ## Phase 4 — Routing and app-chrome strings
 
-- [ ] **T-10** Three catalogue keys
+- [x] **T-10** Three catalogue keys
   — *REQ-934*
   - `nav.more`, `nav.more.aria`, `section.unavailable` in **both** catalogues,
     wording per design §8 / the screen spec's Content table. `de.ts` is the key
@@ -192,7 +208,7 @@ exists; phase 5 is the only one that cannot be split further.
     `frontend/src/app/core/i18n/catalog/en.ts`
   - Validate: `ng build` (a missing English key is a compile error by design).
 
-- [ ] **T-11** The parameterised route table
+- [x] **T-11** The parameterised route table
   — *REQ-912, REQ-914*
   - Replace the four hard-coded section children with
     `{ path: ':sectionKey', component: SectionPlaceholderComponent }` **after**
@@ -205,7 +221,7 @@ exists; phase 5 is the only one that cannot be split further.
     `/standby`, `/connection` and `/einstellungen` still reach the same
     component behind the same guard (REQ-914's acceptance criterion).
 
-- [ ] **T-12** `SectionPlaceholderComponent` resolves by URL
+- [x] **T-12** `SectionPlaceholderComponent` resolves by URL
   — *REQ-912, REQ-913*
   - Derive the current path reactively from `ActivatedRoute`'s url segments (a
     signal, **not** `snapshot`, so a param change re-resolves without
@@ -225,7 +241,7 @@ exists; phase 5 is the only one that cannot be split further.
 
 ## Phase 5 — Sidebar split and popover
 
-- [ ] **T-13** `menu-split.ts` — the whole rule as pure functions
+- [x] **T-13** `menu-split.ts` — the whole rule as pure functions
   — *REQ-915, REQ-919, REQ-920, REQ-923, REQ-924, REQ-925, REQ-926, REQ-927, REQ-928, REQ-930, REQ-931, REQ-932*
   - `SIDEBAR_SLOTS = 5` (**the only place `n` lives**), `routeMatches`,
     `itemForRoute`, `splitMenu`, `sortByLabel`, `collatorFor`. Implement design
@@ -235,13 +251,15 @@ exists; phase 5 is the only one that cannot be split further.
   - Files: `frontend/src/app/layout/sidebar/menu-split.ts`,
     `frontend/src/app/layout/sidebar/menu-split.spec.ts`
   - Validate: the spec covers every row of design §6.1's requirement table,
-    plus: `Intl.Collator` de vs. en ordering including the umlaut label (the
-    `Ärztliche Versorgung` / `Services` / `Umgebung` case from the PRD's
-    acceptance criteria) and `numeric: true`; identical labels tie-breaking by
-    key, asserted twice for stability; and a chosen key that the next call no
-    longer delivers.
+    plus: `Intl.Collator` de vs. en ordering **including an umlaut-initial
+    label** and `numeric: true`. Use an **invented** label — the PRD's
+    acceptance criterion names `Ärztliche Versorgung`, but that is a fixture
+    label and REQ-903 forbids a test depending on one (the same correction T-03
+    carries). `Öffnungszeiten` / `Services` / `Umgebung` proves the identical
+    property. Also: identical labels tie-breaking by key, asserted twice for
+    stability; and a chosen key that the next call no longer delivers.
 
-- [ ] **T-14** Wire `SidebarComponent` and `ShellComponent`
+- [x] **T-14** Wire `SidebarComponent` and `ShellComponent`
   — *REQ-915, REQ-920, REQ-921, REQ-923, REQ-928, REQ-929, REQ-930, REQ-931, REQ-932*
   - `locale` input; `chosen = signal<string | null>(null)`; one `split` computed
     (design §6.2). Rewrite `isActive()` onto `routeMatches()` so the sidebar and
@@ -258,7 +276,7 @@ exists; phase 5 is the only one that cannot be split further.
   - Validate: `ng build`; existing sidebar and shell specs still green before
     T-17 adds the new ones.
 
-- [ ] **T-15** The popover — markup and CDK
+- [x] **T-15** The popover — markup and CDK
   — *REQ-916, REQ-917, REQ-922, REQ-933, REQ-934*
   - Inside `SidebarComponent` (design §7.1 — **no new component**): the trigger
     `.sidebar-item` with `phosphorDotsThree` + `t('nav.more')` and
@@ -275,7 +293,7 @@ exists; phase 5 is the only one that cannot be split further.
   - Validate: `ng build`; open the panel by hand in `ng serve` and confirm
     Escape, outside-click and focus-return work with nothing hand-written.
 
-- [ ] **T-16** The popover — CSS and geometry
+- [x] **T-16** The popover — CSS and geometry
   — *REQ-917, REQ-918, REQ-919*
   - Panel: the glass recipe, `padding: var(--space-4)`,
     `margin-left: var(--space-4)` (the gap, as a token),
@@ -290,7 +308,7 @@ exists; phase 5 is the only one that cannot be split further.
   - Validate: T-19's browser run. jsdom asserts no geometry, ever
     (`frontend/CLAUDE.md`).
 
-- [ ] **T-17** Sidebar specs
+- [x] **T-17** Sidebar specs
   — *REQ-921, REQ-923, REQ-929, REQ-931, REQ-934*
   - Extend `sidebar.component.spec.ts` (design §9): the overflow tile is
     **absent from the DOM** at ≤ 5 items and present above; the panel lists the
@@ -303,7 +321,7 @@ exists; phase 5 is the only one that cannot be split further.
 
 ## Phase 6 — Verification
 
-- [ ] **T-18** Extend the measurement instrument
+- [x] **T-18** Extend the measurement instrument
   — *REQ-935*
   - `ROUTES` 6 → 14 (the `%dev` catalogue's routes; keep the list beside a
     comment saying it must track that catalogue). Add a step that opens the
@@ -316,7 +334,7 @@ exists; phase 5 is the only one that cannot be split further.
   - Files: `frontend/tools/measure.mjs`
   - Validate: it runs and prints; Prettier-clean.
 
-- [ ] **T-19** Measure
+- [x] **T-19** Measure
   — *REQ-918, REQ-935*
   - Backend on the `%dev` seed, frontend served. Full grid: 14 routes × 2 themes
     × 2 languages × 3 viewports, panel **closed**; then the panel-open step at
@@ -331,7 +349,7 @@ exists; phase 5 is the only one that cannot be split further.
     374 px panel at 1024×768 — a material deviation from that means the CSS
     departed from the design.
 
-- [ ] **T-20** Whole-suite green and the byte-identical client
+- [x] **T-20** Whole-suite green and the byte-identical client
   — *REQ-902, REQ-911*
   - `./mvnw verify` (fresh Postgres), `ng test`, `ng build`, then a second
     `./mvnw verify`; the second run leaves the tree unchanged relative to the
@@ -340,16 +358,17 @@ exists; phase 5 is the only one that cannot be split further.
     change when its input does) and no generated source moves;
     `pom.xml`/`package.json` untouched (no dependency was added — the popover is
     the already-approved `@angular/cdk/menu`).
-  - **One backend run in a genuinely different class order**, same mechanism as
-    T-03: `ClassOrderer$Random` with a recorded seed. Do **not** use
-    `-Dsurefire.runOrder` — Quarkus' orderer overrides it and the order comes out
-    byte-identical, so the check would always pass (measured 2026-08-27).
-    Record the seed and the order it produced in the handoff.
+  - **One adverse-order run of the menu subset**, exactly as T-03 prescribes —
+    **not** the whole suite. The whole suite runs twice in its **natural** order.
+    Record the seed and the order. Do **not** use `-Dsurefire.runOrder` (inert)
+    and do **not** use `-Djunit.jupiter.testclass.order.default` (aborts the run
+    with *"corrupted application errors"*, 0 tests). Both measured 2026-08-27 —
+    see `06-review.md` round 2, finding 1.
   - Files: none
   - Validate: all green; `AuditCoverageTest`'s assertions and exemption list and
     the five architecture guards unchanged.
 
-- [ ] **T-21** Documentation sweep and the single commit
+- [x] **T-21** Documentation sweep and the single commit
   — *REQ-903*
   - Confirm `docs/system-context.md`'s four updated rows still describe what
     shipped (they were written in `02_design`); flip this feature's row in

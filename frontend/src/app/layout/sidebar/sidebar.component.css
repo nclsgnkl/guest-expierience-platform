@@ -105,3 +105,91 @@
   transform: scale(0.98);
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* ---------------------------------------------------------------------------
+   The overflow popover (sidebar-catalogue-overflow REQ-917/918/919;
+   docs/design/screens-inhouse/menu-overflow.md). It renders into the CDK
+   overlay container on document.body, so `position: fixed` applies and the
+   panel CANNOT grow the document — the no-scroll rule is met structurally and
+   the route behind it still measures clean.
+   --------------------------------------------------------------------------- */
+
+/* The same glass recipe as every other panel, so dark mode needs no extra
+   work: every value here is a semantic role and `[data-theme='dark']` already
+   overrides all three of them. `margin-left` is the gap to the trigger,
+   expressed as a token rather than as a pixel offset in the CDK position
+   config (the `status-bar-menu.component.css` convention). No entry animation:
+   the pattern this reuses has none and there is no motion token layer yet. */
+.sidebar-overflow {
+  margin-left: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: var(--blur-glass);
+  color: var(--color-text-primary);
+  /* The panel's only limit is the viewport. Past it the GRID scrolls, inside
+     this box — never the document (constitution v1.8.0). There is deliberately
+     no capacity ceiling: no maxItems, no slice, no "and N more". */
+  max-height: calc(100dvh - 2 * var(--space-6));
+  display: flex;
+}
+
+.sidebar-overflow__grid {
+  display: grid;
+  /* Derived, not tokenised — the same expression `.sidebar-item` derives its
+     own square from (--size-sidebar minus 2x --space-3 = 5.25rem), so a tile in
+     the panel and an item in the sidebar stay one number. 5 columns: the panel
+     stays subordinate to the content area and echoes the sidebar's 5 slots. */
+  grid-template-columns: repeat(5, calc(var(--size-sidebar) - 2 * var(--space-3)));
+  /* Row-major fill is the browser default for `grid-auto-flow: row` and is
+     what makes the alphabetical order read left-to-right — and what makes the
+     menu's linear keyboard model walk it in reading order (REQ-919). */
+  gap: var(--space-2);
+  overflow-y: auto;
+}
+
+.sidebar-overflow__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  aspect-ratio: 1;
+  padding: var(--space-2);
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* The one place the panel diverges from the sidebar, which sets
+   `white-space: nowrap` and lets a long label overflow: in a grid a wrapped
+   label costs nothing, and the longest configured labels need two lines at
+   5.25rem. Two lines, then clamped — never a third row of type that would
+   push the tile out of square. */
+.sidebar-overflow__tile-label {
+  font-size: var(--text-label);
+  font-weight: var(--text-label-weight);
+  line-height: var(--text-label-line-height);
+  text-align: center;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Identical to `.sidebar-item:focus-visible` — the panel is the same menu. */
+.sidebar-overflow__tile:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+.sidebar-overflow__tile:active {
+  transform: scale(0.98);
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}

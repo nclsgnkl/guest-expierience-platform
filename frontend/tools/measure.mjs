@@ -22,7 +22,7 @@
  *
  * Covers:
  *   REQ-024 / REQ-123 — nothing scrolls, over the full appearance x language
- *                       grid: 6 routes x 2 themes x 2 languages x 3 viewports
+ *                       grid: 14 routes x 2 themes x 2 languages x 3 viewports
  *   REQ-022           — sidebar box, nav item, group gaps
  *   REQ-014           — heading block, card row, widget column (must not move
  *                       when the status bar is added: it overlays, it does not
@@ -31,6 +31,10 @@
  *                       non-collision with Home's heading and card row
  *   REQ-115           — the open dropdown's overlay box (rendered into the CDK
  *                       overlay container on document.body, NOT inside .shell)
+ *   REQ-918 / REQ-935 — the open overflow popover: its panel box, every tile
+ *                       box against --size-touch-min, the glyph each tile
+ *                       actually rendered, and the DOCUMENT's scroll
+ *                       dimensions while the panel is open
  *   REQ-116 … REQ-118 — the Settings screen's boxes
  *   REQ-007 / REQ-009 — nothing wraps or truncates, in either language
  *   REQ-104           — sampled dark/light composites vs. 02-design.md §3.4
@@ -43,7 +47,32 @@
  */
 import { chromium } from 'playwright';
 
-const ROUTES = ['/', '/info', '/umgebung', '/smart-home', '/services', '/einstellungen'];
+/**
+ * Every route the `%dev` catalogue can name (sidebar-catalogue-overflow
+ * REQ-935). **This list must track that catalogue**: it is hard-coded rather
+ * than derived from the DOM because deriving it is a bigger change to a review
+ * instrument than the problem warrants, and a route the list forgets is simply
+ * a route this run does not measure. The eight after `/services` are the
+ * disposable placeholder fixtures — when they are removed
+ * (`V10__catalogue_expansion.sql` reversed plus a `registered-icons.ts` edit),
+ * this line goes back to six.
+ */
+const ROUTES = [
+  '/',
+  '/info',
+  '/umgebung',
+  '/smart-home',
+  '/services',
+  '/einstellungen',
+  '/wlan',
+  '/anreise',
+  '/hausordnung',
+  '/muell',
+  '/aerztliches',
+  '/parken',
+  '/gastronomie',
+  '/aktivitaeten',
+];
 const VIEWPORTS = [
   [1024, 768],
   [1280, 832],
@@ -84,6 +113,21 @@ const DESIGN_CONTRAST = {
   'sidebar vs. its backdrop': { light: 1.33, dark: 1.29 },
   'active nav pill vs. sidebar': { light: 1.41, dark: 1.69 },
 };
+
+/**
+ * `CONTENT_FALLBACK_ICON` is `phosphorCircle` (`core/icons/registered-icons.ts`),
+ * which is what an UNREGISTERED wire icon name renders as. REQ-904 says no
+ * catalogue tile may fall back to it, and the only way to see that in a browser
+ * is to compare the glyph the DOM actually holds — `[name]` is a property
+ * binding, so the name is not reflected as an attribute.
+ *
+ * The WHOLE `d`, and the path count with it. A prefix is not enough:
+ * `phosphorClock` is a clock face, so its first path is the identical
+ * 104-radius circle and a 25-character prefix flags it as a fallback (measured
+ * 2026-08-27 — it produced eight false findings before this was tightened).
+ */
+const FALLBACK_GLYPH_PATH =
+  'M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Z';
 
 /** Home's signed-off geometry from `home-screen-prototype` (06-review.md).
     The status bar overlays rather than pushes, so these must not have moved. */
@@ -233,6 +277,17 @@ function collect() {
       route's subtree (02-design.md §8.4). */
   const overlayPanel = document.querySelector('.cdk-overlay-container .status-bar-menu__panel');
 
+  /** The overflow popover, also in the CDK overlay container on document.body
+      (sidebar-catalogue-overflow 02-design.md §7.2). The trigger is identified
+      by `aria-haspopup`, which the CDK writes — the sidebar carries no other
+      marker distinguishing it from an ordinary slot, deliberately: it IS an
+      ordinary `.sidebar-item`. */
+  const overflowTrigger = document.querySelector('.sidebar__menu-items [aria-haspopup]');
+  const overflowPanel = document.querySelector('.cdk-overlay-container .sidebar-overflow');
+  const overflowGrid = overflowPanel
+    ? overflowPanel.querySelector('.sidebar-overflow__grid')
+    : null;
+
   const settingsRoot = document.querySelector('.settings');
   const choiceGroups = [...document.querySelectorAll('.setting-choice')].map((group, gi) => ({
     label: text(group.querySelector('.setting-choice__label'), `settings.group[${gi}].label`),
@@ -309,6 +364,61 @@ function collect() {
           ),
         }
       : null,
+
+    menuOverflow: {
+      trigger: overflowTrigger
+        ? {
+            box: box(overflowTrigger),
+            label: text(overflowTrigger.querySelector('.sidebar-item__label'), 'overflow.trigger'),
+            expanded: overflowTrigger.getAttribute('aria-expanded'),
+            hasPopup: overflowTrigger.getAttribute('aria-haspopup'),
+            ariaLabel: overflowTrigger.getAttribute('aria-label'),
+            active: overflowTrigger.classList.contains('sidebar-item--active'),
+          }
+        : null,
+      panel: overflowPanel
+        ? {
+            inShell: !!document.querySelector('.shell .sidebar-overflow'),
+            onBody: !!document.querySelector('body > .cdk-overlay-container .sidebar-overflow'),
+            box: box(overflowPanel),
+            role: overflowPanel.getAttribute('role'),
+            ariaLabel: overflowPanel.getAttribute('aria-label'),
+            maxHeight: getComputedStyle(overflowPanel).maxHeight,
+            columns: overflowGrid ? getComputedStyle(overflowGrid).gridTemplateColumns : null,
+            /* The GRID may scroll inside the panel — legal since constitution
+               v1.8.0, which binds the document, not a bounded sub-component. */
+            gridScrolls: overflowGrid
+              ? overflowGrid.scrollHeight > overflowGrid.clientHeight + 0.5
+              : null,
+            tiles: [...overflowPanel.querySelectorAll('.sidebar-overflow__tile')].map(
+              (tile, i) => ({
+                box: box(tile),
+                role: tile.getAttribute('role'),
+                label: text(
+                  tile.querySelector('.sidebar-overflow__tile-label'),
+                  `overflow.tile[${i}]`,
+                  false,
+                ),
+                /* `-webkit-line-clamp` hides the overflow without changing
+                   the ink width, so the generic `truncated()` heuristic
+                   cannot see it. This is the direct question: is there a
+                   third line the clamp is eating? */
+                clamped: (() => {
+                  const label = tile.querySelector('.sidebar-overflow__tile-label');
+                  return label ? label.scrollHeight > label.clientHeight + 0.5 : null;
+                })(),
+                glyph: (() => {
+                  const paths = [...tile.querySelectorAll('ng-icon svg path')];
+                  return {
+                    paths: paths.length,
+                    d: paths.length ? (paths[0].getAttribute('d') ?? '') : null,
+                  };
+                })(),
+              }),
+            ),
+          }
+        : null,
+    },
 
     heading: box(document.querySelector('.heading-block')),
     headlineLines: lineCount(document.querySelector('.heading-block__headline')),
@@ -430,6 +540,12 @@ async function openDropdown(page, which /* 0 = language, 1 = appearance */) {
   await page.waitForSelector('.cdk-overlay-container .status-bar-menu__panel', { timeout: 5000 });
 }
 
+/** Opens the sidebar's overflow popover and waits for the panel. */
+async function openOverflow(page) {
+  await page.locator('.sidebar__menu-items [aria-haspopup]').click();
+  await page.waitForSelector('.cdk-overlay-container .sidebar-overflow', { timeout: 5000 });
+}
+
 /**
  * A grid of sample points inside a box, inset from its edges. Sampling a
  * *patch* rather than a single pixel is what makes the surface readings
@@ -549,10 +665,12 @@ console.log(
 console.log('\n############ PASS 1 — no-scroll grid, status-bar box, wrapping ############');
 
 for (const [w, h] of viewports) {
-  const context = await seedContext(await browser.newContext({
-    viewport: { width: w, height: h },
-    deviceScaleFactor: 1,
-  }));
+  const context = await seedContext(
+    await browser.newContext({
+      viewport: { width: w, height: h },
+      deviceScaleFactor: 1,
+    }),
+  );
   const page = await context.newPage();
   for (const theme of themes) {
     for (const language of languages) {
@@ -645,10 +763,12 @@ console.log(
 for (const [w, h] of viewports.filter(([vw]) => vw === 1024 || vw === 1280)) {
   for (const theme of themes) {
     for (const language of languages) {
-      const context = await seedContext(await browser.newContext({
-        viewport: { width: w, height: h },
-        deviceScaleFactor: 1,
-      }));
+      const context = await seedContext(
+        await browser.newContext({
+          viewport: { width: w, height: h },
+          deviceScaleFactor: 1,
+        }),
+      );
       const page = await context.newPage();
       await applyPreferences(page, theme, language);
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
@@ -695,10 +815,12 @@ console.log('\n############ PASS 3 — open dropdown overlay (REQ-115, REQ-123) 
 for (const [w, h] of viewports) {
   for (const theme of themes) {
     for (const language of languages) {
-      const context = await seedContext(await browser.newContext({
-        viewport: { width: w, height: h },
-        deviceScaleFactor: 1,
-      }));
+      const context = await seedContext(
+        await browser.newContext({
+          viewport: { width: w, height: h },
+          deviceScaleFactor: 1,
+        }),
+      );
       const page = await context.newPage();
       await applyPreferences(page, theme, language);
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
@@ -746,14 +868,125 @@ for (const [w, h] of viewports) {
   }
 }
 
+/*
+ * The overflow popover (REQ-918, REQ-935). Only the two constitutional
+ * viewports: the no-scroll rule is stated at 1024x768 and 1280x832, and this
+ * pass is about the panel's own geometry rather than about the grid.
+ *
+ * `--size-touch-min` is 2.75rem and the root font size is viewport
+ * proportional, so the minimum is read off the live document rather than
+ * hard-coded — `--size-touch-target` does not exist.
+ */
+console.log('\n############ PASS 3B — open overflow popover (REQ-916…919, REQ-935) ############');
+
+for (const [w, h] of viewports.filter(([vw]) => vw === 1024 || vw === 1280)) {
+  for (const theme of themes) {
+    for (const language of languages) {
+      const context = await seedContext(
+        await browser.newContext({
+          viewport: { width: w, height: h },
+          deviceScaleFactor: 1,
+        }),
+      );
+      const page = await context.newPage();
+      await applyPreferences(page, theme, language);
+      await page.goto(baseUrl + '/', { waitUntil: 'load' });
+      await page.waitForSelector('.sidebar');
+      const closed = await page.evaluate(collect);
+      if (!closed.menuOverflow.trigger) {
+        console.log(
+          `${w}x${h} · ${theme} · ${language}: no overflow trigger — the property offers ` +
+            `${closed.labels.length - 1} sections, at or below the sidebar's slot count`,
+        );
+        await context.close();
+        continue;
+      }
+      await openOverflow(page);
+      await page.waitForTimeout(120);
+      const m = await page.evaluate(collect);
+      const o = m.menuOverflow.panel;
+      const t = m.menuOverflow.trigger;
+      const s = m.scroll;
+      const rootPx = parseFloat(m.rootFontSize);
+      const touchMin = 2.75 * rootPx;
+      const inside =
+        o.box.x >= 0 && o.box.y >= 0 && o.box.right <= s.clientW && o.box.bottom <= s.clientH;
+      const noScroll = s.scrollW <= s.clientW && s.scrollH <= s.clientH;
+      const contentLeft = m.sidebar ? m.sidebar.right : 0;
+      const smallest = Math.min(...o.tiles.map((x) => Math.min(x.box.w, x.box.h)));
+      const fallbacks = o.tiles.filter(
+        (x) => x.glyph.paths === 1 && x.glyph.d === FALLBACK_GLYPH_PATH,
+      );
+      const glyphless = o.tiles.filter((x) => x.glyph.paths === 0);
+      /* Vertically centred on the trigger is the preferred position; a
+         fallback shifts it, which is legitimate and is printed rather than
+         judged. */
+      const centreDelta = Math.round((o.box.y + o.box.h / 2 - (t.box.y + t.box.h / 2)) * 100) / 100;
+      console.log(
+        `\n${w}x${h} · ${theme} · ${language}  (root ${m.rootFontSize}, touch-min ${round(touchMin)}px)\n` +
+          `  trigger  ${JSON.stringify(t.box)} label="${t.label.text}" ` +
+          `haspopup=${t.hasPopup} expanded=${t.expanded} aria-label=${t.ariaLabel} active=${t.active}\n` +
+          `  panel    ${JSON.stringify(o.box)} role=${o.role} aria-label="${o.ariaLabel}"\n` +
+          `  columns  ${o.columns}\n` +
+          `  max-h    ${o.maxHeight}, grid scrolls internally: ${o.gridScrolls}\n` +
+          `  gap to trigger: panel.x - trigger.right = ${round(o.box.x - t.box.right)}, ` +
+          `centre offset ${centreDelta}\n` +
+          `  right of the sidebar: panel.x - sidebar.right = ${round(o.box.x - contentLeft)}\n` +
+          `  tiles    ${o.tiles.length}: ${o.tiles.map((x) => `${x.box.w}x${x.box.h}`).join(',')} ` +
+          `smallest ${round(smallest)}px ${smallest >= touchMin ? '>= touch-min OK' : 'BELOW TOUCH-MIN'}\n` +
+          `  labels   [${o.tiles.map((x) => `"${x.label.text}"(${x.label.lines}L${x.clamped ? ',CLAMPED' : ''})`).join(' ')}]\n` +
+          `  glyphs   ${o.tiles.length - glyphless.length}/${o.tiles.length} rendered, ` +
+          `${fallbacks.length === 0 ? 'none fell back to phosphorCircle OK' : `${fallbacks.length} FELL BACK`}\n` +
+          `  onBody=${o.onBody} inShell=${o.inShell} withinViewport=${inside} ` +
+          `scroll ${s.scrollW}/${s.clientW} ${s.scrollH}/${s.clientH} ${noScroll ? 'NO-SCROLL OK' : 'OVERFLOW'}`,
+      );
+      if (!noScroll)
+        note('OVERFLOW PANEL CAUSED DOCUMENT SCROLL', `${w}x${h} ${theme}/${language}`);
+      if (!inside)
+        note(
+          'OVERFLOW PANEL OUTSIDE VIEWPORT',
+          `${w}x${h} ${theme}/${language} ${JSON.stringify(o.box)}`,
+        );
+      if (o.inShell)
+        note('OVERFLOW PANEL IN SHELL', 'expected in the CDK overlay container on document.body');
+      if (smallest < touchMin)
+        note(
+          'TILE BELOW TOUCH TARGET',
+          `${w}x${h} ${theme}/${language}: ${round(smallest)}px < ${round(touchMin)}px`,
+        );
+      if (fallbacks.length)
+        note(
+          'FALLBACK GLYPH',
+          `${fallbacks.length} tile(s) at ${w}x${h} ${theme}/${language} render phosphorCircle`,
+        );
+      if (glyphless.length)
+        note('MISSING GLYPH', `${glyphless.length} tile(s) at ${w}x${h} ${theme}/${language}`);
+      for (const p of wrapProblems(o.tiles.map((x) => x.label)))
+        note('TEXT', `overflow tile ${w}x${h} ${theme}/${language} ${p}`);
+      for (const tile of o.tiles.filter((x) => x.clamped))
+        note(
+          'TILE LABEL CLAMPED',
+          `${w}x${h} ${theme}/${language} "${tile.label.text}" needs more than 2 lines`,
+        );
+      if (o.box.x < contentLeft)
+        note('OVERFLOW PANEL OVERLAPS THE SIDEBAR', `${w}x${h} ${theme}/${language}`);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(80);
+      await context.close();
+    }
+  }
+}
+
 console.log('\n############ PASS 4 — composites vs. 02-design.md §3.4 ############');
 
 for (const theme of themes) {
   const [w, h] = [1280, 832];
-  const context = await seedContext(await browser.newContext({
-    viewport: { width: w, height: h },
-    deviceScaleFactor: 1,
-  }));
+  const context = await seedContext(
+    await browser.newContext({
+      viewport: { width: w, height: h },
+      deviceScaleFactor: 1,
+    }),
+  );
   const page = await context.newPage();
   await applyPreferences(page, theme, 'de');
   await page.goto(baseUrl + '/', { waitUntil: 'load' });

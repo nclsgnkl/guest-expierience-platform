@@ -115,10 +115,16 @@ The track width is the **sidebar item's own derived box** — `6.25rem − 2 ×
 number (`sidebar.component.css` sets the same precedent: *derived, not
 tokenised*).
 
-| Columns | Panel width | at 1024×768 (root 12.8 px) | Space right of the sidebar |
-|---|---|---|---|
-| 5 | 29.25rem | 374 px | ≈ 890 px |
-| 6 | 34.875rem | 446 px | ≈ 890 px |
+| Columns | Panel content+padding | Border box (what a browser reports) | at 1024×768 | at 1280×832 |
+|---|---|---|---|---|
+| 5 | 29.25rem | 29.25rem + 2px | **376 px** | **470 px** |
+| 6 | 34.875rem | 34.875rem + 2px | **448 px** | **560 px** |
+
+The `+ 2px` is `--border-glass`'s 1 px hairline on each side. It is deliberately
+not expressible in `rem` — `docs/constitution.md` → Styling exempts hairline
+borders and blur radii from the rem rule — which is why the rem column and a
+measured `getBoundingClientRect().width` differ by exactly 2 px and always will.
+Measured 2026-08-27: 376 px / 470 px.
 
 Both fit at the 1024×768 minimum, so measurement does not decide it. **5 wins on
 three stated grounds:** the panel stays visually subordinate to the content area;
