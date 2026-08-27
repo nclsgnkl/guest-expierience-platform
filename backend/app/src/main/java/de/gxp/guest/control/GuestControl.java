@@ -25,7 +25,6 @@ import de.gxp.api.model.GuestSession;
 import de.gxp.api.model.GuestSettings;
 import de.gxp.api.model.GuestSettingsEntry;
 import de.gxp.api.model.GuestStandby;
-import de.gxp.api.model.LanguageOptionDto;
 import de.gxp.api.model.OccupancyState;
 import de.gxp.api.model.PropertyDto;
 import de.gxp.api.model.RoomDto;
