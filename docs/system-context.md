@@ -277,6 +277,33 @@ on, so §5's "kiosks trust natively" claim is withdrawn and `GET
 exists for the instance name only (Part D's need). Sixth scheduled job:
 `InstanceScheduler#reconcileServedCertificate` every 15 min at minute 5.
 
+Planned by [`docs/features/sidebar-catalogue-overflow/`](features/sidebar-catalogue-overflow/02-design.md)
+(2026-08-27, `04_analyze` PASS, implementation pending). **No new component** —
+this is the rare feature that adds capability by changing four existing rows,
+which is itself the reason it was split out of `modular-menu-catalogue`. Listed
+here so the next feature plans against the intended shape; the rows below are
+folded into the tables above when `dev` lands them (TODO T-21):
+
+| Component | Change |
+|---|---|
+| `SidebarComponent` | Stops being "5 `menuItems`". Becomes **5 fixed slots on every viewport**: with ≤ 5 delivered sections it renders exactly today's nav; above that, ranks 1–3 fixed, slot 4 **rotating**, slot 5 an **overflow trigger** opening a `@angular/cdk/menu` popover (the `StatusBarMenuComponent` pattern) that holds every remaining section, alphabetically by the label in the active language via a memoised `Intl.Collator`. Choosing one — or reaching one by an action card or a deep link — promotes it into slot 4, so the active section is always visible in the sidebar. The promotion is **per-session view state**: never `localStorage`, never the wire. Panel spec: [`docs/design/screens-inhouse/menu-overflow.md`](design/screens-inhouse/menu-overflow.md) |
+| `layout/sidebar/menu-split.ts` *(new file, not a service)* | Exported pure functions — the `resolveProperty` precedent — holding the split, the promotion rule and the collation. **The single place `n = 5` lives.** No injectable, no state beyond a module-level collator map |
+| `SectionPlaceholderComponent` | No longer "the 4 sections". `app.routes.ts` replaces the four hard-coded section children with one `:sectionKey` route (after `einstellungen`) plus a `**` fallback **as the shell's last child**, so every route the catalogue can name resolves by construction — including on a cold, offline boot, because the table is a static constant. The component matches the delivered menu **by `route`, not by key**, and renders a defined "not available" state for an unclaimed route |
+| `PropertyContentService` | Gains a `locale` signal — the active language's `Intl` locale from the property's own option list. `StalenessPillComponent` and `StatusBarComponent` still do that lookup inline; moving them onto it is a recorded follow-up, not part of that feature |
+
+Binding facts recorded there: `GuestMenu.items` gains a declared
+`maxItems` (payload sanity at the boundary, **not** a design limit — the popover
+has no capacity ceiling); a Flyway `V10` adds eight **disposable placeholder**
+catalogue rows whose only job is to exercise overflow, promotion and umlaut
+collation, and which arrive **property-disabled** so a migration delivered by the
+v1.8.1 update channel changes nothing a guest sees on a running property; and
+`menu_item_definition` stays release data, not writable through any API
+(`docs/backend/specification.md` §3 decision 5, confirmed by the owner
+2026-08-27). Known limitation recorded with it: `PUT /api/manager/menu-config`
+is a **whole-set replace**, so a partial submit deletes those opt-out rows and
+absence resolves back to enabled — a future manager UI must round-trip the whole
+set.
+
 ## Cross-Cutting Concerns
 
 - **Scheduled housekeeping:** the only work this box does unattended. Core
