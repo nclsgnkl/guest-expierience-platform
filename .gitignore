@@ -443,6 +443,14 @@ FodyWeavers.xsd
 # Recreate after a fresh clone: ln -s ../frontend/node_modules packages/node_modules
 /packages/node_modules
 
+# A `quarkus:dev` run invokes the client generator without an execution id, so
+# it writes a second, byte-identical input-hash file beside the real one. It is
+# a build artifact, not bookkeeping the build reads back — the Maven execution
+# writes `openapi.yaml-generate-ts-client.sha256`, which IS tracked and must
+# change whenever the contract does. The `-null` twin has leaked into a commit
+# once already (5557318) and is recreated on every dev run.
+/packages/api-client/.openapi-generator/openapi.yaml-null.sha256
+
 # update-channel (REQ-725): a release-signing PRIVATE key never enters the repo.
 # The TEST key pair under backend/app/src/test/resources/update/ is public by
 # definition (it signs fixtures only) and is explicitly re-included.

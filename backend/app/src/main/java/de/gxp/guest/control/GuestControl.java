@@ -14,14 +14,14 @@ import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ActionCardDto;
 import de.gxp.api.model.GuestActionCard;
 import de.gxp.api.model.GuestBrand;
-import de.gxp.api.model.GuestHomeScreen;
+import de.gxp.api.model.GuestContent;
+import de.gxp.api.model.GuestHome;
 import de.gxp.api.model.GuestMenu;
 import de.gxp.api.model.GuestMenuItem;
 import de.gxp.api.model.GuestPreference;
 import de.gxp.api.model.GuestPreferencesUpdate;
 import de.gxp.api.model.GuestProperty;
 import de.gxp.api.model.GuestRoom;
-import de.gxp.api.model.GuestSession;
 import de.gxp.api.model.GuestSettings;
 import de.gxp.api.model.GuestSettingsEntry;
 import de.gxp.api.model.GuestStandby;
@@ -39,6 +39,11 @@ import de.gxp.text.control.TemplateControl;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.CacheControl;
+import jakarta.ws.rs.core.EntityTag;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 /**
  * Control — the guest read model (REQ-416..426): the ONE place where
@@ -59,8 +64,8 @@ import jakarta.transaction.Transactional;
  * <p>Sub-package layout (constitution v1.6.0): {@code de.gxp.guest} is the
  * second feature with NO Entity — it owns no table at all, by design. It gets
  * a {@code .boundary} and a {@code .control} and nothing else; the
- * {@code GuestEtagFilter} sits package-private beside this class. Every one
- * of the six features this Control reaches into is reached through that
+ * package-private {@link GuestContentVersion} sits beside this class. Every
+ * one of the seven features this Control reaches into is reached through that
  * feature's public {@code *Control}, which is the only crossing spec §4
  * allows.
  */
@@ -84,10 +89,11 @@ public class GuestControl {
     private final StayControl stayControl;
     private final AssetControl assetControl;
     private final TemplateControl templateControl;
+    private final GuestContentVersion contentVersion;
 
     GuestControl(SecurityIdentity identity, PropertyControl propertyControl, RoomControl roomControl,
             MenuControl menuControl, StayControl stayControl, AssetControl assetControl,
-            TemplateControl templateControl) {
+            TemplateControl templateControl, GuestContentVersion contentVersion) {
         this.identity = identity;
         this.propertyControl = propertyControl;
         this.roomControl = roomControl;
@@ -95,22 +101,50 @@ public class GuestControl {
         this.stayControl = stayControl;
         this.assetControl = assetControl;
         this.templateControl = templateControl;
+        this.contentVersion = contentVersion;
     }
 
     /**
-     * Everything route-independent for the device's room (REQ-416/418/419/426).
-     * Vacant rooms still answer 200 — the session carries the standby texts
-     * and settings config the standby screen renders from — but no display
-     * name and no preference override.
+     * Everything the device's room renders from, in ONE document
+     * (REQ-941/942/944/946/948) — property, room, occupancy, settings,
+     * resolved menu, standby texts, and for an occupied room the stay-derived
+     * half: display name, raw preference override and {@code home}.
+     *
+     * <p><b>Always throws the built 200/304 Response</b>, the same shape
+     * {@code AssetControl.binary} ships: an entity-carrying
+     * {@code WebApplicationException} never reaches a mapper (see
+     * {@code ApiErrorMappers}) and {@code ResponseStatusFilter} leaves thrown
+     * responses alone. That is what lets the 304 be answered from the version
+     * stamp ALONE — matched before anything is read, composed or serialized
+     * (REQ-946). The retired guest ETag response filter hashed the response
+     * BYTES, so it had to resolve the whole payload to say "unchanged"; it is
+     * deleted rather than bypassed, so no code path that could serialize in
+     * order to tag survives.
+     *
+     * <p>Vacancy is expressed as ABSENCE, not as a second status code
+     * (REQ-944/945): a vacant room answers 200 with the property-scoped half
+     * intact and no {@code guestDisplayName}, no {@code preference} and no
+     * {@code home}. Home's texts resolve against the active stay
+     * ({@code {stay.displayName}}, {@code {stay.checkOut|time}}), so there is
+     * nothing honest to serve for a room with no stay. {@code home} itself is
+     * mandatory ({@link MenuControl#MANDATORY_KEYS}), so an occupied room
+     * always carries it — the old 404 for a home that resolved disabled is
+     * not handled here, it is unreachable (REQ-948).
      */
     @Transactional
-    public GuestSession session() {
+    public GuestContent content(String ifNoneMatch) {
         long roomId = roomId();
+        StayDto stay = stayControl.activeStayOf(roomId);
+        EntityTag etag = new EntityTag(contentVersion.stampFor(roomId, stay));
+        if (ifNoneMatch != null && etag.getValue().equals(ifNoneMatch.replace("\"", ""))) {
+            throw new WebApplicationException(Response.notModified(etag).build());
+        }
+
         PropertyDto property = propertyControl.guestView();
         RoomDto room = roomControl.guestView(roomId);
-        StayDto stay = stayControl.activeStayOf(roomId);
         List<String> languages = offeredLanguages(property);
-        GuestSession session = new GuestSession()
+        List<GuestMenuItem> menu = menuControl.guestResolvedMenu(roomId, languages);
+        GuestContent content = new GuestContent()
                 .property(new GuestProperty()
                         .name(property.getName())
                         .brand(new GuestBrand()
@@ -129,40 +163,37 @@ public class GuestControl {
                         .defaultAppearance(room.getDefaultAppearance() != null
                                 ? room.getDefaultAppearance() : property.getDefaultAppearance()))
                 .menu(new GuestMenu()
-                        .items(menuControl.guestResolvedMenu(roomId, languages))
+                        .items(menu)
                         .settingsEntry(settingsEntry(languages)))
                 .standby(new GuestStandby()
                         .headline(resolveLocalized(property.getStandbyHeadline(), property, null, languages))
                         .message(resolveLocalized(property.getStandbyMessage(), property, null, languages)));
         if (stay != null) {
-            session.guestDisplayName(stay.getDisplayName());
-            session.preference(new GuestPreference()
+            content.guestDisplayName(stay.getDisplayName());
+            content.preference(new GuestPreference()
                     .language(stay.getLanguage() == null ? null : stay.getLanguage().toString())
                     .appearance(stay.getAppearance() == null ? null : stay.getAppearance().toString()));
+            content.home(home(property, room, stay, menu, roomId, languages));
         }
-        return session;
+
+        CacheControl cacheControl = new CacheControl();
+        cacheControl.setNoCache(true);
+        // JAX-RS defaults noTransform to true; the wire value stays exactly
+        // the "no-cache" the kiosk has always been served
+        cacheControl.setNoTransform(false);
+        throw new WebApplicationException(Response.ok(content, MediaType.APPLICATION_JSON_TYPE)
+                .tag(etag)
+                .cacheControl(cacheControl)
+                .build());
     }
 
     /**
-     * The home screen (REQ-419/420/421): vacant → the named 409; resolved-
-     * disabled {@code home} → 404. All templates resolve server-side per
-     * offered language against the active stay — no braces ever leave the
-     * server. Artwork falls back room → property.
+     * The home content (REQ-419/420/421), occupied rooms only: all templates
+     * resolved server-side per offered language against the active stay — no
+     * braces ever leave the server. Artwork falls back room → property.
      */
-    @Transactional
-    public GuestHomeScreen homeScreen() {
-        long roomId = roomId();
-        StayDto stay = stayControl.activeStayOf(roomId);
-        if (stay == null) {
-            throw ApiErrors.conflict("room-vacant", "The room has no active stay");
-        }
-        PropertyDto property = propertyControl.guestView();
-        RoomDto room = roomControl.guestView(roomId);
-        List<String> languages = offeredLanguages(property);
-        List<GuestMenuItem> menu = menuControl.guestResolvedMenu(roomId, languages);
-        if (menu.stream().noneMatch(item -> "home".equals(item.getKey()))) {
-            throw ApiErrors.notFound("screen-not-found", "The home screen resolves disabled for this room");
-        }
+    private GuestHome home(PropertyDto property, RoomDto room, StayDto stay, List<GuestMenuItem> menu,
+            long roomId, List<String> languages) {
         List<GuestActionCard> cards = new ArrayList<>();
         for (ActionCardDto card : menuControl.guestResolvedCards(roomId)) {
             GuestMenuItem target = menu.stream()
@@ -178,7 +209,7 @@ public class GuestControl {
                     .targetKey(card.getTargetMenuItemKey())
                     .targetRoute(target.getRoute()));
         }
-        return new GuestHomeScreen()
+        return new GuestHome()
                 .headline(resolveLocalized(property.getHeadline(), property, stay, languages))
                 .subtitle(resolveLocalized(property.getHeroSubtitle(), property, stay, languages))
                 .paragraph(resolveLocalized(property.getParagraph(), property, stay, languages))

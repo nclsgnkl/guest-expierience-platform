@@ -76,7 +76,7 @@ class GuestPreferenceTest {
         var write = putPreferences(Map.of("language", "en", "appearance", "dark"));
         org.junit.jupiter.api.Assertions.assertEquals(204, write.statusCode());
         given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("preference.language", equalTo("en"))
                 .body("preference.appearance", equalTo("dark"));
@@ -87,7 +87,7 @@ class GuestPreferenceTest {
         clear.put("appearance", null);
         org.junit.jupiter.api.Assertions.assertEquals(204, putPreferences(clear).statusCode());
         given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("preference.language", nullValue())
                 .body("preference.appearance", nullValue());

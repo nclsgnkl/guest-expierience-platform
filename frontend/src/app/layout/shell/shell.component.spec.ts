@@ -10,6 +10,7 @@ import {
   phosphorHouse,
   phosphorInfo,
   phosphorSun,
+  phosphorWifiSlash,
 } from '@ng-icons/phosphor-icons/regular';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -76,13 +77,14 @@ describe('ShellComponent', () => {
         },
         /* The shell reads content through the REAL PropertyContentService,
            which since REQ-510 reads GuestDataService — doubled with a held
-           config plus the two staleness-pill signals. */
+           config plus the signals the staleness chrome derives from. */
         {
           provide: GuestDataService,
           useValue: {
             config: signal<PropertyConfig | null>(TEST_CONFIG),
             connection: signal('ONLINE'),
             staleSince: signal<number | null>(null),
+            occupancy: signal<string | null>('OCCUPIED'),
           },
         },
         provideZonelessChangeDetection(),
@@ -97,6 +99,7 @@ describe('ShellComponent', () => {
           phosphorGlobe,
           phosphorSun,
           phosphorCaretDown,
+          phosphorWifiSlash,
         }),
       ],
     });
@@ -159,22 +162,66 @@ describe('ShellComponent', () => {
     const element: HTMLElement = harness.routeNativeElement!;
     expect(element.querySelector('.staleness-pill')).toBeNull();
 
-    const guestData = TestBed.inject(GuestDataService) as unknown as {
-      connection: ReturnType<typeof signal<string>>;
-      staleSince: ReturnType<typeof signal<number | null>>;
-    };
+    const guestData = staleness();
+    // Five minutes ago, relative to the real clock: the escalation threshold
+    // is an hour, so a wall-clock literal here would decide the *other* case.
+    const since = Date.now() - 5 * 60_000;
     guestData.connection.set('STALE');
-    guestData.staleSince.set(Date.parse('2026-08-20T14:05:00'));
+    guestData.staleSince.set(since);
     await harness.fixture.whenStable();
 
     const pill = element.querySelector('.staleness-pill');
     expect(pill).toBeTruthy();
     expect(pill!.getAttribute('role')).toBe('status');
-    expect(pill!.textContent).toContain('14:05');
+    expect(pill!.textContent).toContain(asOf(since));
 
     guestData.connection.set('ONLINE');
     guestData.staleSince.set(null);
     await harness.fixture.whenStable();
     expect(element.querySelector('.staleness-pill')).toBeNull();
   });
+
+  it('after an hour the pill is replaced by the banner, with the GUEST wording (REQ-952)', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/', ShellComponent);
+    const element: HTMLElement = harness.routeNativeElement!;
+
+    const guestData = staleness();
+    const since = Date.now() - 61 * 60_000;
+    guestData.connection.set('STALE');
+    guestData.staleSince.set(since);
+    await harness.fixture.whenStable();
+
+    const banner = element.querySelector('.staleness-banner');
+    expect(banner).toBeTruthy();
+    expect(banner!.getAttribute('role')).toBe('status');
+    expect(banner!.getAttribute('aria-live')).toBe('polite');
+    // Occupied: the guest is directed to their host, and the pill's own
+    // timestamp line survives the escalation.
+    expect(banner!.textContent).toContain('Gastgeber');
+    expect(banner!.textContent).not.toContain('Verwaltung');
+    expect(banner!.textContent).toContain(asOf(since));
+    // Tri-state: one derived level, so the two are never up together.
+    expect(element.querySelector('.staleness-pill')).toBeNull();
+    // REQ-952's second half, the one D13 argued hardest for: a hard cutoff was
+    // explicitly rejected, so the routed content must keep rendering behind
+    // the banner — the guest still needs the door code and the WiFi password.
+    expect(element.textContent).toContain('home content');
+  });
+
+  /** The staleness signals of the `GuestDataService` double. */
+  function staleness() {
+    return TestBed.inject(GuestDataService) as unknown as {
+      connection: ReturnType<typeof signal<string>>;
+      staleSince: ReturnType<typeof signal<number | null>>;
+      occupancy: ReturnType<typeof signal<string | null>>;
+    };
+  }
+
+  /** What the chrome renders for a `storedAt`, in the config's own locale. */
+  function asOf(since: number): string {
+    return new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(
+      new Date(since),
+    );
+  }
 });

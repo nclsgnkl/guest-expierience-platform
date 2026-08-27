@@ -505,7 +505,7 @@ const BOOT_CONFIG: PropertyConfig = {
 /** A successful wire bootstrap, delivered asynchronously like the real one. */
 class FakeGuestDataService {
   readonly config = signal<PropertyConfig | null>(null);
-  readonly session = signal<null>(null);
+  readonly payload = signal<null>(null);
   readonly occupancy = signal<'OCCUPIED' | 'VACANT' | null>(null);
   readonly connection = signal<'ONLINE' | 'STALE' | 'DISCONNECTED'>('DISCONNECTED');
   readonly staleSince = signal<number | null>(null);
@@ -517,7 +517,7 @@ class FakeGuestDataService {
     this.connection.set('ONLINE');
   }
 
-  sessionPreference(): null {
+  preferenceOverride(): null {
     return null;
   }
 

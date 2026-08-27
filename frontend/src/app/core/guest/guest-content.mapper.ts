@@ -1,8 +1,9 @@
-import type {
-  GuestHomeScreen,
-  GuestMenuItem,
-  GuestSession,
-  GuestSettingsEntry,
+import {
+  OccupancyState,
+  type GuestContent,
+  type GuestHome,
+  type GuestMenuItem,
+  type GuestSettingsEntry,
 } from '@gxp/api-client';
 
 import { TRANSLATION_CATALOGS } from '../i18n/catalog';
@@ -50,7 +51,7 @@ export class GuestContentMappingError extends Error {
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 /**
  * The two array bounds `api/openapi.yaml` declares — `GuestMenu.items.maxItems`
- * and `GuestHomeScreen.actionCards.maxItems`. Both are boundary validation of an
+ * and `GuestHome.actionCards.maxItems`. Both are boundary validation of an
  * untrusted wire, and both reject rather than truncate.
  *
  * `MAX_MENU_ITEMS` was `5` until REQ-901, and that was the bug: the number was
@@ -65,45 +66,51 @@ const MAX_MENU_ITEMS = 50;
 const MAX_CARDS = 4;
 
 /**
- * Maps a session (+ the home screen while occupied) into the internal config.
- * Throws {@link GuestContentMappingError} on structural violations.
+ * Maps the one content payload into the internal config. Throws
+ * {@link GuestContentMappingError} on structural violations.
+ *
+ * **Occupied implies `home`** (guest-payload-consolidation §1.2): the server
+ * omits the whole stay-derived half exactly when the room is vacant, so an
+ * OCCUPIED payload without `home` is a server bug — named here rather than
+ * rendered as half a screen.
  */
-export function mapGuestContent(
-  session: GuestSession,
-  home: GuestHomeScreen | null,
-): PropertyConfig {
-  const settingsConfig = mapSettingsConfig(session);
+export function mapGuestContent(content: GuestContent): PropertyConfig {
+  const home = content.home ?? null;
+  if (content.occupancy === OccupancyState.Occupied && home === null) {
+    throw new GuestContentMappingError('occupancy is OCCUPIED but "home" is absent');
+  }
+  const settingsConfig = mapSettingsConfig(content);
   const defaultLanguage = settingsConfig.defaultLanguage;
 
-  const name = requireText(session.property?.name, 'property.name');
+  const name = requireText(content.property?.name, 'property.name');
 
-  const items = session.menu?.items ?? [];
+  const items = content.menu?.items ?? [];
   if (items.length > MAX_MENU_ITEMS) {
     throw new GuestContentMappingError(`menu.items exceeds the contract's 0–${MAX_MENU_ITEMS}`);
   }
-  const settingsEntry = session.menu?.settingsEntry;
+  const settingsEntry = content.menu?.settingsEntry;
   if (!settingsEntry) {
     throw new GuestContentMappingError('menu.settingsEntry is missing');
   }
 
   return {
     propertyName: name,
-    logoAssetId: session.property.logoAssetId ?? null,
-    branding: mapBranding(session),
+    logoAssetId: content.property.logoAssetId ?? null,
+    branding: mapBranding(content),
     menuItems: [...items]
       .sort((a, b) => a.sortIndex - b.sortIndex)
       .map((item) => mapMenuItem(item, defaultLanguage)),
     settings: mapSettingsEntry(settingsEntry, defaultLanguage),
     settingsConfig,
-    standbyHeadline: localized(session.standby?.headline, 'standby.headline', defaultLanguage),
-    standbyMessage: localized(session.standby?.message, 'standby.message', defaultLanguage),
+    standbyHeadline: localized(content.standby?.headline, 'standby.headline', defaultLanguage),
+    standbyMessage: localized(content.standby?.message, 'standby.message', defaultLanguage),
     home: home === null ? null : mapHome(home, defaultLanguage),
   };
 }
 
 /** The stay's raw preference override, handed to `PreferencesService.hydrate()`. */
-export function mapStoredPreferences(session: GuestSession): StoredPreferences | null {
-  const preference = session.preference;
+export function mapStoredPreferences(content: GuestContent): StoredPreferences | null {
+  const preference = content.preference;
   if (!preference) {
     return null;
   }
@@ -121,8 +128,8 @@ export function mapStoredPreferences(session: GuestSession): StoredPreferences |
   return stored;
 }
 
-function mapSettingsConfig(session: GuestSession): PropertySettingsConfig {
-  const settings = session.settings;
+function mapSettingsConfig(content: GuestContent): PropertySettingsConfig {
+  const settings = content.settings;
   if (!settings || !Array.isArray(settings.languages) || settings.languages.length === 0) {
     throw new GuestContentMappingError('settings.languages is missing or empty');
   }
@@ -157,8 +164,8 @@ function mapSettingsConfig(session: GuestSession): PropertySettingsConfig {
   return { languages, defaultLanguage, appearances, defaultAppearance };
 }
 
-function mapBranding(session: GuestSession): PropertyBranding | null {
-  const brand = session.property?.brand;
+function mapBranding(content: GuestContent): PropertyBranding | null {
+  const brand = content.property?.brand;
   if (!brand) {
     return null;
   }
@@ -187,7 +194,7 @@ function mapSettingsEntry(entry: GuestSettingsEntry, defaultLanguage: string): M
   };
 }
 
-function mapHome(home: GuestHomeScreen, defaultLanguage: string): HomeContent {
+function mapHome(home: GuestHome, defaultLanguage: string): HomeContent {
   const cards = home.actionCards ?? [];
   if (cards.length > MAX_CARDS) {
     throw new GuestContentMappingError(`actionCards exceeds the contract's 0–${MAX_CARDS}`);

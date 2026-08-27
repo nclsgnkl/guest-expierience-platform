@@ -72,7 +72,7 @@ class DevDataSeederTest {
                 "the dev seed must create exactly one device");
 
         given().header("Authorization", "Bearer " + DevDataSeeder.DEV_DEVICE_TOKEN)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("occupancy", equalTo("OCCUPIED"))
                 .body("guestDisplayName", equalTo("Anna & Tom"))
@@ -86,14 +86,14 @@ class DevDataSeederTest {
                 .body("standby.headline.de", equalTo("Meine Unterkunft"));
 
         given().header("Authorization", "Bearer " + DevDataSeeder.DEV_DEVICE_TOKEN)
-                .when().get("/api/guest/screens/home")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
-                .body("actionCards", hasSize(4))
-                .body("headline.de", equalTo("Willkommen im Airbnb von Anna & Tom!"))
-                .body("headline.en", equalTo("Welcome to Anna & Tom's Airbnb!"))
-                .body("subtitle.de", equalTo("Schön, dass ihr da seid"))
-                .body("actionCards[0].icon", equalTo("phosphorKey"))
-                .body("actionCards[0].title.de", equalTo("Check-Out"));
+                .body("home.actionCards", hasSize(4))
+                .body("home.headline.de", equalTo("Willkommen im Airbnb von Anna & Tom!"))
+                .body("home.headline.en", equalTo("Welcome to Anna & Tom's Airbnb!"))
+                .body("home.subtitle.de", equalTo("Schön, dass ihr da seid"))
+                .body("home.actionCards[0].icon", equalTo("phosphorKey"))
+                .body("home.actionCards[0].title.de", equalTo("Check-Out"));
     }
 
     @Test

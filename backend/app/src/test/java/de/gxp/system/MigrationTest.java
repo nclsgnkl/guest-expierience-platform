@@ -48,12 +48,14 @@ class MigrationTest {
     }
 
     @Test
-    void flywayHeadIsV10CatalogueExpansion() {
+    void flywayHeadIsV11HomeIsMandatory() {
         // The head is pinned as a LITERAL on purpose: a migration cannot be
         // added silently, and updating this line is the conscious step.
         // sidebar-catalogue-overflow (REQ-903, REQ-910) moved it from V9 to
-        // V10 — data only, no DDL. What V10 actually inserts is asserted in
-        // de.gxp.menu.CatalogueExpansionTest, not here: this class shares the
+        // V10 and guest-payload-consolidation (REQ-948) to V11 — both data
+        // only, no DDL. What V10 actually inserts is asserted in
+        // de.gxp.menu.CatalogueExpansionTest, and V11's effect in
+        // de.gxp.menu.MandatoryMenuItemTest, not here: this class shares the
         // suite's database and has no @AfterEach, so an enablement assertion
         // would be order-dependent (02-design.md §3.3).
         // Still pinned below: update-channel's V8+V9, auth-hardening's V5-V7,
@@ -62,7 +64,7 @@ class MigrationTest {
                 .createNativeQuery("SELECT version FROM flyway_schema_history"
                         + " WHERE success = true ORDER BY installed_rank DESC LIMIT 1")
                 .getSingleResult();
-        assertEquals("10", head, "Flyway head must be V10 (catalogue expansion)");
+        assertEquals("11", head, "Flyway head must be V11 (home is mandatory)");
         Number trustedKeyColumns = (Number) entityManager
                 .createNativeQuery("SELECT count(*) FROM information_schema.columns"
                         + " WHERE table_name = 'update_channel'"

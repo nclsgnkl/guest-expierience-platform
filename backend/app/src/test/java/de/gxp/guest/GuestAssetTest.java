@@ -150,8 +150,8 @@ class GuestAssetTest {
     }
 
     @Test
-    void homeScreenArtworkFallsBackRoomToProperty() {
-        // with a room artwork set, the home screen serves the room's id
+    void homeArtworkFallsBackRoomToProperty() {
+        // with a room artwork set, the content's home half serves the room's id
         // (needs an active stay — create and remove one around the check)
         int stayId = given().header("Authorization", "Bearer " + adminToken)
                 .contentType("application/json")
@@ -163,9 +163,9 @@ class GuestAssetTest {
                 .then().statusCode(201).extract().path("id");
         try {
             given().header("Authorization", "Bearer " + deviceToken)
-                    .when().get("/api/guest/screens/home")
+                    .when().get("/api/guest/content")
                     .then().statusCode(200)
-                    .body("artworkAssetId", equalTo(ownArtworkId));
+                    .body("home.artworkAssetId", equalTo(ownArtworkId));
             // remove the room override → falls back to the property default (none set → null)
             given().header("Authorization", "Bearer " + adminToken)
                     .contentType("application/json")
@@ -173,9 +173,9 @@ class GuestAssetTest {
                     .when().put("/api/manager/rooms/" + roomId)
                     .then().statusCode(200);
             given().header("Authorization", "Bearer " + deviceToken)
-                    .when().get("/api/guest/screens/home")
+                    .when().get("/api/guest/content")
                     .then().statusCode(200)
-                    .body("artworkAssetId", org.hamcrest.Matchers.nullValue());
+                    .body("home.artworkAssetId", org.hamcrest.Matchers.nullValue());
         } finally {
             given().header("Authorization", "Bearer " + adminToken)
                     .when().delete("/api/manager/stays/" + stayId)

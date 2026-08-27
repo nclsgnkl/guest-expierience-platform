@@ -14,9 +14,10 @@ import { OccupancyState } from './occupancyState';
 import { GuestProperty } from './guestProperty';
 import { GuestMenu } from './guestMenu';
 import { GuestStandby } from './guestStandby';
+import { GuestHome } from './guestHome';
 
 
-export interface GuestSession { 
+export interface GuestContent { 
     property: GuestProperty;
     room: GuestRoom;
     occupancy: OccupancyState;
@@ -28,8 +29,12 @@ export interface GuestSession {
     preference?: GuestPreference;
     menu: GuestMenu;
     standby: GuestStandby;
+    /**
+     * Occupied only — a vacant room serves no stay-derived value.
+     */
+    home?: GuestHome;
 }
-export namespace GuestSession {
+export namespace GuestContent {
 }
 
 

@@ -180,7 +180,7 @@ class UpdateCheckTest {
         try {
             Instant start = Instant.now();
             CompletableFuture<UpdateCheckOutcome> check = CompletableFuture.supplyAsync(control::runCheck);
-            given().header("Authorization", "Bearer " + deviceToken).when().get("/api/guest/session").then().statusCode(200);
+            given().header("Authorization", "Bearer " + deviceToken).when().get("/api/guest/content").then().statusCode(200);
             given().header("Authorization", "Bearer " + adminToken).when().get("/api/manager/property").then().statusCode(200);
             assertFalse(check.isDone(), "the check must still be in flight while the kiosk and the manager were served");
             assertEquals(UpdateCheckOutcome.UNREACHABLE, check.get());

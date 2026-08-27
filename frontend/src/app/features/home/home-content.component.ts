@@ -13,9 +13,11 @@ import { HeroArtworkComponent } from './hero-artwork/hero-artwork.component';
  * guest-frontend-integration: the content is the server's home payload
  * (REQ-511) — 0–4 cards lay out in the same flex row (fewer cards simply
  * leave space; no layout logic change), and the whole region renders only
- * while home content is held (`home()` non-null: the occupancy guard keeps
- * a vacant room on /standby, so a null here is only ever the brief
- * occupied-but-home-unfetched window of a cache-boot).
+ * while home content is held (`home()` non-null). Since
+ * guest-payload-consolidation the home half arrives in the same payload as
+ * the occupancy, so an occupied room can no longer be held without it — the
+ * `@if` stays as defence against a payload neither the mapper nor the
+ * occupancy guard should ever let through.
  */
 @Component({
   selector: 'app-home-content',

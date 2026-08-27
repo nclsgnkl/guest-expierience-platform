@@ -95,14 +95,14 @@ class RoomScopingTest {
     @Test
     void eachDeviceSeesExactlyItsOwnRoom() {
         given().header("Authorization", "Bearer " + deviceA)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("room.code", equalTo("SCOPE-A"))
                 .body("guestDisplayName", equalTo("Gast Alpha"))
                 .body("preference.language", equalTo("de"))
                 .body("menu.items.key", hasItem("smart-home")); // room A inherits — enabled
         given().header("Authorization", "Bearer " + deviceB)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("room.code", equalTo("SCOPE-B"))
                 .body("guestDisplayName", equalTo("Gast Beta"))
@@ -116,7 +116,8 @@ class RoomScopingTest {
         given().header("Authorization", "Bearer " + adminToken)
                 .when().post("/api/manager/devices/" + deviceId + "/revoke")
                 .then().statusCode(204);
-        for (String path : List.of("/api/guest/session", "/api/guest/screens/home", "/api/system/info")) {
+        // one path per guest GET the contract still has, plus system/info
+        for (String path : List.of("/api/guest/content", "/api/guest/assets/1", "/api/system/info")) {
             given().header("Authorization", "Bearer " + deviceA)
                     .when().get(path)
                     .then().statusCode(401);

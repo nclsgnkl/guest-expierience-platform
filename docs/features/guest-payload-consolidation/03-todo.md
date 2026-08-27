@@ -1,7 +1,7 @@
 # TODO: Guest Payload Consolidation
 
 **Feature:** [index.md](../index.md) | **PRD:** [01-prd.md](01-prd.md) | **Design:** [02-design.md](02-design.md)
-**Status:** Not Started
+**Status:** All 19 tasks implemented (2026-08-27), uncommitted — review next
 
 > **Start condition:** Part A (`sidebar-catalogue-overflow`) is **committed**.
 > This list is written against the post-Part-A tree — see
@@ -20,7 +20,7 @@
 
 ## Phase 1 — Contract (§1, §8)
 
-- [ ] **T-01** Merge the two guest operations in `api/openapi.yaml`
+- [x] **T-01** Merge the two guest operations in `api/openapi.yaml`
   — *REQ-941, REQ-948*
   - Delete `GET /api/guest/session` and `GET /api/guest/screens/home`. Add
     `GET /api/guest/content` (`getGuestContent`, `bearerAuth`, header param
@@ -39,7 +39,7 @@
 
 ## Phase 2 — Backend: the stamp and the merged read (§2, §3)
 
-- [ ] **T-02** `AuditControl.latestSequence()`
+- [x] **T-02** `AuditControl.latestSequence()`
   — *REQ-946, REQ-947*
   - Add `long maxId()` to `AuditEntryRepository` (`select coalesce(max(id), 0)
     from AuditEntry`) and a **public, non-`@Transactional`** `latestSequence()`
@@ -54,7 +54,7 @@
   - Validate: `./mvnw -Dtest=AuditCoverageTest test` green; the five
     architecture guards green.
 
-- [ ] **T-03** `GuestContentVersion` — the stamp
+- [x] **T-03** `GuestContentVersion` — the stamp
   — *REQ-946, REQ-947*
   - New **package-private** class in `de.gxp.guest.control`:
     `String stampFor(long roomId, StayDto stay)` = `sha256hex(bootId | audit
@@ -71,7 +71,7 @@
   - Validate: compiles; `ControlPackageVisibilityTest` green (the class must
     **not** be public).
 
-- [ ] **T-04** `GuestControl.content(ifNoneMatch)` and the deletion of the filter
+- [x] **T-04** `GuestControl.content(ifNoneMatch)` and the deletion of the filter
   — *REQ-941, REQ-942, REQ-944, REQ-946, REQ-948*
   - Replace `session()` and `homeScreen()` with one `@Transactional public
     GuestContent content(String ifNoneMatch)`: room from the identity, one
@@ -94,7 +94,7 @@
   - Validate: backend compiles; `grep -r "screen-not-found\|GuestEtagFilter"
     backend/app/src/main` is empty.
 
-- [ ] **T-05** `home` becomes mandatory
+- [x] **T-05** `home` becomes mandatory
   — *REQ-948*
   - In `MenuControl`: `public static final Set<String> MANDATORY_KEYS =
     Set.of("home")`; resolution treats a mandatory key as enabled whatever any
@@ -106,7 +106,7 @@
   - Files: `…/de/gxp/menu/control/MenuControl.java`
   - Validate: `./mvnw -Dtest='Menu*Test,ActionCardTest' test` green.
 
-- [ ] **T-06** `V11__home_is_mandatory.sql`
+- [x] **T-06** `V11__home_is_mandatory.sql`
   — *REQ-948*
   - `UPDATE menu_item_config SET enabled = NULL, sort_index = NULL WHERE
     menu_item_key = 'home';` — no DDL. Header comment: this repairs instances
@@ -121,7 +121,7 @@
 
 ## Phase 3 — Backend tests (§9)
 
-- [ ] **T-07** `GuestContentTest` — the merged read
+- [x] **T-07** `GuestContentTest` — the merged read
   — *REQ-941, REQ-944, REQ-945, REQ-948*
   - Rename `GuestSessionTest` → `GuestContentTest` and fold in
     `GuestHomeScreenTest`'s surviving cases (template resolution per offered
@@ -137,7 +137,7 @@
   - Validate: `./mvnw -Dtest=GuestContentTest test` green; the whole backend
     suite green in one run (the shared-database hygiene is only visible there).
 
-- [ ] **T-08** `GuestEtagTest` — the stamp's three properties
+- [x] **T-08** `GuestEtagTest` — the stamp's three properties
   — *REQ-946, REQ-947*
   - Rewrite for `/api/guest/content` and add, as separate cases:
     (a) **the seam** — poll, corrupt `property.timezone` with native SQL (no
@@ -151,7 +151,7 @@
   - Validate: `./mvnw -Dtest=GuestEtagTest test` green; every case restores the
     state it changed.
 
-- [ ] **T-09** Mandatory-item tests and the audit list
+- [x] **T-09** Mandatory-item tests and the audit list
   — *REQ-948*
   - New `MandatoryMenuItemTest` (a **new file**, to keep Part A's
     `MenuDisableGuardTest` edits out of the way): disabling `home` at property
@@ -168,7 +168,7 @@
 
 ## Phase 4 — Frontend: one resource (§5)
 
-- [ ] **T-10** Collapse `GuestDataService`
+- [x] **T-10** Collapse `GuestDataService`
   — *REQ-942, REQ-943, REQ-946, REQ-949*
   - Remove `HOME_CACHE_KEY`, `homeEtag`, `heldHome`, `fetchHome()` (both
     overloads), `asVacant()` with its comment, `withIfNoneMatch()` and the
@@ -184,12 +184,16 @@
   - Files: `frontend/src/app/core/guest/guest-data.service.ts`,
     `…/core/guest/guest-bootstrap.service.ts`,
     `…/core/preferences/http-preference-gateway.ts`
-  - Validate: `wc -l` on the service is **< 452**; `grep -n
+  - Validate: `grep -n
     "HOME_CACHE_KEY\|homeEtag\|heldHome\|fetchHome\|asVacant"
-    frontend/src/app/core/guest/guest-data.service.ts` is empty; `ng build`
-    green.
+    frontend/src/app/core/guest/guest-data.service.ts` is empty; the file
+    holds **one** fetch, **one** ETag field, **one** cache key and **one**
+    held copy; neither entry point runs a two-call sequence; no branch
+    handles a `409`; `ng build` green. *(The `wc -l < 452` check was struck
+    by the owner on 2026-08-27 — `01-prd.md` REQ-949. Judge the structure,
+    not the size.)*
 
-- [ ] **T-11** `mapGuestContent(content)`
+- [x] **T-11** `mapGuestContent(content)`
   — *REQ-942, REQ-948*
   - One parameter instead of two; `home` read from `content.home`;
     `mapHome()` and every validation rule unchanged, **including Part A's
@@ -204,7 +208,7 @@
     `…/features/home/home-content.component.ts` (comment only)
   - Validate: `ng test` for the mapper spec green.
 
-- [ ] **T-12** Rewrite `guest-data.service.spec.ts`
+- [x] **T-12** Rewrite `guest-data.service.spec.ts`
   — *REQ-950, REQ-945, REQ-951*
   - The 13 cases, rebuilt around one request to `/api/guest/content`: every
     transition (200 / 304 / error / 401 / vacancy / cache-rejected) keeps its
@@ -221,7 +225,7 @@
 
 ## Phase 5 — The escalating banner (§6)
 
-- [ ] **T-13** `StalenessService`
+- [x] **T-13** `StalenessService`
   — *REQ-952, REQ-943*
   - New `core/guest/staleness.service.ts`: `STALE_ESCALATION_MS = 60 * 60 *
     1000` and `level: 'NONE' | 'PILL' | 'BANNER'` derived from
@@ -234,8 +238,13 @@
     `304`s → `NONE`, cold boot from an hour-old `storedAt` → `BANNER`
     immediately; and asserts `ConnectionState` still has exactly three members.
 
-- [ ] **T-14** The banner component and the pill's one-line change
+- [x] **T-14** The banner component and the pill's one-line change
   — *REQ-952*
+  - *(Geometry superseded 2026-08-27 by the fix round: the clamp is dropped —
+    `width: max-content` to a one-line body, glyph `--size-icon-md` in
+    `--color-status-warning`, timestamp on the title's row, entrance + glyph
+    pulse behind `prefers-reduced-motion`. Read §6.3 and `connection.md`, not
+    this bullet, for what ships.)*
   - New `layout/staleness-banner/` (ts/html/css) per §6.3: absolute overlay in
     the pill's anchor, `min(22rem, 40vw)`, glass panel, the already-registered
     `WifiSlash` in `--color-status-offline` (decorative — **no new icon**, so
@@ -252,7 +261,7 @@
     vacant), one asserting the pill is gone when the banner is up; no raw hex
     or px in the CSS, no user-visible string in the template.
 
-- [ ] **T-15** Catalogue keys
+- [x] **T-15** Catalogue keys
   — *REQ-952*
   - Add `stale.banner.title`, `stale.banner.body`, `stale.banner.bodyStandby`
     to `de.ts` (the key set's source of truth) and translate them in `en.ts`,
@@ -260,7 +269,7 @@
   - Files: `…/core/i18n/catalog/de.ts`, `…/core/i18n/catalog/en.ts`
   - Validate: `ng build` green (a missing key fails the build by design).
 
-- [ ] **T-16** Build against `connection.md`, do not rewrite it
+- [x] **T-16** Build against `connection.md`, do not rewrite it
   — *REQ-952*
   - **The spec is already written** (`planner`, `02_design`, the Part A
     precedent of `menu-overflow.md`):
@@ -277,7 +286,7 @@
 
 ## Phase 6 — Measure, sweep, hand over
 
-- [ ] **T-17** Measure the banner
+- [x] **T-17** Measure the banner
   — *REQ-952*
   - Add a BANNER cell to `frontend/tools/measure-states.mjs` beside the
     existing STALE-pill cell: load online once, rewrite the cached record's
@@ -291,7 +300,7 @@
     status-bar cluster nor Home's card row. If geometry needs adjusting,
     change the CSS and re-measure — never `overflow: hidden`.
 
-- [ ] **T-18** Documentation sweep
+- [x] **T-18** Documentation sweep
   — *REQ-941, REQ-942, REQ-952*
   - `docs/system-context.md`: update the `de.gxp.guest` row (one content
     resource, the stamp, `GuestEtagFilter` gone, `home` mandatory), the
@@ -306,11 +315,14 @@
     `docs/features/guest-payload-consolidation/handoff.md`
   - Validate: no document still claims two guest content endpoints.
 
-- [ ] **T-19** Whole-suite green and the byte-identical client
+- [x] **T-19** Whole-suite green and the byte-identical client
   — *REQ-941, REQ-949, REQ-950*
   - `./mvnw verify` twice in a row: `packages/api-client/` must be
     **byte-identical** on the second build (`git status` clean after it).
-    `ng build` + `ng test`. Re-check REQ-949's two greps and the line count.
+    `ng build` + `ng test`. Re-check REQ-949's grep and its four structural
+    properties (one fetch, one ETag field, one cache key, one held copy; no
+    two-call sequence; no `409` branch). **Not the line count** — struck by
+    the owner 2026-08-27.
     Confirm `pom.xml` and `package.json` are untouched, `AuditCoverageTest`'s
     assertions and exemption list carry exactly the one intended swap, and the
     five architecture guards are unchanged — **no sixth was added**.

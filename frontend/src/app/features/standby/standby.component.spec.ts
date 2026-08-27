@@ -6,6 +6,7 @@ import {
   phosphorGlobe,
   phosphorMoon,
   phosphorSun,
+  phosphorWifiSlash,
 } from '@ng-icons/phosphor-icons/regular';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -60,14 +61,26 @@ function config(language: string): ResolvedPropertyConfig {
 describe('StandbyComponent', () => {
   const language = signal('de');
   const logoUrl = signal<string | null>(null);
+  const connection = signal('ONLINE');
+  const staleSince = signal<number | null>(null);
+  const occupancy = signal<string | null>('VACANT');
 
   beforeEach(() => {
     language.set('de');
     logoUrl.set(null);
+    connection.set('ONLINE');
+    staleSince.set(null);
+    occupancy.set('VACANT');
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
-        provideIcons({ phosphorGlobe, phosphorSun, phosphorMoon, phosphorCaretDown }),
+        provideIcons({
+          phosphorGlobe,
+          phosphorSun,
+          phosphorMoon,
+          phosphorCaretDown,
+          phosphorWifiSlash,
+        }),
         {
           provide: PREFERENCE_GATEWAY,
           useValue: {
@@ -76,10 +89,11 @@ describe('StandbyComponent', () => {
             clear: () => Promise.resolve(),
           },
         },
-        /* The status bar + pill read these; standby itself reads property(). */
+        /* The status bar, pill and banner read these; standby itself reads
+           property(). */
         {
           provide: GuestDataService,
-          useValue: { connection: signal('ONLINE'), staleSince: signal<number | null>(null) },
+          useValue: { connection, staleSince, occupancy },
         },
         {
           provide: PropertyContentService,
@@ -138,5 +152,26 @@ describe('StandbyComponent', () => {
   it('shows the property logo only when it exists and has arrived (alt="")', async () => {
     const fixture = render();
     expect(fixture.nativeElement.querySelector('.standby__logo')).toBeNull();
+  });
+
+  it('escalates to the banner with the STAFF wording — a vacant room has no guest (REQ-952)', async () => {
+    connection.set('STALE');
+    staleSince.set(Date.now() - 61 * 60_000);
+    const fixture = render();
+    const el: HTMLElement = fixture.nativeElement;
+
+    const banner = el.querySelector('.staleness-banner');
+    expect(banner).toBeTruthy();
+    expect(banner!.getAttribute('role')).toBe('status');
+    expect(banner!.getAttribute('aria-live')).toBe('polite');
+    // The occupied wording cannot be reused here: it directs a guest to their
+    // host, and there is no guest (spec: connection.md -> Content).
+    expect(banner!.textContent).toContain('Verwaltung');
+    expect(banner!.textContent).not.toContain('Gastgeber');
+    // Tri-state: the banner replaces the pill, it does not join it.
+    expect(el.querySelector('.staleness-pill')).toBeNull();
+    // REQ-952's second half: the standby block keeps rendering behind the
+    // banner — the escalation is an overlay, never a cutoff.
+    expect(el.querySelector('.standby__headline')?.textContent).toContain('Villa Test');
   });
 });

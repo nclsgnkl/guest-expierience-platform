@@ -50,13 +50,13 @@ class SpaRoutingHandlerTest {
     void realApiBehaviorIsByteForByteUntouched() {
         // Anonymous guest call: the API's own 401 challenge, not the app shell.
         given().header("Accept", "application/json")
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(401)
                 .body(not(containsString(MARKER)));
         // Even an html-only Accept gets the API's own answer (REST's 406
         // content negotiation) — never the rewritten app shell.
         given().header("Accept", "text/html")
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(406)
                 .body(not(containsString(MARKER)));
     }

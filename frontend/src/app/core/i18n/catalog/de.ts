@@ -49,4 +49,9 @@ export const de = {
   'connection.body':
     'Die Anzeige verbindet sich automatisch neu, sobald der Server erreichbar ist.',
   'stale.asOf': 'Stand {time}',
+  'stale.banner.title': 'Diese Anzeige ist nicht aktuell',
+  'stale.banner.body':
+    'Seit über einer Stunde besteht keine Verbindung zum Server. Bitte den Gastgeber informieren.',
+  'stale.banner.bodyStandby':
+    'Seit über einer Stunde besteht keine Verbindung zum Server. Bitte die Verwaltung informieren.',
 } as const;

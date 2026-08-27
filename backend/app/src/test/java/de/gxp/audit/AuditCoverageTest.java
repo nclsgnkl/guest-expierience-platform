@@ -76,7 +76,7 @@ class AuditCoverageTest {
             // reads and lookups
             "list", "get", "getConfig", "getCards", "getCatalogue", "guestView", "guestResolvedMenu",
             "guestResolvedCards", "requireKind", "requireOffered", "requireExists", "allRoomIds",
-            "lockForStayWrite", "localeOf", "binary", "guestBinary", "activeStayOf", "session", "homeScreen",
+            "lockForStayWrite", "localeOf", "binary", "guestBinary", "activeStayOf", "content",
             "asset", "ready", "info", "listDevices", "verifyToken",
             // kiosk / guest side writes (not manager mutations, REQ-621)
             "writePreference", "writePreferences", "createPairingRequest", "poll", "sweepExpiredPairingRequests",

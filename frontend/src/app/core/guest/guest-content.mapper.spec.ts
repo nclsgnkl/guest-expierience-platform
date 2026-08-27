@@ -1,4 +1,4 @@
-import type { GuestHomeScreen, GuestSession } from '@gxp/api-client';
+import type { GuestContent, GuestHome } from '@gxp/api-client';
 import { describe, expect, it } from 'vitest';
 
 import { CONTENT_FALLBACK_ICON } from '../icons/registered-icons';
@@ -12,8 +12,11 @@ import {
  * S-map — the wire boundary (REQ-510/512, 02-design.md §6). Fixtures mirror
  * the dev seed (`DevDataSeeder`), so what the spec accepts is what a dev
  * backend actually serves.
+ *
+ * Since guest-payload-consolidation there is **one** payload: `home` is
+ * nested inside it and is absent exactly when the room is vacant.
  */
-function sessionFixture(overrides: Partial<GuestSession> = {}): GuestSession {
+function contentFixture(overrides: Partial<GuestContent> = {}): GuestContent {
   return {
     property: {
       name: 'Meine Unterkunft',
@@ -52,11 +55,21 @@ function sessionFixture(overrides: Partial<GuestSession> = {}): GuestSession {
       headline: { de: 'Meine Unterkunft', en: 'Meine Unterkunft' },
       message: { de: 'Herzlich willkommen', en: 'Welcome' },
     },
+    home: homeFixture(),
     ...overrides,
   };
 }
 
-function homeFixture(overrides: Partial<GuestHomeScreen> = {}): GuestHomeScreen {
+/** The vacant answer: the property half intact, the stay-derived half absent. */
+function vacantFixture(): GuestContent {
+  const content = contentFixture();
+  delete content.guestDisplayName;
+  delete content.preference;
+  delete content.home;
+  return { ...content, occupancy: 'VACANT' };
+}
+
+function homeFixture(overrides: Partial<GuestHome> = {}): GuestHome {
   return {
     headline: { de: 'Willkommen im Airbnb von Anna & Tom!', en: "Welcome to Anna & Tom's Airbnb!" },
     subtitle: { de: 'Schön, dass ihr da seid', en: 'Great to have you here' },
@@ -75,8 +88,8 @@ function homeFixture(overrides: Partial<GuestHomeScreen> = {}): GuestHomeScreen 
 }
 
 describe('mapGuestContent', () => {
-  it('maps the dev-seed-shaped payloads to the internal config (happy path)', () => {
-    const config = mapGuestContent(sessionFixture(), homeFixture());
+  it('maps the dev-seed-shaped payload to the internal config (happy path)', () => {
+    const config = mapGuestContent(contentFixture());
 
     expect(config.propertyName).toBe('Meine Unterkunft');
     expect(config.logoAssetId).toBe(7);
@@ -95,44 +108,53 @@ describe('mapGuestContent', () => {
   });
 
   it('orders menu items by sortIndex regardless of wire order', () => {
-    const session = sessionFixture();
-    session.menu.items = [...session.menu.items].reverse();
+    const content = contentFixture();
+    content.menu.items = [...content.menu.items].reverse();
 
-    const config = mapGuestContent(session, null);
+    const config = mapGuestContent(content);
     expect(config.menuItems.map((i) => i.id)).toEqual(['home', 'info']);
   });
 
-  it('a null home maps to home: null (vacant path)', () => {
-    const config = mapGuestContent(sessionFixture(), null);
+  it('a vacant payload maps to home: null, property half intact', () => {
+    const config = mapGuestContent(vacantFixture());
+
     expect(config.home).toBeNull();
+    expect(config.propertyName).toBe('Meine Unterkunft');
+    expect(config.menuItems.map((i) => i.id)).toEqual(['home', 'info']);
+  });
+
+  it('rejects an OCCUPIED payload with no home — a server bug, not half a screen', () => {
+    const content = contentFixture();
+    delete content.home;
+
+    expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
+    expect(() => mapGuestContent(content)).toThrow(/OCCUPIED but "home" is absent/);
   });
 
   it('rejects an invalid brand hex — branding null, everything else survives (REQ-512)', () => {
-    const session = sessionFixture();
-    session.property.brand.primary = '#zz0000';
+    const content = contentFixture();
+    content.property.brand!.primary = '#zz0000';
 
-    const config = mapGuestContent(session, homeFixture());
+    const config = mapGuestContent(content);
     expect(config.branding).toBeNull();
     expect(config.propertyName).toBe('Meine Unterkunft');
   });
 
   it('renders an unknown icon name as the neutral fallback glyph, never a crash', () => {
-    const session = sessionFixture();
-    session.menu.items[0]!.icon = 'phosphorDoesNotExist';
-    const home = homeFixture();
-    home.actionCards[0]!.icon = '<script>alert(1)</script>';
+    const content = contentFixture();
+    content.menu.items[0]!.icon = 'phosphorDoesNotExist';
+    content.home!.actionCards[0]!.icon = '<script>alert(1)</script>';
 
-    const config = mapGuestContent(session, home);
+    const config = mapGuestContent(content);
     expect(config.menuItems[0]?.icon).toBe(CONTENT_FALLBACK_ICON);
     expect(config.home?.cards[0]?.icon).toBe(CONTENT_FALLBACK_ICON);
   });
 
   it('accepts 0 menu items and 0 cards (the contract minima)', () => {
-    const session = sessionFixture();
-    session.menu.items = [];
-    const home = homeFixture({ actionCards: [] });
+    const content = contentFixture({ home: homeFixture({ actionCards: [] }) });
+    content.menu.items = [];
 
-    const config = mapGuestContent(session, home);
+    const config = mapGuestContent(content);
     expect(config.menuItems).toEqual([]);
     expect(config.home?.cards).toEqual([]);
   });
@@ -140,7 +162,7 @@ describe('mapGuestContent', () => {
   it('rejects more than 4 cards as a contract violation', () => {
     const home = homeFixture();
     home.actionCards = Array.from({ length: 5 }, () => home.actionCards[0]!);
-    expect(() => mapGuestContent(sessionFixture(), home)).toThrow(GuestContentMappingError);
+    expect(() => mapGuestContent(contentFixture({ home }))).toThrow(GuestContentMappingError);
   });
 
   it('maps a catalogue larger than the sidebar without dropping or rejecting any item', () => {
@@ -149,8 +171,8 @@ describe('mapGuestContent', () => {
     // really declares (`GuestMenu.items.maxItems: 50`), and how many fit down
     // the side of the screen is the sidebar's business — a 13-row catalogue is
     // what %dev serves.
-    const session = sessionFixture();
-    session.menu.items = Array.from({ length: 12 }, (_, i) => ({
+    const content = contentFixture();
+    content.menu.items = Array.from({ length: 12 }, (_, i) => ({
       key: `k${i}`,
       label: { de: `Eintrag ${i}`, en: `Entry ${i}` },
       icon: 'phosphorInfo',
@@ -158,7 +180,7 @@ describe('mapGuestContent', () => {
       sortIndex: i,
     }));
 
-    const config = mapGuestContent(session, null);
+    const config = mapGuestContent(content);
 
     expect(config.menuItems).toHaveLength(12);
     expect(config.menuItems.map((i) => i.id)).toEqual(
@@ -178,48 +200,48 @@ describe('mapGuestContent', () => {
         sortIndex: i,
       }));
 
-    const atTheBound = sessionFixture();
+    const atTheBound = contentFixture();
     atTheBound.menu.items = itemsOfLength(50);
-    expect(mapGuestContent(atTheBound, null).menuItems).toHaveLength(50);
+    expect(mapGuestContent(atTheBound).menuItems).toHaveLength(50);
 
-    const overTheBound = sessionFixture();
+    const overTheBound = contentFixture();
     overTheBound.menu.items = itemsOfLength(51);
-    expect(() => mapGuestContent(overTheBound, null)).toThrow(
+    expect(() => mapGuestContent(overTheBound)).toThrow(
       /menu\.items exceeds the contract's 0–50/,
     );
   });
 
   it('rejects a localized map missing the default-language entry', () => {
-    const session = sessionFixture();
-    session.standby.message = { en: 'Welcome' }; // defaultLanguage is 'de'
-    expect(() => mapGuestContent(session, null)).toThrow(GuestContentMappingError);
+    const content = contentFixture();
+    content.standby.message = { en: 'Welcome' }; // defaultLanguage is 'de'
+    expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
   });
 
   it('rejects an offered language with no registered catalogue', () => {
-    const session = sessionFixture();
-    session.settings.languages = [
+    const content = contentFixture();
+    content.settings.languages = [
       { code: 'fr' as never, shortLabel: 'FR', label: 'Français', locale: 'fr-FR' },
     ];
-    session.settings.defaultLanguage = 'fr' as never;
-    expect(() => mapGuestContent(session, null)).toThrow(GuestContentMappingError);
+    content.settings.defaultLanguage = 'fr' as never;
+    expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
   });
 
   it('rejects a default outside the offered set', () => {
-    const session = sessionFixture();
-    session.settings.defaultAppearance = 'system';
-    expect(() => mapGuestContent(session, null)).toThrow(GuestContentMappingError);
+    const content = contentFixture();
+    content.settings.defaultAppearance = 'system';
+    expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
   });
 });
 
 describe('mapStoredPreferences', () => {
   it('hands the raw stay override to hydration', () => {
-    expect(mapStoredPreferences(sessionFixture())).toEqual({ language: 'en' });
+    expect(mapStoredPreferences(contentFixture())).toEqual({ language: 'en' });
   });
 
   it('absent preference → null; junk values are dropped', () => {
-    expect(mapStoredPreferences(sessionFixture({ preference: undefined }))).toBeNull();
+    expect(mapStoredPreferences(contentFixture({ preference: undefined }))).toBeNull();
     expect(
-      mapStoredPreferences(sessionFixture({ preference: { language: '', appearance: 'neon' } })),
+      mapStoredPreferences(contentFixture({ preference: { language: '', appearance: 'neon' } })),
     ).toEqual({});
   });
 });

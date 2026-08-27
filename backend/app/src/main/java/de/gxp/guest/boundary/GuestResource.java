@@ -3,9 +3,8 @@ package de.gxp.guest.boundary;
 import java.io.File;
 
 import de.gxp.api.GuestApi;
-import de.gxp.api.model.GuestHomeScreen;
+import de.gxp.api.model.GuestContent;
 import de.gxp.api.model.GuestPreferencesUpdate;
-import de.gxp.api.model.GuestSession;
 import de.gxp.guest.control.GuestControl;
 import jakarta.annotation.security.RolesAllowed;
 
@@ -30,13 +29,8 @@ public class GuestResource implements GuestApi {
     }
 
     @Override
-    public GuestHomeScreen getGuestHomeScreen() {
-        return guestControl.homeScreen();
-    }
-
-    @Override
-    public GuestSession getGuestSession() {
-        return guestControl.session();
+    public GuestContent getGuestContent(String ifNoneMatch) {
+        return guestControl.content(ifNoneMatch);
     }
 
     @Override

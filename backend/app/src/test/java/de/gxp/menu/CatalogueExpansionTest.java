@@ -118,7 +118,7 @@ class CatalogueExpansionTest {
         String key = firstFixtureKey(ManagerFixtures.login());
         // The API refuses to create this state (ceiling rule 2,
         // `item-disabled-at-property`), so seed the room row directly — the
-        // GuestSessionTest precedent. Resolution must still ceiling it out:
+        // GuestContentTest precedent. Resolution must still ceiling it out:
         // the property is the ceiling and a room cannot rise above it.
         try {
             QuarkusTransaction.requiringNew().run(() -> entityManager
@@ -167,7 +167,7 @@ class CatalogueExpansionTest {
 
     private io.restassured.response.ValidatableResponse session() {
         return given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200);
     }
 

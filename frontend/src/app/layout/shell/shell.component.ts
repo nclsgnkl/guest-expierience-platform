@@ -6,6 +6,7 @@ import { filter } from 'rxjs';
 import { PropertyContentService } from '../../core/content/property-content.service';
 import { GuestAssetService } from '../../core/guest/guest-asset.service';
 import { SidebarComponent } from '../sidebar/sidebar.component';
+import { StalenessBannerComponent } from '../staleness-banner/staleness-banner.component';
 import { StalenessPillComponent } from '../staleness-pill/staleness-pill.component';
 import { StatusBarComponent } from '../status-bar/status-bar.component';
 
@@ -28,7 +29,13 @@ const LOGO_PLACEHOLDER = 'assets/branding/logo-placeholder.svg';
  */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, SidebarComponent, StatusBarComponent, StalenessPillComponent],
+  imports: [
+    RouterOutlet,
+    SidebarComponent,
+    StatusBarComponent,
+    StalenessPillComponent,
+    StalenessBannerComponent,
+  ],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.css',
 })

@@ -5,8 +5,9 @@ import type { AppearanceMode } from '../preferences/preference-gateway';
  * Content-service contract (docs/features/home-screen-prototype/02-design.md
  * -> "Content service contract"; extended by appearance-and-language
  * 02-design.md §5.1; reshaped by guest-frontend-integration REQ-510…515: the
- * config is now fed from `GET /api/guest/session` + `…/screens/home` through
- * `guest-content.mapper.ts` instead of a static import).
+ * config is now fed from `GET /api/guest/content` through
+ * `guest-content.mapper.ts` instead of a static import — one payload since
+ * guest-payload-consolidation, `home` nested inside it).
  *
  * Two shapes of the same config live here, deliberately:
  *
@@ -25,7 +26,7 @@ import type { AppearanceMode } from '../preferences/preference-gateway';
  * Changes for the wire era (02-design.md §8):
  *   - `guestName` + the `{guestName}` interpolation are GONE — the server
  *     resolves every template (REQ-511); the client renders verbatim.
- *   - `home` is nullable: a vacant room's `screens/home` is never fetched
+ *   - `home` is nullable: the vacant payload simply carries no `home`
  *     (REQ-517), and menu/settings/standby must render without it.
  *   - assets are ids (`logoAssetId`, `artworkAssetId`) fetched with the
  *     device token via `GuestAssetService` — never a bare `<img src>`
@@ -33,7 +34,7 @@ import type { AppearanceMode } from '../preferences/preference-gateway';
  *   - `menuItems` and `home.cards` are server-resolved and server-ordered
  *     (REQ-511/515) — the old "exactly 5 / exactly 4" arms are gone. Their
  *     counts are bounded by the contract's own `maxItems`
- *     (`GuestMenu.items` 50, `GuestHomeScreen.actionCards` 4), which is a
+ *     (`GuestMenu.items` 50, `GuestHome.actionCards` 4), which is a
  *     WIRE bound for payload sanity — not a layout one. How many menu items
  *     the sidebar shows is a layout decision and lives in
  *     `layout/sidebar/`, never here (REQ-901).

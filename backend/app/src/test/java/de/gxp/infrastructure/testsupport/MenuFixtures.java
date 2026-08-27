@@ -17,7 +17,7 @@ import jakarta.persistence.EntityManager;
  * writes for the placeholder catalogue fixtures. Absence of a config row
  * resolves to *enabled*, so those classes would otherwise leave the fixtures
  * ON for whatever runs next in the shared database — and
- * {@code GuestSessionTest}'s menu-size assertions would become
+ * {@code GuestContentTest}'s menu-size assertions would become
  * order-dependent.
  *
  * <p>Called from an {@code @AfterEach} in every class that replaces the

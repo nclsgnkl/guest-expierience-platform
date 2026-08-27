@@ -40,6 +40,24 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class MenuControl {
 
+    /**
+     * Catalogue keys a manager cannot remove or re-order (REQ-948, owner
+     * decision 2026-08-27). {@code home} is the kiosk's landing screen and
+     * the target every stranded-card rule falls back to; a property that had
+     * disabled it served a guest device a 404 it could not recover from.
+     * Mandatory means three things together, and all three are needed:
+     * resolution ignores any config row for the key ({@link #enabled}), its
+     * resolved sort index is pinned to {@link #MANDATORY_SORT_INDEX}, and
+     * {@link #validateConfigEntries} refuses to store such a row at either
+     * scope. So a row written before this release is INERT rather than a
+     * trap, and no new one can be created — an unreachable error case beats a
+     * handled one.
+     */
+    public static final Set<String> MANDATORY_KEYS = Set.of("home");
+
+    /** A mandatory item resolves first, whatever any scope's row says (REQ-948). */
+    private static final int MANDATORY_SORT_INDEX = 0;
+
     private static final int MAX_CARDS_PER_SCOPE = 4;
 
     private final MenuRepository repository;
@@ -232,9 +250,11 @@ public class MenuControl {
                             propertyConfig == null ? null : propertyConfig.iconOverride,
                             definition.defaultIcon))
                     .route(definition.route)
-                    .sortIndex(firstNonNull(roomConfig == null ? null : roomConfig.sortIndex,
-                            propertyConfig == null ? null : propertyConfig.sortIndex,
-                            definition.defaultSortIndex)));
+                    .sortIndex(MANDATORY_KEYS.contains(definition.key)
+                            ? MANDATORY_SORT_INDEX
+                            : firstNonNull(roomConfig == null ? null : roomConfig.sortIndex,
+                                    propertyConfig == null ? null : propertyConfig.sortIndex,
+                                    definition.defaultSortIndex)));
         }
         items.sort(java.util.Comparator.comparing(GuestMenuItem::getSortIndex));
         return items;
@@ -309,6 +329,14 @@ public class MenuControl {
             if (!seen.add(entry.getMenuItemKey())) {
                 throw ApiErrors.badRequest("duplicate-menu-item",
                         "'" + entry.getMenuItemKey() + "' appears twice in the scope's entries");
+            }
+            if (MANDATORY_KEYS.contains(entry.getMenuItemKey())
+                    && (Boolean.FALSE.equals(entry.getEnabled()) || entry.getSortIndex() != null)) {
+                // either scope — REQ-948. Icon and label overrides on a
+                // mandatory item stay perfectly legal; only enablement and
+                // ordering are taken away.
+                throw ApiErrors.badRequest("menu-item-mandatory",
+                        "'" + entry.getMenuItemKey() + "' is mandatory — it cannot be disabled or re-ordered");
             }
             if (entry.getLabel() != null) {
                 requireSupportedLanguageKeys(entry.getLabel().keySet(), "label");
@@ -442,6 +470,9 @@ public class MenuControl {
      * {@code enabled(property, k)} stays property row → catalogue default.
      */
     private boolean enabled(Long scopeRoomId, String menuItemKey) {
+        if (MANDATORY_KEYS.contains(menuItemKey)) {
+            return true; // REQ-948: no row at any scope can take it away
+        }
         boolean propertyEnabled = propertyEnabled(menuItemKey);
         if (scopeRoomId == null || !propertyEnabled) {
             return propertyEnabled;
@@ -456,6 +487,9 @@ public class MenuControl {
 
     /** Property-scope resolution: property row → catalogue default (enabled). */
     private boolean propertyEnabled(String menuItemKey) {
+        if (MANDATORY_KEYS.contains(menuItemKey)) {
+            return true; // REQ-948, and so the ceiling rules below never see it as disabled
+        }
         return repository.configsOf(null).stream()
                 .filter(config -> config.menuItemKey.equals(menuItemKey))
                 .map(config -> config.enabled)

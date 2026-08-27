@@ -19,11 +19,11 @@ import type { StoredPreferences } from './preference-gateway';
  */
 describe('HttpPreferenceGateway', () => {
   const handleUnauthorized = vi.fn();
-  let sessionPreference: StoredPreferences | null = null;
+  let preferenceOverride: StoredPreferences | null = null;
 
   beforeEach(() => {
     handleUnauthorized.mockReset();
-    sessionPreference = null;
+    preferenceOverride = null;
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
@@ -34,7 +34,7 @@ describe('HttpPreferenceGateway', () => {
         HttpPreferenceGateway,
         {
           provide: GuestDataService,
-          useValue: { sessionPreference: () => sessionPreference, handleUnauthorized },
+          useValue: { preferenceOverride: () => preferenceOverride, handleUnauthorized },
         },
       ],
     });
@@ -95,8 +95,8 @@ describe('HttpPreferenceGateway', () => {
     await expect(pending).rejects.toBeTruthy();
   });
 
-  it('load() answers from the session payload — no second GET (D8)', async () => {
-    sessionPreference = { language: 'en' };
+  it('load() answers from the content payload — no second GET (D8)', async () => {
+    preferenceOverride = { language: 'en' };
     await expect(gateway().load()).resolves.toEqual({ language: 'en' });
     // verify() in afterEach proves no HTTP happened
   });

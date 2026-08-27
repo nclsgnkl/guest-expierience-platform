@@ -94,8 +94,10 @@ double through DI — if a test has to import the data file to assert something,
 that is a design smell, not a test convenience.
 
 `tools/measure-states.mjs` is the review instrument for the three full-screen
-states and the staleness pill; it needs the dev backend and drives its state
-via the manager API (and restores it).
+states and for the staleness chrome — the discreet pill and its escalated
+banner, the latter driven by ageing the cached record's `storedAt` past the
+threshold; it needs the dev backend and drives its state via the manager API
+(and restores it).
 
 **`src/test-setup.ts` runs before every spec** (`setupFiles` on the `test`
 target). It supplies `localStorage`/`sessionStorage`, because Node ≥ 26 defines

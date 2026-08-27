@@ -442,16 +442,30 @@ the live region cannot chatter on the minute tick.
 
 ### 6.3 Placement — the hint escalates *in place*
 
+*(Revised 2026-08-27, after the review measured the first build. The
+authoritative spec is `docs/design/screens-inhouse/connection.md` → "The
+escalated staleness banner"; this section states what the feature builds and
+why.)*
+
 Same anchor as the pill (top-right, directly below the status-bar cluster,
-right-aligned to it), grown into a panel of `min(22rem, 40vw)`:
-`--color-surface-glass`, `--border-glass`, `--radius-2xl`, `--blur-glass`,
-`--shadow-panel`, the connection screen's own **already-registered**
-`WifiSlash` glyph in `--color-status-offline` (decorative — the text carries
-the information, as with the pill's dot; no new icon, so `registered-icons.ts`
-stays a Part A file, and the severity order stays honest: the full-screen panel
-is the more severe state), a
-title in `--text-title` weight, one body line in `--text-body`,
-and the pill's own `Stand HH:MM` line kept as the third line.
+right-aligned to it) — but it grows **sideways into a bar**, not into a panel.
+The first build clamped it at `min(22rem, 40vw)` and the approved copy then ran
+to **three** body lines; the owner struck the clamp rather than the line
+clause, so the width follows the copy: `width: max-content`, `max-width` at the
+content area's left edge, **one body line**. Measured, the object is
+~540 × 60 at 1024×768 and ~679 × 74 at 1280×832 — about **9 : 1**. "The pill
+grown into a panel" no longer describes it.
+
+Surface unchanged (`--color-surface-glass`, `--border-glass`, `--radius-2xl`,
+`--blur-glass`, `--shadow-panel`), padding `--space-4` all round. The glyph is
+still the connection screen's own **already-registered** `WifiSlash` — no new
+icon, so `registered-icons.ts` stays a Part A file — one step smaller at
+`--size-icon-md`, and now in **`--color-status-warning`** (§6.7). It stays
+decorative: the glyph names *what* is wrong, the colour says *that* it matters,
+and the severity order stays honest because the full-screen panel is a
+takeover. Two rows: the title (`--text-title` weight) with the pill's own
+`Stand HH:MM` right-aligned beside it, then the one body line. The timestamp
+rides the title's row because it costs no width there and keeps the bar flat.
 
 - **It is an absolute overlay** (`:host { display: contents }`, the status
   bar's and pill's pattern), so it takes no flow space and **cannot grow the
@@ -461,10 +475,44 @@ and the pill's own `Stand HH:MM` line kept as the third line.
   `y 744` at 832), and the escalation would sit on the screen's primary
   controls. Top-centre was rejected: it collides with the reserved status-bar
   corner and with the headline that identifies the screen.
-- The top-right region is the empty widget column on Home
-  (`docs/design/screens/home.md`, "open by design"), and free space on standby.
-  Sizes are `rem`, the root is viewport-proportional, so a fit at 1280×832 is a
-  fit at 1024×768 — still **measured**, not assumed (§9).
+- **The anchor, restated against the measurement** *(corrected 2026-08-27 —
+  the figures below replace x475…998 / x594…1248, which named the gap after
+  the **heading block** as though that were Home's flex item; it is only the
+  widget column's left edge on a Home with no cards)*. Home's left flex item
+  `.home-content__screen` runs x138…**794** / x172…**992** — sized by the card
+  row at its bottom, not by the heading — and lays heading and cards out with
+  `space-between`, so the band beside the heading is empty by design. The
+  empty widget column `.home-content__widgets` is x819…998 / x1024…1248, only
+  **179 / 224 px** wide. A one-line bar (540…553 px at 1024, 675…694 at 1280)
+  therefore lies mostly over that empty band — 335 px of 540 at 1024, 423 px
+  of 679 at 1280 — plus the gutter and the whole widget column. It reaches
+  neither `.heading-block` (which ends at x450 / x562) nor the card row
+  (424 / 402 px of vertical clearance) nor the sidebar. On standby there is
+  neither, and the measured clearance to the centred block is 230 / 224 px.
+- **Clearance to Home's hero headline is structural now.** That headline is
+  manager-authored with `{stay.displayName}` interpolated and the first build
+  cleared it by 4–5 px — a margin that depended on one guest's name.
+  `.heading-block` is a fixed `--size-heading` wide, and `.heading-block__headline`
+  now carries **`overflow-wrap: anywhere`** so that an unbroken token cannot
+  escape it either: no name can push a line past x450 / x562, while the bar
+  starts at x459 / x569 — **≥ 9 px / ≥ 7 px for any name**. Measured with a
+  37-character unbroken display name: five lines, reaching x450 / x560, 9 px
+  clear at both viewports. Without that CSS line the same name renders one
+  line to x935 / x1173, straight under the bar — which is a **pre-existing**
+  overflow this round closes, and the instrument's `OVERFLOW` check is its
+  ratchet.
+- Sizes are `rem` and the root is viewport-proportional, but the *copy* is not,
+  so a fit at 1280×832 is no longer automatically a fit at 1024×768: both
+  viewports are **measured** (§9).
+- **Motion** (added 2026-08-27), both behind `prefers-reduced-motion: reduce`:
+  a 350 ms `cubic-bezier(0.16, 1, 0.3, 1)` entrance — the design sheet's *Page
+  Transition* token — so the pill → bar swap is an event, and a slow 4 s pulse
+  **on the glyph only**, never on text that must stay re-readable for hours. A
+  marquee was proposed and rejected (WCAG 2.2.2 needs a pause mechanism a kiosk
+  cannot offer, and it vanishes under reduced-motion exactly where a fallback
+  is needed). The entrance must not be what changes the live region's text:
+  the `role="status"` element is created and destroyed by an `@if`, and an
+  animation that also re-wrote the copy would announce mid-motion.
 
 ### 6.4 Two string variants, both app chrome
 
@@ -511,6 +559,38 @@ guest; the clause's stated rationale — operational alerting on a box with no
 remote access — is exactly what the vacant case serves. Nothing is contradicted
 and **no amendment is proposed**. Recorded here so the analyze gate does not
 have to rediscover it.
+
+### 6.7 The warning colour — a global role, not a banner colour
+
+*(Added 2026-08-27 with the bar redesign; owner-decided, with its derivation.)*
+
+`docs/design/design-sheet.md` → *Status* already carries a v1 palette marked
+*"noch nicht verwendet"*, and `Offline #A79DBA` was realised from it in 2026-08-20
+as `--status-offline-raw`. The warning colour **continues that decision**
+instead of placing a second one beside it: it is derived from the same
+palette's `Warning #F8B84E` (hue 37°).
+
+| Theme | Value | Measured contrast on glass |
+|---|---|---|
+| light | `#895806` | 4.64 over `--mesh-6`, 5.17 over `--mesh-8` |
+| dark | `#f9b84e` | 5.63 over `--night-6`, 4.86 over `--night-8` |
+
+Three guardrails, all of which live in the token comment as well as here:
+
+- **Named after the status family, never after the banner**:
+  `--status-warning-raw` / `--status-warning-dark-raw` (primitives) +
+  `--color-status-warning` (semantic role) + a `[data-theme='dark']` override
+  of the role only — the `--status-offline` shape, and the theme axis still
+  never redefines a primitive.
+- **It is a FOREGROUND role** — text, glyph, border. **Never a surface fill**:
+  `#895806` as a background would fail any dark text placed on it. A tinted
+  warning surface, if one is ever needed, is a second token.
+- **Warning is not error.** `Danger #F26666` sits beside it in the v1 palette
+  for destructive actions; nobody may repurpose warning for a delete dialog.
+
+Both values clear 4.5 : 1 **deliberately**, even though a decorative glyph does
+not need it — that shortcut is exactly what left `--color-status-offline` with
+its permanent *"never a text colour"* caveat.
 
 ---
 
@@ -609,7 +689,10 @@ a route, so `tools/measure.mjs`'s route grid cannot reach it: the instrument is
 online once and reloading with `/api` blocked. Part B adds a BANNER cell —
 same path, with the cached record's `storedAt` rewritten to 61 minutes ago
 before the reload — over both viewports, both themes, both languages, and both
-the shell and the standby host. *(The PRD's acceptance line named
+the shell and the standby host, plus (added in the 2026-08-27 fix round) a
+third variant that renames the active stay to a **37-character unbroken
+display name** and back, because Home's headline is the one thing on this
+screen whose width a guest supplies. *(The PRD's acceptance line named
 `tools/measure.mjs` when it was written and was corrected to this instrument at
 `04_analyze` — finding F-2. The assertion is unchanged: `scrollWidth <=
 clientWidth` and `scrollHeight <= clientHeight`. Note also that Part A's T-18
@@ -655,7 +738,9 @@ settled, REQ-952's standby question was answered by the owner on 2026-08-27,
 and the endpoint name, the stamp scheme, the banner's state shape and its
 placement are decisions this phase owns and has taken above.
 
-Two items are **verify-at-implementation**, neither of which changes a
-requirement or opens a gate: §3.2 (thrown JSON `Response` writes its entity and
-ETag) with the §3.4 fallback, and the exact `min(22rem, 40vw)` panel geometry,
-which measurement in T-19 may adjust.
+One item is **verify-at-implementation**, and it changes no requirement and
+opens no gate: §3.2 (thrown JSON `Response` writes its entity and ETag) with
+the §3.4 fallback. *(The second one — the exact `min(22rem, 40vw)` panel
+geometry — was resolved: measurement showed the clamp and the line-count clause
+could not both hold, and the owner struck the clamp on 2026-08-27. §6.3 now
+states the bar's measured geometry.)*

@@ -52,7 +52,7 @@ class DeviceAuthTest {
     @Test
     void aValidDeviceTokenOpensTheGuestSessionWithoutExpiryHeader() {
         given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("room.code", equalTo("1"))
                 // device tokens do not slide — no expiry header (REQ-412)
@@ -62,14 +62,14 @@ class DeviceAuthTest {
     @Test
     void aRevokedTokenIs401WithChallengeOnTheVeryNextRequest() {
         given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200);
         long deviceId = DeviceFixtures.deviceIdOf(entityManager, deviceToken);
         given().header("Authorization", "Bearer " + adminToken())
                 .when().post("/api/manager/devices/" + deviceId + "/revoke")
                 .then().statusCode(204);
         given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(401)
                 .header("WWW-Authenticate", equalTo("Bearer"));
     }
@@ -77,11 +77,11 @@ class DeviceAuthTest {
     @Test
     void unknownAndMalformedTokensAre401() {
         given().header("Authorization", "Bearer never-issued-token")
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(401)
                 .header("WWW-Authenticate", equalTo("Bearer"));
         given().header("Authorization", "NotBearer x")
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(401);
     }
 
@@ -89,7 +89,7 @@ class DeviceAuthTest {
     void anAdminTokenGrantsNoGuestEndpoint() {
         // an admin has no room — the guest surface is device-only (REQ-414)
         given().header("Authorization", "Bearer " + adminToken())
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(403);
     }
 

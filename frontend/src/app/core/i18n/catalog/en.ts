@@ -31,4 +31,9 @@ export const en: TranslationCatalog = {
   'connection.title': 'No connection',
   'connection.body': 'This display reconnects automatically as soon as the server is reachable.',
   'stale.asOf': 'As of {time}',
+  'stale.banner.title': 'This display is out of date',
+  'stale.banner.body':
+    'There has been no connection to the server for over an hour. Please let your host know.',
+  'stale.banner.bodyStandby':
+    'There has been no connection to the server for over an hour. Please inform the property manager.',
 };

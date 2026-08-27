@@ -21,7 +21,7 @@ import { GuestDataService } from './guest-data.service';
  *   3. nothing arrived → resolve; the connection guard lands the router on
  *      `/connection` and `GuestDataService` keeps retrying.
  *
- * The constructor effect re-syncs on every later session adoption (poll
+ * The constructor effect re-syncs on every later content adoption (poll
  * 200): defaults may have been edited by the manager, and a preference
  * changed server-side is re-hydrated under `PreferencesService`'s existing
  * never-overwrite-a-fresh-choice rule — `hydrate()` is idempotent by that
@@ -38,8 +38,8 @@ export class GuestBootstrapService {
 
   constructor() {
     effect(() => {
-      const session = this.guestData.session();
-      if (session === null || !this.applied) {
+      const content = this.guestData.payload();
+      if (content === null || !this.applied) {
         return; // initial application happens inside run(), before first paint
       }
       untracked(() => {

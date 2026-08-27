@@ -10,7 +10,7 @@
 import { GuestActionCard } from './guestActionCard';
 
 
-export interface GuestHomeScreen { 
+export interface GuestHome { 
     /**
      * RESOLVED greeting per offered language.
      */

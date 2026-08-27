@@ -206,6 +206,31 @@ public class AuditControl {
                 .total(entries.count());
     }
 
+    /**
+     * The audit sequence — {@code max(id)}, {@code 0} on an empty table.
+     *
+     * <p>Public so the guest ETag may lean on it: constitution v1.8.1 makes
+     * "every manager mutation writes an audit row" an obligation, and
+     * {@code AuditCoverageTest} derives every {@code @Transactional public}
+     * Control method from the sources and fails the build unless it records or
+     * is pinned as not-a-manager-mutation. So a monotonically rising sequence
+     * here IS a write counter for everything a kiosk renders, without a second
+     * counter to keep in step.
+     *
+     * <p>{@code max(id)}, not {@code count(*)}: {@code pruneOlderThan} runs
+     * daily, so the count is not monotonic — the sequence is, as long as any
+     * row survives the prune, because ids are never reused and pruning removes
+     * the oldest rows. An emptied table restarts at {@code 0}, which costs one
+     * extra 200 and never a stale 304.
+     *
+     * <p>Deliberately NOT {@code @Transactional} — like {@link #page} — so it
+     * never enters {@code AuditCoverageTest}'s derived set of mutations. It
+     * reads the trail and never writes it.
+     */
+    public long latestSequence() {
+        return entries.maxId();
+    }
+
     // ------------------------------------------------------------ retention (REQ-623)
 
     /**

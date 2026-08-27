@@ -22,6 +22,13 @@ class AuditEntryRepository implements PanacheRepository<AuditEntry> {
         return findAll(Sort.descending("occurredAt", "id")).page(Page.of(page, size)).list();
     }
 
+    /** The highest id ever allocated, {@code 0} on an empty table — the audit sequence. */
+    long maxId() {
+        return getEntityManager()
+                .createQuery("select coalesce(max(e.id), 0) from AuditEntry e", Long.class)
+                .getSingleResult();
+    }
+
     /** Retention (REQ-623): rows that occurred strictly before the cut-off. */
     long deleteOlderThan(Instant cutOff) {
         return delete("occurredAt < ?1", cutOff);

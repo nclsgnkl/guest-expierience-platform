@@ -35,7 +35,7 @@ class ManagerSurfaceDeniedTest {
                 "/api/manager/assets",          // AssetResource
                 "/api/manager/devices",         // DeviceAdminResource
                 "/api/system/info",             // SystemResource (REQ-432)
-                "/api/guest/session");          // GuestResource (device role)
+                "/api/guest/content");          // GuestResource (device role)
     }
 
     @ParameterizedTest

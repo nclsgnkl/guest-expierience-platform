@@ -21,7 +21,7 @@ import type { PreferenceGateway, StoredPreferences } from './preference-gateway'
  *     noise. Anything else rejects, so `PreferencesService`'s bounded retry
  *     applies.
  *   - `load()` → **no HTTP call**: the stay's raw override arrives inside the
- *     session payload (02-design.md §2/§5), handed over by
+ *     content payload (02-design.md §2/§5), handed over by
  *     `GuestDataService`. One fetch feeds everything at boot.
  *   - `clear()` → client-side no-op (02-design.md §2): the override is
  *     stay-anchored server-side and clears at stay change by construction.
@@ -34,7 +34,7 @@ export class HttpPreferenceGateway implements PreferenceGateway {
   private readonly guestData = inject(GuestDataService);
 
   load(): Promise<StoredPreferences | null> {
-    return Promise.resolve(this.guestData.sessionPreference());
+    return Promise.resolve(this.guestData.preferenceOverride());
   }
 
   async save(value: StoredPreferences): Promise<void> {

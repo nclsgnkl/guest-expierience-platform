@@ -30,9 +30,9 @@ describe('provideGuestApi', () => {
     TestBed.inject(DeviceTokenStore).set('token-one');
     const http = TestBed.inject(HttpTestingController);
 
-    TestBed.inject(GuestService).getGuestSession().subscribe();
+    TestBed.inject(GuestService).getGuestContent().subscribe();
 
-    const request = http.expectOne('/api/guest/session');
+    const request = http.expectOne('/api/guest/content');
     expect(request.request.headers.get('Authorization')).toBe('Bearer token-one');
     request.flush({});
   });
@@ -43,11 +43,11 @@ describe('provideGuestApi', () => {
     const service = TestBed.inject(GuestService);
 
     store.set('token-one');
-    service.getGuestSession().subscribe();
+    service.getGuestContent().subscribe();
     http.expectOne((r) => r.headers.get('Authorization') === 'Bearer token-one').flush({});
 
     store.set('token-two');
-    service.getGuestSession().subscribe();
+    service.getGuestContent().subscribe();
     http.expectOne((r) => r.headers.get('Authorization') === 'Bearer token-two').flush({});
   });
 
@@ -57,9 +57,9 @@ describe('provideGuestApi', () => {
     store.clear();
     const http = TestBed.inject(HttpTestingController);
 
-    TestBed.inject(GuestService).getGuestSession().subscribe();
+    TestBed.inject(GuestService).getGuestContent().subscribe();
 
-    const request = http.expectOne('/api/guest/session');
+    const request = http.expectOne('/api/guest/content');
     expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush({});
   });

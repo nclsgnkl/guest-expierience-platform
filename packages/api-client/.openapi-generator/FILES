@@ -35,14 +35,14 @@ model/deviceDto.ts
 model/deviceUpdateRequest.ts
 model/guestActionCard.ts
 model/guestBrand.ts
-model/guestHomeScreen.ts
+model/guestContent.ts
+model/guestHome.ts
 model/guestMenu.ts
 model/guestMenuItem.ts
 model/guestPreference.ts
 model/guestPreferencesUpdate.ts
 model/guestProperty.ts
 model/guestRoom.ts
-model/guestSession.ts
 model/guestSettings.ts
 model/guestSettingsEntry.ts
 model/guestStandby.ts

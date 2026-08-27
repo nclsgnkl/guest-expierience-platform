@@ -135,7 +135,7 @@ dead code and the unhandled 404.
 | REQ-946 | The session `ETag` is derived from a **monotonic content version stamp** bumped on any content write, not by serialising and hashing the payload on every poll — `GuestEtagFilter:60` currently does `sha256Hex(objectMapper.writeValueAsBytes(entity))` on **every** request, so a `304` today costs a full resolve and serialise. | Must |
 | REQ-947 | The version stamp is **correct across everything that changes what a given kiosk sees** — content writes, occupancy/stay transitions, preference writes, and the room scope itself (two rooms must not share one stamp). A stamp that only tracks "content writes" would serve a stale `304` across a check-in. This is the failure mode that makes REQ-946 dangerous if under-specified. | Must |
 | REQ-948 | A **resolved-disabled `home` is a defined kiosk state**. `GuestControl.homeScreen():164` answers the contract-declared `404 screen-not-found`; today `bootstrap()`/`refresh()` handle only `401` and `409`, so that `404` drops a working kiosk to `STALE`/`DISCONNECTED`. Consolidation removes the second call and therefore the fall-through; the requirement is that the resulting state is deliberate and tested. | Must |
-| REQ-949 | `guest-data.service.ts` has **fewer lines** after this Part than the 452 it has at the time of writing, and `grep` finds no `HOME_CACHE_KEY`, `homeEtag`, `heldHome`, `fetchHome` or `asVacant`. | Must |
+| REQ-949 | `guest-data.service.ts` is **structurally simpler** after this Part, and `grep` finds no `HOME_CACHE_KEY`, `homeEtag`, `heldHome`, `fetchHome` or `asVacant`. Simpler means, concretely and checkably: **one** fetch, **one** ETag field, **one** cache key, **one** held copy; the two-call sequence gone from both entry points; and no `409`-handling branch, because a vacant room is now expressed as an absent `home` field rather than an error. *(Amended 2026-08-27, owner. The original wording demanded **fewer than 452 lines**. Struck as a bad metric: a line count is always reachable — by joining statements, deleting an explanatory comment, or declining a well-named helper because its signature costs a line — and every one of those makes the number better and the code worse. The owner's words: "Ob das am Ende wirklich weniger Zeilen sind ist mir eigentlich egal. Hauptsache es ist sauberer Code." The line count was a proxy for the case reduction; the case reduction is now stated directly, so nothing is lost and the perverse incentive goes. Fewer lines is expected to fall out anyway — it is simply no longer a pass criterion.)* | Must |
 | REQ-950 | The **13** existing cases in `guest-data.service.spec.ts` are rewritten for one resource and assert the **same observable behaviour** for every transition (200 / 304 / error / 401 / vacancy / cache-rejected). | Must |
 | REQ-951 | The merged payload written to the last-known-good cache **carries nothing that extends reach beyond the device**: no device token, no manager bearer or session token, no key material, no credential that could address the backend, and nothing scoped to another room or another stay. Every guest-facing value it does carry stays inside the amended boundary — one the server resolved **for this room's current guest**, because the manager chose to display it. *(Rewritten 2026-08-27 against `docs/constitution.md` **v1.9.0**. The old text — "holds no guest-sensitive value" — restated an absolute prohibition the amendment removed; the credential line replaces it and is the half that was always load-bearing. Factually today's merged payload still carries no WiFi password or door code — the contract defines none — but that is now an observation, not the requirement.)* | Must |
 | REQ-952 | **Staleness escalates on time, and content never stops rendering.** In `STALE`, once **60 minutes** have elapsed since the last **successful backend contact**, the discreet staleness pill is replaced by a **prominent banner** naming the situation and directing the guest to contact their host. Content keeps rendering before and after the escalation — a hard cutoff was explicitly rejected. The escalation is a **presentation property derived from the already-held `staleSince`, not a fourth `ConnectionState`**: the union stays `'ONLINE' \| 'STALE' \| 'DISCONNECTED'` and no transition, timer, cadence or backoff changes (REQ-943). The rationale is **operational visibility, not security**: on a box with no remote access a guest complaint is the only alerting channel that exists. *(Owner decision 2026-08-27 — **D13**, option (b). REQ-950's thirteen rewritten cases are unaffected; none advances the clock by an hour, and REQ-952 brings its own.)* **Answered by the owner 2026-08-27: yes — the banner shows on the standby screen of a vacant room too.** A vacant room has no guest, so the escalation there is aimed at whoever else sees the screen (cleaning staff, the manager), which serves the same operational purpose: a dead backend must not stay invisible just because the room happens to be empty. *Note for `02_design`: the occupied-room wording directs the guest to their host and cannot be reused verbatim on standby — the standby variant addresses staff, not a guest. Both strings resolve through `TranslationService` like all app chrome.* | Must |
@@ -145,8 +145,11 @@ dead code and the unhandled 404.
 ## Acceptance criteria (testable)
 
 - **REQ-942/949:** Given this Part is complete, when `guest-data.service.ts` is
-  measured, then it has fewer than 452 lines, and `grep` finds no
-  `HOME_CACHE_KEY`, `homeEtag`, `heldHome`, `fetchHome` or `asVacant`.
+  inspected, then `grep` finds no `HOME_CACHE_KEY`, `homeEtag`, `heldHome`,
+  `fetchHome` or `asVacant`; there is exactly one fetch, one ETag field, one
+  cache key and one held copy; neither entry point runs a two-call sequence;
+  and no branch handles a `409`. **Line count is not a criterion** (amended
+  2026-08-27, owner) — judge the structure, not the size.
 - **REQ-945:** Given an occupied room with cached content, when the stay ends,
   then the kiosk still holds and can render the property-scoped content and
   holds nothing stay-derived in RAM or in `localStorage`.
@@ -363,11 +366,13 @@ correction to the briefing that carried them:**
 - **A cold boot can start already escalated**, and that is the correct
   behaviour: `adoptCache()` seeds `_staleSince` from a `storedAt` that may be
   hours old.
-- **REQ-949's line budget survives REQ-952.** REQ-942's removals are ~90 lines
-  (`fetchHome` with both overloads, `asVacant` with its comment, the two-call
-  sequence in both entry points, the second cache key / ETag / held copy); the
-  escalation is a threshold constant plus one derived value. The net stays well
-  under 452.
+- **REQ-952 does not re-complicate what REQ-949 simplifies.** REQ-942 removes
+  `fetchHome` with both overloads, `asVacant` with its comment, the two-call
+  sequence in both entry points and the second cache key / ETag / held copy;
+  the escalation adds a threshold constant plus one derived value, and lives in
+  its own `StalenessService` rather than in `guest-data.service.ts`. *(This note
+  used to argue a line budget. That criterion was struck 2026-08-27 — see
+  REQ-949 — so the point now is the structural one it was standing in for.)*
 
 ---
 

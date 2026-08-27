@@ -973,7 +973,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/MenuItemConfigEntryDto"
         "400":
-          description: Unknown menu item key or duplicate entry.
+          description: >-
+            Unknown menu item key, duplicate entry, or an entry that disables
+            or re-sorts a mandatory item (menu-item-mandatory).
           content:
             application/json:
               schema:
@@ -1039,7 +1041,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/MenuItemConfigEntryDto"
         "400":
-          description: Unknown menu item key or duplicate entry.
+          description: >-
+            Unknown menu item key, duplicate entry, or an entry that disables
+            or re-sorts a mandatory item (menu-item-mandatory).
           content:
             application/json:
               schema:
@@ -1688,77 +1692,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /api/guest/session:
+  /api/guest/content:
     get:
       tags: [guest]
-      operationId: getGuestSession
-      summary: Everything route-independent for the device's room
+      operationId: getGuestContent
+      summary: Everything the device's room renders from, in one document
       description: >-
         Property (name, brand, logo), room, occupancy, settings config with
         resolved defaults (room override, else property default), the stay's
         raw preference override (occupied only), the resolved menu under the
-        ceiling rule plus the fixed settings chrome, and the resolved standby
-        texts. Vacant rooms serve no stay-derived value (data-sparing) but
-        still answer 200 — the standby screen renders from this.
+        ceiling rule plus the fixed settings chrome, the resolved standby
+        texts, and — for an occupied room — the home content (headline/
+        subtitle/paragraph and 0-4 action cards, all templates RESOLVED
+        server-side per offered language against the active stay; no braces
+        ever leave the server, artwork falls back room -> property). Vacant
+        rooms serve no stay-derived value (data-sparing) but still answer 200
+        — the standby screen renders from this.
       security:
         - bearerAuth: []
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
       responses:
         "200":
-          description: The session for the device's room.
+          description: The content for the device's room.
           headers:
             ETag:
-              description: Strong ETag — SHA-256 over the response bytes.
+              description: >-
+                Strong ETag — an opaque 64-hex version stamp for this room's
+                content. Compared, never parsed.
               schema:
                 type: string
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GuestSession"
+                $ref: "#/components/schemas/GuestContent"
         "304":
-          description: If-None-Match matched — empty body.
+          description: If-None-Match matched the current version stamp — empty body.
         "401":
           description: Missing, unknown or revoked device token.
-  /api/guest/screens/home:
-    get:
-      tags: [guest]
-      operationId: getGuestHomeScreen
-      summary: The home screen content for the device's room
-      description: >-
-        Headline/subtitle/paragraph and 0–4 action cards, all templates
-        RESOLVED server-side per offered language against the active stay
-        (checkout time/date in the property timezone, each language's
-        locale) — no braces ever leave the server. Artwork falls back room →
-        property.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: The resolved home screen.
-          headers:
-            ETag:
-              description: Strong ETag — SHA-256 over the response bytes.
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GuestHomeScreen"
-        "304":
-          description: If-None-Match matched — empty body.
-        "401":
-          description: Missing, unknown or revoked device token.
-        "404":
-          description: Unknown screen key, or the home item resolves disabled for this room.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The room is vacant (room-vacant) — no stay-derived content is served.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /api/guest/assets/{assetId}:
     get:
       tags: [guest]
@@ -2648,7 +2623,7 @@ components:
           $ref: "#/components/schemas/LocalizedText"
         message:
           $ref: "#/components/schemas/LocalizedText"
-    GuestSession:
+    GuestContent:
       type: object
       required: [property, room, occupancy, settings, menu, standby]
       properties:
@@ -2669,6 +2644,9 @@ components:
           $ref: "#/components/schemas/GuestMenu"
         standby:
           $ref: "#/components/schemas/GuestStandby"
+        home:
+          description: Occupied only — a vacant room serves no stay-derived value.
+          $ref: "#/components/schemas/GuestHome"
     GuestActionCard:
       type: object
       required: [icon, title, description, targetKey, targetRoute]
@@ -2685,7 +2663,7 @@ components:
           type: string
         targetRoute:
           type: string
-    GuestHomeScreen:
+    GuestHome:
       type: object
       required: [headline, subtitle, paragraph, actionCards]
       properties:

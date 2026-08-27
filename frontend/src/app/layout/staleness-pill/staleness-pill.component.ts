@@ -2,6 +2,7 @@ import { Component, computed, inject } from '@angular/core';
 
 import { PropertyContentService } from '../../core/content/property-content.service';
 import { GuestDataService } from '../../core/guest/guest-data.service';
+import { StalenessService } from '../../core/guest/staleness.service';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { PreferencesService } from '../../core/preferences/preferences.service';
 
@@ -13,6 +14,11 @@ import { PreferencesService } from '../../core/preferences/preferences.service';
  * backend is unreachable (`STALE`). The timestamp is the cache's `storedAt`
  * — static per stale episode (when the data was fetched, not a countdown),
  * so the `aria-live` region never chatters.
+ *
+ * Visibility is `StalenessService`'s tri-state level, not a condition of its
+ * own: after 60 minutes the pill is *replaced* by `StalenessBannerComponent`
+ * (REQ-952), and one derived level is what makes "never both at once" true by
+ * construction.
  */
 @Component({
   selector: 'app-staleness-pill',
@@ -21,13 +27,12 @@ import { PreferencesService } from '../../core/preferences/preferences.service';
 })
 export class StalenessPillComponent {
   private readonly guestData = inject(GuestDataService);
+  private readonly staleness = inject(StalenessService);
   private readonly content = inject(PropertyContentService);
   private readonly preferences = inject(PreferencesService);
   protected readonly t = inject(TranslationService).t;
 
-  protected readonly visible = computed(
-    () => this.guestData.connection() === 'STALE' && this.guestData.staleSince() !== null,
-  );
+  protected readonly visible = computed(() => this.staleness.level() === 'PILL');
 
   /** `Stand HH:MM` / `As of HH:MM`, in the active language's own locale. */
   protected readonly label = computed(() => {

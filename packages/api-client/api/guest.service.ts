@@ -19,11 +19,9 @@ import { OpenApiHttpParams, QueryParamStyle } from '../query.params';
 // @ts-ignore
 import { ApiError } from '../model/apiError';
 // @ts-ignore
-import { GuestHomeScreen } from '../model/guestHomeScreen';
+import { GuestContent } from '../model/guestContent';
 // @ts-ignore
 import { GuestPreferencesUpdate } from '../model/guestPreferencesUpdate';
-// @ts-ignore
-import { GuestSession } from '../model/guestSession';
 
 // @ts-ignore
 import { BASE_PATH, COLLECTION_FORMATS }                     from '../variables';
@@ -97,19 +95,23 @@ export class GuestService extends BaseService {
     }
 
     /**
-     * The home screen content for the device\&#39;s room
-     * Headline/subtitle/paragraph and 0–4 action cards, all templates RESOLVED server-side per offered language against the active stay (checkout time/date in the property timezone, each language\&#39;s locale) — no braces ever leave the server. Artwork falls back room → property.
-     * @endpoint get /api/guest/screens/home
+     * Everything the device\&#39;s room renders from, in one document
+     * Property (name, brand, logo), room, occupancy, settings config with resolved defaults (room override, else property default), the stay\&#39;s raw preference override (occupied only), the resolved menu under the ceiling rule plus the fixed settings chrome, the resolved standby texts, and — for an occupied room — the home content (headline/ subtitle/paragraph and 0-4 action cards, all templates RESOLVED server-side per offered language against the active stay; no braces ever leave the server, artwork falls back room -&gt; property). Vacant rooms serve no stay-derived value (data-sparing) but still answer 200 — the standby screen renders from this.
+     * @endpoint get /api/guest/content
+     * @param ifNoneMatch 
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public getGuestHomeScreen(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<GuestHomeScreen>;
-    public getGuestHomeScreen(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<GuestHomeScreen>>;
-    public getGuestHomeScreen(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<GuestHomeScreen>>;
-    public getGuestHomeScreen(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public getGuestContent(ifNoneMatch?: string, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<GuestContent>;
+    public getGuestContent(ifNoneMatch?: string, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<GuestContent>>;
+    public getGuestContent(ifNoneMatch?: string, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<GuestContent>>;
+    public getGuestContent(ifNoneMatch?: string, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
+        if (ifNoneMatch !== undefined && ifNoneMatch !== null) {
+            localVarHeaders = localVarHeaders.set('If-None-Match', String(ifNoneMatch));
+        }
 
         // authentication (bearerAuth) required
         localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
@@ -137,65 +139,9 @@ export class GuestService extends BaseService {
             }
         }
 
-        let localVarPath = `/api/guest/screens/home`;
+        let localVarPath = `/api/guest/content`;
         const { basePath, withCredentials } = this.configuration;
-        return this.httpClient.request<GuestHomeScreen>('get', `${basePath}${localVarPath}`,
-            {
-                context: localVarHttpContext,
-                responseType: <any>responseType_,
-                ...(withCredentials ? { withCredentials } : {}),
-                headers: localVarHeaders,
-                observe: observe,
-                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
-                reportProgress: reportProgress
-            }
-        );
-    }
-
-    /**
-     * Everything route-independent for the device\&#39;s room
-     * Property (name, brand, logo), room, occupancy, settings config with resolved defaults (room override, else property default), the stay\&#39;s raw preference override (occupied only), the resolved menu under the ceiling rule plus the fixed settings chrome, and the resolved standby texts. Vacant rooms serve no stay-derived value (data-sparing) but still answer 200 — the standby screen renders from this.
-     * @endpoint get /api/guest/session
-     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
-     * @param reportProgress flag to report request and response progress.
-     * @param options additional options
-     */
-    public getGuestSession(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<GuestSession>;
-    public getGuestSession(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<GuestSession>>;
-    public getGuestSession(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<GuestSession>>;
-    public getGuestSession(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
-
-        let localVarHeaders = this.defaultHeaders;
-
-        // authentication (bearerAuth) required
-        localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
-
-        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
-            'application/json'
-        ]);
-        if (localVarHttpHeaderAcceptSelected !== undefined) {
-            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
-        }
-
-        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
-
-        const localVarTransferCache: boolean = options?.transferCache ?? true;
-
-
-        let responseType_: 'text' | 'json' | 'blob' = 'json';
-        if (localVarHttpHeaderAcceptSelected) {
-            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
-                responseType_ = 'text';
-            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
-                responseType_ = 'json';
-            } else {
-                responseType_ = 'blob';
-            }
-        }
-
-        let localVarPath = `/api/guest/session`;
-        const { basePath, withCredentials } = this.configuration;
-        return this.httpClient.request<GuestSession>('get', `${basePath}${localVarPath}`,
+        return this.httpClient.request<GuestContent>('get', `${basePath}${localVarPath}`,
             {
                 context: localVarHttpContext,
                 responseType: <any>responseType_,
