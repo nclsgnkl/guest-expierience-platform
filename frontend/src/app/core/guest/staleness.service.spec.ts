@@ -14,6 +14,15 @@ import { STALE_ESCALATION_MS, StalenessService } from './staleness.service';
  */
 const NOW = Date.parse('2026-08-27T14:00:00');
 const MINUTE = 60_000;
+/**
+ * Every case below is expressed as an offset from the **configured**
+ * threshold, never as 59/60 minutes: the value comes from the environment
+ * (`STALE_ESCALATION_MS`) and the `development` configuration — the one these
+ * tests build under — shortens it to a minute. A literal "59 minutes is still
+ * the pill" would assert the production number against a dev build and fail,
+ * and worse, would keep passing for the wrong reason if the number moved.
+ */
+const THRESHOLD = STALE_ESCALATION_MS;
 
 describe('StalenessService', () => {
   const connection = signal<ConnectionState>('ONLINE');
@@ -36,10 +45,10 @@ describe('StalenessService', () => {
     staleness = TestBed.inject(StalenessService);
   });
 
-  /** Stale since `minutes` ago, as the machine would have left it. */
-  function staleFor(minutes: number): void {
+  /** Stale since `ms` ago, as the machine would have left it. */
+  function staleFor(ms: number): void {
     connection.set('STALE');
-    staleSince.set(NOW - minutes * MINUTE);
+    staleSince.set(NOW - ms);
   }
 
   it('ONLINE is NONE — no hint of any kind', () => {
@@ -48,25 +57,25 @@ describe('StalenessService', () => {
 
   it('DISCONNECTED is NONE — the full-screen connection panel names it already', () => {
     connection.set('DISCONNECTED');
-    staleSince.set(NOW - 90 * MINUTE);
+    staleSince.set(NOW - 2 * THRESHOLD);
 
     expect(staleness.level()).toBe('NONE');
   });
 
-  it('59 minutes stale is still the discreet pill', () => {
-    staleFor(59);
+  it('one millisecond short of the threshold is still the discreet pill', () => {
+    staleFor(THRESHOLD - 1);
 
     expect(staleness.level()).toBe('PILL');
   });
 
-  it('60 minutes stale escalates to the banner', () => {
-    staleFor(60);
+  it('reaching the threshold escalates to the banner', () => {
+    staleFor(THRESHOLD);
 
     expect(staleness.level()).toBe('BANNER');
   });
 
   it('escalates on the clock tick alone — no new timer, nothing re-fetched', () => {
-    staleFor(59);
+    staleFor(THRESHOLD - 1);
     expect(staleness.level()).toBe('PILL');
 
     now.set(new Date(NOW + MINUTE)); // the minute-aligned ClockService ticks
@@ -82,7 +91,7 @@ describe('StalenessService', () => {
     expect(staleness.level()).toBe('NONE');
   });
 
-  it('a cold boot from an hour-old cache is escalated immediately', () => {
+  it('a cold boot from a cache older than the threshold is escalated immediately', () => {
     // `adoptCache()` seeds staleSince from the cached record's storedAt.
     connection.set('STALE');
     staleSince.set(NOW - STALE_ESCALATION_MS - 1);
@@ -93,8 +102,9 @@ describe('StalenessService', () => {
   it('a stale episode is always exactly one level — never both, never neither', () => {
     // The tri-state is the mechanism: pill and banner read the same signal, so
     // "banner up ⇒ pill down" holds by construction rather than by agreement.
-    const levels = [0, 30, 59, 60, 61, 600].map((minutes) => {
-      staleFor(minutes);
+    const ages = [0, THRESHOLD / 2, THRESHOLD - 1, THRESHOLD, THRESHOLD + 1, 10 * THRESHOLD];
+    const levels = ages.map((ms) => {
+      staleFor(ms);
       return staleness.level();
     });
 

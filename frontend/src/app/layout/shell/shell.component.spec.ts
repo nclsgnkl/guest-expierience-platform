@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ShellComponent } from './shell.component';
 import type { PropertyConfig } from '../../core/content/property.model';
 import { GuestDataService } from '../../core/guest/guest-data.service';
+import { STALE_ESCALATION_MS } from '../../core/guest/staleness.service';
 import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
 
 @Component({ selector: 'app-test-home', template: '<p>home content</p>' })
@@ -163,9 +164,11 @@ describe('ShellComponent', () => {
     expect(element.querySelector('.staleness-pill')).toBeNull();
 
     const guestData = staleness();
-    // Five minutes ago, relative to the real clock: the escalation threshold
-    // is an hour, so a wall-clock literal here would decide the *other* case.
-    const since = Date.now() - 5 * 60_000;
+    // Half the CONFIGURED threshold ago, relative to the real clock. A literal
+    // ("five minutes") would decide the other case under the development
+    // environment, whose threshold is one minute — and that is the environment
+    // these tests build under.
+    const since = Date.now() - STALE_ESCALATION_MS / 2;
     guestData.connection.set('STALE');
     guestData.staleSince.set(since);
     await harness.fixture.whenStable();
@@ -181,13 +184,16 @@ describe('ShellComponent', () => {
     expect(element.querySelector('.staleness-pill')).toBeNull();
   });
 
-  it('after an hour the pill is replaced by the banner, with the GUEST wording (REQ-952)', async () => {
+  it('past the threshold the pill is replaced by the banner, with the GUEST wording (REQ-952)', async () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/', ShellComponent);
     const element: HTMLElement = harness.routeNativeElement!;
 
     const guestData = staleness();
-    const since = Date.now() - 61 * 60_000;
+    // A minute PAST the configured threshold: the real ClockService is
+    // minute-aligned, so its `now()` can trail `Date.now()` by up to 59 s and
+    // a value exactly at the threshold would be a coin flip.
+    const since = Date.now() - STALE_ESCALATION_MS - 60_000;
     guestData.connection.set('STALE');
     guestData.staleSince.set(since);
     await harness.fixture.whenStable();

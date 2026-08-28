@@ -14,6 +14,7 @@ import { PropertyContentService } from '../../core/content/property-content.serv
 import type { ResolvedPropertyConfig } from '../../core/content/property.model';
 import { GuestAssetService } from '../../core/guest/guest-asset.service';
 import { GuestDataService } from '../../core/guest/guest-data.service';
+import { STALE_ESCALATION_MS } from '../../core/guest/staleness.service';
 import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
 import { PreferencesService } from '../../core/preferences/preferences.service';
 import { StandbyComponent } from './standby.component';
@@ -156,7 +157,11 @@ describe('StandbyComponent', () => {
 
   it('escalates to the banner with the STAFF wording — a vacant room has no guest (REQ-952)', async () => {
     connection.set('STALE');
-    staleSince.set(Date.now() - 61 * 60_000);
+    // A minute past the CONFIGURED threshold, not a literal hour: the
+    // development environment shortens it to a minute (see
+    // `staleness.service.ts`), and the minute-aligned ClockService needs the
+    // slack on top.
+    staleSince.set(Date.now() - STALE_ESCALATION_MS - 60_000);
     const fixture = render();
     const el: HTMLElement = fixture.nativeElement;
 

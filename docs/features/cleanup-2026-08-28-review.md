@@ -369,3 +369,275 @@ baselines are on figure.
 **Yes.** 🔴 0 · 🟠 0. Findings 1 and 2 are ~10-word edits that belong in this
 commit rather than after it; finding 3 belongs in the handoff's "recorded,
 deliberately not fixed" section beside the `401`/`403` case; 4–10 are optional.
+
+---
+
+# Review — Round 3 (the configurable staleness threshold), 2026-08-28
+
+An owner-requested change, unrelated to rounds 1–2: the staleness escalation
+threshold moves from a module constant to the environment pair — **60 minutes
+in production, one minute under the `development` configuration** — so that the
+escalated banner is reachable by hand instead of by waiting an hour or editing
+a running system. `STALE_ESCALATION_MS` keeps its exported name, so no importer
+moves.
+
+Base `8bfb6df`; branch `refactor/bce-subpackages-and-boundary-security`,
+unchanged. Seven files, all under `frontend/`. Nothing committed by this review.
+`docs/features/module-content/d9-spike.md` is out of scope and untouched.
+
+**This review edited tracked files three times and restored them each time** —
+two mutations of `staleness.service.ts` and one temporary `git checkout HEAD`
+of the three specs, each to answer a question the diff cannot. The tree was
+verified back to the reviewed state after each (`git diff --stat` identical:
+7 files, 121 insertions, 36 deletions).
+
+## 🔍 Verdict: PASS ✅
+
+**🔴 0 · 🟠 0 · 🟡 3 · 🟢 4**
+
+All three claims I was asked to check hold, and two of them hold for a sharper
+reason than the brief gives. Nothing blocks the commit. The three 🟡 are one
+~15-word documentation line, one queued nested-`CLAUDE.md` entry I am barred
+from writing, and one line in an instrument.
+
+## 1 — the `measure-states.mjs` judgement call: correct, and load-bearing
+
+`await page.evaluate(ageTheCache, 0)` in the PILL block is **right**, and the
+hazard it closes is real rather than theoretical.
+
+**The hazard, stated exactly.** The PILL block's mechanism is the inverse of
+the BANNER blocks': it loads *online* (writing the cache with `storedAt = T0`),
+blocks `/api`, reloads, and waits for `.staleness-pill`. `adoptCache()` seeds
+`staleSince` from `storedAt`, so the pill exists only while
+`clock.now() − T0 < threshold`. Under the `development` configuration that
+window is **not 60 s but 60–120 s** (see §4), measured from the *online* load —
+and the reload it must survive is budgeted at 120 000 ms. The block's budget
+therefore exceeded its own guaranteed window. On overshoot the cell renders the
+banner, `waitForSelector('.staleness-pill', 30000)` rejects **uncaught**, and
+the run dies before `SUMMARY` — the failure class rounds 1–3 of the previous
+review paid for four times.
+
+**Why the fix is sound.** It is the same cache-driven mechanism the BANNER
+blocks use, at offset `0` instead of `61`, so the instrument keeps its own
+doctrine ("driven through the cache, not through a clock hack"). It changes no
+state the app validates: `storedAt` is read at `guest-data.service.ts:303`
+with a `typeof === 'number'` guard and no freshness or signature check, and
+re-stamping it *forward* to now is exactly what a successful write would have
+done a moment earlier.
+
+**"Nothing measured moves" — confirmed, with one precision.** The pill's text
+is `stale.asOf` formatted by `Intl.DateTimeFormat(locale, { hour: '2-digit',
+minute: '2-digit' })` (`staleness-pill.component.ts:56`). Two-digit hour and
+minute is **fixed-width**, so the string's length, wrapping and box are
+invariant under any shift of `storedAt`. Strictly, dev's phrasing understates
+it slightly: the re-stamp *can* change the rendered minute (from `10:00` to
+`10:01`) when the online load straddles a boundary — it is not that the value
+cannot change, but that **nothing the block asserts depends on it**. Every
+assertion is geometry: `pill.y < bar.bottom`, the heading intersection, and
+`pill.h > 28.5`. All three are unaffected. The claim survives; the reason is
+"fixed-width format", not "same minute".
+
+### The rename `STALE_ESCALATION_MINUTES` → `AGED_CACHE_MINUTES` (61)
+
+**Right name, right reasoning, adequately caveated.** The old name asserted an
+identity that is now false — it never *was* the threshold, it was an offset
+past it, and under two thresholds the old name would have read as a claim about
+which one. Not deriving it is also right: a `.mjs` cannot import the TS module
+without a transpile, and scraping the literal would couple the instrument to
+the source's formatting — the precise coupling that produced round 1's
+duplicated-path defect (`measure.mjs:573`/`:589`). The block needs only an age
+that *clears* the threshold, and 61 minutes clears both.
+
+The caveat ("if a future threshold ever exceeds an hour this number must grow
+with it") is recorded **in the docblock immediately above the constant**, which
+is where someone raising the threshold would be reading. That is adequate. I
+looked for a second place it should also live and found none: no other file
+names 61.
+
+## 2 — the specs: they still fail when the escalation breaks
+
+This is the claim that mattered, so I did not read it — I broke the subject
+three ways and watched.
+
+| Experiment | Change | Result |
+|---|---|---|
+| **A** — boundary regression | `>= STALE_ESCALATION_MS` → `> STALE_ESCALATION_MS` (one character) | **2 failed**, 309 passed — `reaching the threshold escalates to the banner`, `a stale episode is always exactly one level` |
+| **B** — environment ignored | service hardcodes `>= 60 * 60 * 1000`, the constant unused | **6 failed**, 305 passed — across **all three** spec files, including both banner cases and the cold-boot case |
+| **C** — dev's own claim | `git checkout HEAD --` the three specs, new environment | **exactly 4 failed**, 307 passed |
+
+**Experiment A settles the tautology question.** A parameterised test whose
+subject is the parameter would pass under any operator; this one does not. The
+exact boundary — `THRESHOLD − 1` is `PILL`, `THRESHOLD` is `BANNER` — is still
+asserted, and one character in the comparison turns it red. That property was
+what the literals used to buy, and it survives the parameterisation intact.
+
+**Experiment B settles the premise, better than a probe spec does.** dev proved
+by a temporary spec that the tests resolve `environment.development.ts`. B
+proves the same thing *by consequence*: if the specs built under the production
+environment, hardcoding an hour in the service would be a no-op and nothing
+would fail. Six tests failed. The premise is confirmed from the source side as
+well — `@angular/build/src/builders/unit-test/options.js:39` reads
+`options.buildTarget ?? '::development'`, and `angular.json`'s `test` target
+sets no `buildTarget`, so it resolves `frontend:build:development` and its
+`fileReplacements`. Two independent confirmations; no probe needed.
+
+**Experiment C reproduces dev's number exactly** — 4 cases, and the same four:
+`59 minutes stale is still the discreet pill`, `escalates on the clock tick
+alone`, `a stale episode is always exactly one level`, and
+`shell.component.spec.ts`'s `shows the staleness pill only in the STALE state`
+(the `Date.now() - 5 * 60_000` whose comment said *"the escalation threshold is
+an hour"*). The hardcoded figures were load-bearing; touching them was not
+optional tidying.
+
+**The one-minute slack on the banner cases is correct and minimal.** With
+`ClockService`'s `_now` only ever *trailing* wall-clock (it is set at
+construction and re-set on the minute — never rounded forward), the observed
+age is `since + lag` where `lag ∈ [0, 60_000)`. At `THRESHOLD + 60_000` the
+worst case is `THRESHOLD + 1 ms` — passing, by one millisecond, for **any**
+threshold. Exactly at the threshold it would indeed be a coin flip. The pill
+case at `THRESHOLD / 2` has the inverse margin (30 s under the dev value) and
+cannot fail without a test taking 30 s, which the runner would abort first.
+Both directions hold under the production value too, so the specs stay green
+whichever configuration a future runner builds under.
+
+## 3 — the dev value does not ship: confirmed independently, and more strongly
+
+Fresh `npx ng build` (default configuration = `production`), then grep of
+`dist/frontend/browser/main-3OAZML7O.js`:
+
+- `gxp-dev-device-token` — **0 occurrences**.
+- `36e5` — **1 occurrence**, and its context is the whole environment object:
+  `var Cr={devDeviceToken:null,staleEscalationMs:36e5}`. Both fields, production
+  values, one literal.
+- `6e4` (the dev value, 60 000) — **1 occurrence**, and it is
+  `setInterval(()=>this._now.set(new Date),6e4)`, i.e. `ClockService`'s minute
+  tick. Not a threshold.
+
+That last line is the part worth keeping: the guarantee is not merely "36e5 is
+present" but "the only 60 000 in the bundle is provably something else". The
+environment object survives minification as a greppable literal, so this check
+stays cheap for whoever repeats it. This is the same shape of guarantee
+`system-context.md:228` already records for the dev device token.
+
+## 4 — dev's hand-proof: the 115.2 s is not an approximation, it is the arithmetic
+
+The disclosure is correct and the mechanism predicts the measurement to within
+its own resolution.
+
+`ClockService` re-reads the wall clock on **whole-minute boundaries**. Let `s`
+be the seconds-past-the-minute at which `staleSince` falls. The level flips at
+the first tick `k` minutes later satisfying `60k − s ≥ 60`, so `k = 2` for any
+`s > 0`, and the real time elapsed is `120 − s` seconds:
+
+- `s → 60⁻` — escalates after just over **60 s**
+- `s → 0⁺` — escalates after nearly **120 s**
+
+The window is therefore `(60, 120]` seconds, never a flat minute. dev's
+observed **115.2 s** implies `s ≈ 4.8 s` — the page loaded about five seconds
+past a minute boundary, which is exactly what an `ng serve` load looks like.
+Rounding this to "about a minute" would have been wrong in the direction that
+breaks things, and it is precisely the number that makes §1's fix necessary
+rather than decorative. Disclosing it was the right call.
+
+`content: true` across all three observations is REQ-952's no-cutoff half
+(`01-prd.md:141`, "a hard cutoff was explicitly rejected") still holding, on
+both the pre- and post-escalation side.
+
+## Findings
+
+| # | Severity | Category | File | Finding | Fix |
+|---|----------|----------|------|---------|-----|
+| 1 | 🟡 | Record accuracy (living doc) | `docs/system-context.md:239` | The `StalenessService` row states **`STALE_ESCALATION_MS = 60 min`** as a fixed constant. After this change it is `environment.staleEscalationMs` — 60 min in production only. `system-context.md` is a living reference `CLAUDE.md` points every session at, and this is the very constant the round is about, so it is the one line most likely to be read and believed. (The behavioural phrasings at `:240` and `:495` — "after 60 min…", "after an hour…" — describe the product and are **fine as they stand**, like `connection.md`'s Trigger.) | The precedent is one row up at `:228`, which already does this for the sibling field: *"The dev fallback (`environment.development.ts`, D3) … is grep-provably absent from a production bundle"*. Mirror it: `STALE_ESCALATION_MS = environment.staleEscalationMs` (60 min in production; `environment.development.ts` shortens it to a minute so the banner is reachable by hand). |
+| 2 | 🟡 | Convention undocumented | `frontend/CLAUDE.md` → Tests | **"Unit tests build under the `development` configuration"** is now load-bearing — it is what decided the four cases of experiment C — and it is recorded only in three spec comments. The next person writing a staleness-adjacent spec with a wall-clock literal reproduces the same defect, and the compiler will not stop them. dev's proposed constitution amendment covers the dev/prod-threshold *pattern*, which is the broader fact; this frontend-specific one has no home. | **I am barred from writing it** (owner's rule — this and the `overflow-wrap` entry are queued). Proposed text for the owner's approval: *"`ng test` builds the **development** configuration — `angular.json`'s `test` target sets no `buildTarget` and `@angular/build:unit-test` defaults to `::development`, so specs see `environment.development.ts`. A test that depends on a value the environment pair varies must express it as an offset from the imported constant, never as a wall-clock literal."* |
+| 3 | 🟡 | Instrument (silent path) | `frontend/tools/measure-states.mjs:369` | The PILL block **discards `ageTheCache`'s return value**, while all three BANNER blocks wrap the identical call in `if (!(await …)) note('NO CACHE', …)` (`:532`, `:599`, `:647`). With no cache the block falls through to a 30 s `waitForSelector` timeout that throws uncaught — the same failure class the new line was added to close, reached by the other door. The asymmetry is new: before this change the PILL block made no such call at all. | `if (!(await page.evaluate(ageTheCache, 0))) note('NO CACHE', \`nothing cached to re-stamp at ${w}x${h}\`);` — one line, same shape as its three siblings. |
+| 4 | 🟢 | Instrument (residual) | `measure-states.mjs:369-370` | The re-stamp precedes `page.reload({ timeout: 120000 })`, so the reload consumes the very window the re-stamp opened. Guaranteed window is 60 s (§4); the configured budget is 120 s + 30 s. In practice a warm dev server reloads in 1–3 s, so the risk is small — but it is not zero, and it is the residue of the hazard rather than its elimination. | Optional: `await page.addInitScript(ageTheCache, 0)` instead, which re-stamps at document-start of the reload and reduces the consumed window to the app's own boot. Note `addInitScript` persists for later navigations in that page — harmless here (the theme loop navigates nowhere), but it is why the simpler form is defensible. |
+| 5 | 🟢 | Instrument (new interaction) | `frontend/tools/measure.mjs` | The **main** grid instrument has **zero** mentions of `staleness` (`grep` → 0). Under the production hour a backend stall could never surface the chrome mid-grid; under one minute, a >60 s Quarkus stall on this box escalates to the banner, and the banner is an absolute overlay that "cannot grow the document" — so it raises no scroll finding and the affected cells are measured with an overlay silently on top. New consequence of this change, worth recording. | Record, or one guard: note when `.staleness-pill`/`.staleness-banner` is present in a cell the grid expects to be online. |
+| 6 | 🟢 | Type shape | `environment.ts:8`, `environment.development.ts:11` | The environment's structural type is written **inline in both files** and has now doubled from one field to two. tsc checks both files (`tsconfig.app.json` includes `src/**/*.ts`) but as independent modules, so a shape divergence is caught only at a consumption site under the swapped configuration — here, by `ng build` and `ng test` respectively, which is why both are green. | Optional, and the standard Angular shape: a shared `export interface Environment` in a third file, imported by both. `fileReplacements` swaps only `environment.ts`, so a shared model file is safe. |
+| 7 | 🟢 | Test coverage (inherent) | — | **No test pins the production 60-minute value.** It cannot: specs build under `development`, and importing `environment.ts` from a spec yields the replaced file. Before this change the literal in `staleness.service.spec.ts` was that pin. The compensating control is the bundle grep in §3, which is stronger than a unit test (it checks the shipped bytes) but is not automated. | None required. Worth knowing that §3's grep is now the *only* check on that number, and worth repeating in any round that touches the environment pair. |
+
+## Your question — a pointer in `connection.md`?
+
+**My recommendation: no — put it in `frontend/CLAUDE.md` (finding 2) instead,
+and record the mechanism where a manual tester will actually stand.**
+
+`docs/design/screens-inhouse/connection.md` is a **design** record: what the
+screen is, why, and what the guest sees. `frontend/CLAUDE.md` calls
+`docs/design/**` "the **as-built** record: exactly what exists in Figma and was
+extracted". A build-configuration affordance is not a design fact, and putting
+one there starts a precedent where every dev shortcut earns a line in a screen
+spec. dev was right to leave `01-prd.md:141` and `connection.md`'s Trigger
+alone; I would leave them alone for the *category* reason too, not only because
+they describe production.
+
+The tester who needs this is in one of two places, and both are already served
+or served by finding 2: running `tools/measure-states.mjs` (whose BANNER
+docblock now states both values explicitly), or writing a spec (finding 2's
+`CLAUDE.md` line). The owner's own use case — unplug the backend and watch —
+is the third, and for that the honest home is the environment file's docblock,
+where it already is and reads well.
+
+**If you want the pointer anyway**, the least-bad form is a parenthetical on
+`connection.md`'s Trigger that does not restate the number as a design
+decision: *"(60 minutes is the production value; a `development` build shortens
+it — see `frontend/src/environments/` — so this state can be reached by hand.)"*
+That keeps the spec's number authoritative and makes the dev value visibly
+subordinate to it. I would still rather it lived in `CLAUDE.md`.
+
+## My own numbers
+
+| Check | Result |
+|---|---|
+| `npx ng test --no-watch`, run alone | **34 files, 311/311**, 18.0 s (build 19.6 s) |
+| `npx tsc --noEmit -p tsconfig.app.json` | **0 errors** |
+| `npx ng build` (production) | clean — **main 460.12 kB** (105.07 kB transfer), initial total 469.39 kB. Baseline 460.08 kB → **+0.04 kB**, consistent with one added numeric property |
+| Bundle grep | `gxp-dev-device-token` **0**; `36e5` **1**, as `{devDeviceToken:null,staleEscalationMs:36e5}`; `6e4` **1**, and it is `ClockService`'s tick |
+| Mutation A (`>=` → `>`) | **2 failed** — the boundary is genuinely asserted |
+| Mutation B (service ignores the environment) | **6 failed** across all three spec files — and independent proof that specs build `development` |
+| Experiment C (HEAD specs, new environment) | **exactly 4 failed**, and the same four dev named |
+| `prettier --check`, the six `src/` files | **clean** |
+| `prettier --check tools/measure-states.mjs` | nonconforming — **and nonconforming at HEAD too** (verified with `--config .prettierrc` on a `git show` copy; the default-config run in `/tmp` is not a valid comparison, it reports quote style). Every line prettier wants is pre-existing (`newContext` calls, `waitForFunction`, one `if`); **none of the added lines appears in its diff**. Left nonconforming, correctly |
+| Backend | **not run.** No JDK invoked, no container started. The D9 spike's `430 · 0 failures · 4 errors` is not treated as a baseline and nothing here touches backend code |
+| `api/openapi.yaml`, `packages/`, `backend/`, `pom.xml`, `package.json`, `package-lock.json` | untouched — `git status` shows 7 files, all `frontend/src` or `frontend/tools` |
+| Constitution / nested `CLAUDE.md` | untouched. The `overflow-wrap` entry is still unwritten, and so is finding 2's — **no amendment written by this review** |
+| Branch / commits | `refactor/bce-subpackages-and-boundary-security`, HEAD `8bfb6df`, nothing committed |
+| Tree after review | `git diff --stat` identical to the reviewed baseline: 7 files, 121 insertions, 36 deletions |
+
+### Visual check (skill step 0 — not skipped, and its ruling stated)
+
+**This change has no rendered surface, and that is verifiable from the diff
+rather than asserted.** No `.html` and no `.css` file is touched
+(`git diff --name-only | grep -E '\.(html|css)$'` → empty), no design token is
+referenced, and no translation key changes. `StalenessPillComponent` and
+`StalenessBannerComponent` are byte-identical to HEAD. What changed is *when*
+one replaces the other, and only under a configuration that does not ship.
+
+I therefore did **not** start `ng serve` or the backend for a screenshot, and I
+am naming that as a decision rather than an omission: the rule exists because a
+text comparison can match a spec's prose while the render misses its intent
+(`home-screen-prototype`, 2026-08-18), and that failure mode requires a diff
+that *can* change a render. This one cannot. The one visual consequence — the
+banner reading *"Seit über einer Stunde"* after a minute — is the accepted item
+and is out of scope by instruction.
+
+## Ready to commit?
+
+**Yes.** 🔴 0 · 🟠 0.
+
+Finding 1 is a ~15-word documentation line with an in-file precedent and
+belongs in this commit rather than after it. Finding 3 is a one-line
+instrument change of the same shape as its three siblings and is cheap enough
+to fold in. Finding 2 is queued behind the owner's approval and must not be
+written by an agent. Findings 4–7 are optional and are recorded here so they
+are not rediscovered.
+
+### Top 3 recommendations
+
+1. **Take findings 1 and 3 into this commit** — one doc line, one instrument
+   line, both with an existing pattern to copy from three lines away.
+2. **Queue finding 2's `frontend/CLAUDE.md` text with the amendment already
+   awaiting you.** The pattern-level amendment and this frontend-level fact are
+   different statements and both are needed; the second is what actually stops
+   the next wall-clock literal.
+3. **Keep §3's bundle grep as a standing check.** With the production value no
+   longer pinned by any test (finding 7), that grep is the only thing standing
+   between a future edit and shipping a one-minute threshold to a guest.

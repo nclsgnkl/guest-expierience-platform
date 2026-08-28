@@ -16,11 +16,14 @@
  *               reloading with /api blocked — bootstrap falls back to the
  *               cache and the pill appears immediately.
  *   BANNER      the same, with the cached record's `storedAt` rewritten to 61
- *               minutes ago before the reload: the escalation (REQ-952) is a
- *               function of the cache's own age, so this measures the cold-boot
- *               case at the same time. Both hosts — the shell (occupied, the
- *               guest wording) and standby (vacant, the staff wording), the
- *               latter needing GXP_SMOKE_ADMIN_PW like the STANDBY cell.
+ *               minutes ago before the reload — past the escalation threshold
+ *               on both environments (an hour in production, a minute under
+ *               the `development` configuration this instrument runs against).
+ *               The escalation (REQ-952) is a function of the cache's own age,
+ *               so this measures the cold-boot case at the same time. Both
+ *               hosts — the shell (occupied, the guest wording) and standby
+ *               (vacant, the staff wording), the latter needing
+ *               GXP_SMOKE_ADMIN_PW like the STANDBY cell.
  *               A third variant renames the active stay to a 37-character
  *               UNBROKEN display name (and renames it back): Home's headline
  *               is manager-authored with `{stay.displayName}` interpolated,
@@ -357,6 +360,17 @@ for (const [w, h] of VIEWPORTS) {
   await page.goto(baseUrl + '/', { waitUntil: 'load', timeout: 120000 });
   await page.waitForSelector('.home-content', { timeout: 60000 }); // online — cache written
   await context.route('**/api/**', (route) => route.abort('connectionrefused'));
+  /* Re-stamp the record as of NOW, the exact inverse of what the BANNER
+     blocks do. The pill only exists BELOW the threshold, and under the
+     `development` configuration that window is one minute wide (owner,
+     2026-08-28) — so a slow reload between the online load and this
+     measurement would silently escalate the cell to the banner and hang
+     `waitForSelector` below. Nothing measured changes: `storedAt` moves by
+     the couple of seconds the online load took, and the rendered `asOf` is
+     minute-formatted. */
+  if (!(await page.evaluate(ageTheCache, 0))) {
+    note('NO CACHE', `nothing cached to re-stamp at ${w}x${h}`);
+  }
   await page.reload({ waitUntil: 'load', timeout: 120000 });
   await page.waitForSelector('.staleness-pill', { timeout: 30000 });
   for (const theme of THEMES) {
@@ -381,13 +395,28 @@ for (const [w, h] of VIEWPORTS) {
 
 /* ------------------------ ESCALATED BANNER ----------------------------- */
 /**
- * REQ-952: after 60 minutes without successful backend contact the pill is
- * REPLACED by a panel. Driven through the cache, not through a clock hack —
- * `staleSince` is seeded from the cached record's `storedAt`, so ageing the
- * record by 61 minutes is exactly the cold-boot case the spec calls out.
+ * REQ-952: after the escalation threshold without successful backend contact
+ * the pill is REPLACED by a panel. Driven through the cache, not through a
+ * clock hack — `staleSince` is seeded from the cached record's `storedAt`, so
+ * ageing the record past the threshold is exactly the cold-boot case the spec
+ * calls out.
+ *
+ * **61 minutes is an offset, not the threshold**, and deliberately not derived
+ * from one. The threshold now lives in `src/environments/environment*.ts` —
+ * 60 minutes in production, ONE MINUTE under the `development` configuration
+ * (which is what `ng serve`, and therefore this instrument, runs). A `.mjs`
+ * script cannot import that TypeScript module without a transpile step, and
+ * scraping the literal out of the file would couple the instrument to the
+ * source's formatting for no gain: the block needs any age that CLEARS the
+ * threshold, and 61 minutes clears both values with room to spare. If a
+ * future threshold ever exceeds an hour this number must grow with it.
  */
-const STALE_ESCALATION_MINUTES = 61;
+const AGED_CACHE_MINUTES = 61;
 
+/**
+ * `minutes` ago for ageing past the threshold; `0` to re-stamp the record as
+ * of NOW, which is how the PILL block keeps its own window open — see there.
+ */
 function ageTheCache(minutes) {
   const raw = localStorage.getItem('gxp.cache.content');
   if (!raw) return false;
@@ -502,7 +531,7 @@ for (const [w, h] of VIEWPORTS) {
   await page.addInitScript((token) => localStorage.setItem('gxp.device-token', token), DEV_TOKEN);
   await page.goto(baseUrl + '/', { waitUntil: 'load', timeout: 120000 });
   await page.waitForSelector('.home-content', { timeout: 60000 }); // online — cache written
-  if (!(await page.evaluate(ageTheCache, STALE_ESCALATION_MINUTES))) {
+  if (!(await page.evaluate(ageTheCache, AGED_CACHE_MINUTES))) {
     note('NO CACHE', `nothing cached to age at ${w}x${h}`);
   }
   await context.route('**/api/**', (route) => route.abort('connectionrefused'));
@@ -569,7 +598,7 @@ if (ADMIN_PW === null) {
         await page.addInitScript((t) => localStorage.setItem('gxp.device-token', t), DEV_TOKEN);
         await page.goto(baseUrl + '/', { waitUntil: 'load', timeout: 120000 });
         await page.waitForSelector('.home-content', { timeout: 60000 }); // online — cache written
-        if (!(await page.evaluate(ageTheCache, STALE_ESCALATION_MINUTES))) {
+        if (!(await page.evaluate(ageTheCache, AGED_CACHE_MINUTES))) {
           note('NO CACHE', `nothing cached to age at ${w}x${h} (long name)`);
         }
         await context.route('**/api/**', (route) => route.abort('connectionrefused'));
@@ -617,7 +646,7 @@ if (ADMIN_PW === null) {
         await page.addInitScript((t) => localStorage.setItem('gxp.device-token', t), DEV_TOKEN);
         await page.goto(baseUrl + '/', { waitUntil: 'load', timeout: 120000 });
         await page.waitForSelector('.standby__headline', { timeout: 45000 });
-        if (!(await page.evaluate(ageTheCache, STALE_ESCALATION_MINUTES))) {
+        if (!(await page.evaluate(ageTheCache, AGED_CACHE_MINUTES))) {
           note('NO CACHE', `nothing cached to age on standby at ${w}x${h}`);
         }
         await context.route('**/api/**', (route) => route.abort('connectionrefused'));

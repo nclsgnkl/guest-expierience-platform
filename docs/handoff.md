@@ -451,6 +451,23 @@ after a 401 wipe, or with storage blocked — says nothing at all. Same shape as
 the other three. Latent today; recorded rather than fixed, on the same reasoning
 that keeps the `401`/`403` case open.
 
+## Awaiting owner — a SECOND proposed `frontend/CLAUDE.md` entry (2026-08-28)
+
+From the dev-threshold review, finding 2. Proposed and **not written**. The fact
+it records is now load-bearing and lives only in three spec comments:
+
+**unit tests build under the `development` configuration**, so a spec sees the
+**dev** value of anything in `environment.development.ts` — the 1-minute
+staleness threshold, the dev device token. Proven from source:
+`@angular/build/src/builders/unit-test/options.js:39` is
+`options.buildTarget ?? '::development'`, and `angular.json`'s `test` target sets
+no `buildTarget`. The exact wording the reviewer proposes is in
+`docs/features/cleanup-2026-08-28-review.md` → round 3, finding 2.
+
+Why it matters: a spec that hardcodes a production figure is **green and wrong**.
+Four cases did exactly that before this round — one carried the comment
+*"the escalation threshold is an hour"*.
+
 ## Queued work — approved, not yet done
 
 ### Two more owner approvals, 2026-08-27 (from the Part B review)
