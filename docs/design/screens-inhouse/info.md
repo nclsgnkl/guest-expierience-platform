@@ -227,12 +227,22 @@ What differs, invisibly, and what the design does about it:
   not. Nothing on screen depends on this — `/info` renders only under
   `OCCUPIED` (a vacant kiosk is on `/standby`, and `screens/*` answer
   `409 room-vacant`), so "no stay" never reaches this screen.
-- **An unresolvable placeholder degrades to literal text.**
+- **An unresolvable placeholder degrades to literal text — and on this screen
+  that outcome is *unreachable*, not merely unlikely.** *(Corrected 2026-08-28.
+  This paragraph read "an occupied stay with no check-out timestamp would put
+  the raw braces on the guest screen". **That state cannot exist:**
+  `stay.check_out` is `timestamptz NOT NULL` (`V2__domain_config.sql`), and
+  `GuestControl.resolveLocalized` passes a null `checkOut` into the template
+  context **only when `stay == null`** — a vacant room, which is on `/standby`.)*
   `TemplateControl.resolve` leaves `{stay.checkOut|time}` as-is rather than
-  rendering `null`. So an occupied stay with no check-out timestamp would put
-  the raw braces on the guest screen. The kiosk cannot detect this — by then it
-  is just a string. Recorded in "Open questions"; it is Part C's to decide, not
-  a thing this design can render its way out of.
+  rendering `null`, and the kiosk cannot detect it — by then it is just a
+  string. So the do-nothing fallback is free, correct and already in place for
+  the day somebody adds a placeholder whose context value may legitimately be
+  absent. **Answered by D18** (owner, 2026-08-28): refused at the *write* — that
+  half belongs to the successor feature `module-content-authoring`, since Part C
+  has no write path — and **nothing clever at the read**. The mapper carries no
+  placeholder-shaped logic at all; dropping a value because it contains `{…}`
+  was put to the owner as option (a) and **rejected**.
 - **A property value can simply be unauthored.** Rule: **an absent value means
   an absent row.** Not an em dash, not an empty `<dd>` — a labelled blank tells
   the guest the screen is broken. ← *generalises*. For this screen the
@@ -515,7 +525,8 @@ other route.
 ## Open questions
 
 Three when this screen was written, all of them **Part C's**, none of them a
-question about the screen. **One is answered; two remain open.** All three are
+question about the screen. **All three are now closed** — question 1 by D15,
+question 2 by D18, question 3 reclassified by D19, all on 2026-08-28. They are
 tracked in
 [`docs/features/module-content/01-prd.md`](../../features/module-content/01-prd.md)
 → "Open items".
@@ -536,16 +547,29 @@ tracked in
    authored yet", and that is exactly when `SectionPlaceholderComponent` renders
    — so REQ-974 is answered in the form proposed under "What replaces the
    `/info` placeholder", and that section is now settled rather than proposed.
-2. **An unresolvable stay placeholder reaches the guest as literal braces.**
-   `TemplateControl.resolve` leaves an absent value as-is by design (better than
-   `null`), and the kiosk cannot detect it — by the wire it is a plain string.
-   Does the mapper drop a value still containing `{…}` (REQ-972), does the
-   server refuse to serve one, or is it accepted as a visible authoring error?
-   Not decidable here.
-3. **A module type that can deliver zero rows needs an empty state.** `info`
-   cannot — row 1 is always present under `OCCUPIED` — so none is designed, and
-   none should be invented for this screen. The first module type that *can* is
-   the one that has to answer it.
+2. ~~**An unresolvable stay placeholder reaches the guest as literal
+   braces.**~~ **✅ ANSWERED 2026-08-28 — D18 (owner).** Refused at the
+   **write** (the server will not store content carrying a placeholder it
+   cannot resolve — reusing `TemplateControl.findInvalidPlaceholders`, which
+   already ships for property text and card templates), and **nothing clever at
+   the read**: the raw placeholder text simply renders, which is already
+   `TemplateControl.resolve`'s documented behaviour, so the fallback costs no
+   code. Option (a) — the mapper drops a value containing `{…}` — was
+   **rejected**: it hides an authoring error and false-positives on
+   legitimately braced text. Under D16 the write half belongs to the successor
+   feature `module-content-authoring`. **And the outcome itself is unreachable
+   on `/info` today** — see the correction in Decision 2.
+3. ~~**A module type that can deliver zero rows needs an empty state.**~~
+   **✅ RECLASSIFIED 2026-08-28 — D19 (owner): it is not a question.** Empty
+   states are **per module type**; there is no shared generic one, because what
+   "empty" means and what belongs in its place depend on what the module shows.
+   It is **a line on the checklist for designing any module type** — see "What
+   generalises" — not something owed to a future screen. `info` cannot be
+   empty (row 1 is a stay fact always present under `OCCUPIED`), so none is
+   designed here and none should be invented. **Keep the two cases apart:** a
+   menu item carrying **no module** means "nothing authored yet" and renders
+   `SectionPlaceholderComponent`; a module delivering **zero entries** means
+   "authored and empty right now" and renders that type's own empty state.
 
 **Not open:** whether a row carries an icon (no), whether rows carry an ordering
 field (no — array order), whether a value is marked sensitive (no — D12 closed
@@ -563,6 +587,7 @@ module reaches its route (**D15**, question 1 above).
 | Module shape | **bespoke per type** (Decision 1) — the row is a shared component, never the model | `info` happens to be a row list |
 | Provenance | stay-resolved and property-authored render identically (Decision 2) | row 1 is the stay one |
 | Absent value | absent value ⇒ absent row | no empty state (unreachable here) |
+| **Empty state** | **every module type states its empty state — or a stated reason the type cannot be empty** (D19, added 2026-08-28) | `info` **cannot** be empty: row 1 is a stay fact always present under `OCCUPIED` |
 | Module title | a module never restates the section's name | — |
 | Ordering | delivered array order, no per-row sort key | — |
 | Alignment | values left-aligned; the top-right band belongs to the staleness banner | — |

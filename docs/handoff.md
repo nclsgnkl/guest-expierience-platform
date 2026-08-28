@@ -544,6 +544,31 @@ died in between — it died twice that night — it would have been lost and the
 owner would have had to approve it again. Every proposed gate text goes into this
 file at the moment it is proposed, not when it is approved.
 
+## Owner approval 2026-08-28 — the `pom.xml` generator option
+
+*"ja hast meine genehmigung. Das darf rein in die pom xml"* — given **before**
+`dev` reached the step, so the approval pause Part C's TODO plans for is
+**already discharged**. Whoever implements it does **not** stop to ask.
+
+**What is approved, and only this:** one `<configOptions>` line on the existing
+`openapi-generator-maven-plugin`, `<useOneOfInterfaces>true</useOneOfInterfaces>`.
+
+Why it was gated at all: `backend/CLAUDE.md` treats **every** `pom.xml` change as
+approval-gated, regardless of size. The approval does **not** widen to anything
+else in that file — a version bump, a plugin, a dependency all still need their
+own word.
+
+Why it is safe, measured rather than assumed (`d9-spike.md`): it is a generator
+**option**, not a dependency — nothing pulls in `jackson-databind-nullable` or
+any other artifact, which is the second gate D9 had reserved and which therefore
+never opens. Its blast radius on today's contract is **provably zero**, because
+`api/openapi.yaml` contains no other `oneOf`; the full diff of the generated Java
+tree between flag-off and flag-on was the three spike files and nothing else.
+
+Still lands **with the first real union**, not before — on today's contract the
+line changes nothing, so it belongs in the commit where it can be reviewed
+against the thing it affects.
+
 ## Queued work — approved, not yet done
 
 ### Two more owner approvals, 2026-08-27 (from the Part B review)
