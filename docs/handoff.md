@@ -468,6 +468,24 @@ Why it matters: a spec that hardcodes a production figure is **green and wrong**
 Four cases did exactly that before this round — one carried the comment
 *"the escalation threshold is an hour"*.
 
+## The backend baseline of 441 is not established — re-measure before quoting it
+
+Both the D9 spike and the round-3 reviewer ran `./mvnw verify` on a
+**byte-identical** backend tree and got **430 / 4 errors** and **429 / 4 errors**
+respectively, never 441. Every error is a `ContainerLaunchException` or
+`Failed to start quarkus` raised **before any application code runs**, always in
+a test that forces its own `@TestProfile` and therefore a second Dev Services
+container. A raw `docker run postgres:17.11` is ready in 7 s on this host.
+
+**The likely cause is the box, and it is worth knowing:** a 3.8 GB Pi that also
+runs **Immich and Home Assistant**, with concurrent agent builds on top. That
+explains the night's `ng test` worker crashes far better than the stale 9 MB
+Chromium process an earlier review blamed.
+
+**Consequence:** do not quote 441 as a passing baseline. Re-establish it on a
+quiet box before it is used as evidence for anything. No failure has ever been
+an assertion — that part is solid.
+
 ## Queued work — approved, not yet done
 
 ### Two more owner approvals, 2026-08-27 (from the Part B review)
