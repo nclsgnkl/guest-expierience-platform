@@ -1,8 +1,17 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.9.0 | **Last amended:** 2026-08-27
+**Version:** 1.10.0 | **Last amended:** 2026-08-28
 
-> **1.9.0** — owner decision 2026-08-27, wording approved verbatim before it
+> **1.10.0** — owner decision 2026-08-28, wording approved verbatim before it
+> was written. Adds a constraint on thresholds that gate hard-to-reach states.
+> The occasion was `guest-payload-consolidation`'s staleness escalation: seeing
+> it meant waiting an hour or editing a running system, and the owner asked for
+> the pattern he knows from work — production keeps the real value, development
+> gets one reachable by hand. The clause generalises that, and names the failure
+> it is really guarding against: not the wait, but the constant somebody edits
+> to test and forgets to edit back.
+>
+> > **1.9.0** — owner decision 2026-08-27, wording approved verbatim before it
 > was written. The kiosk cache clause was an absolute prohibition on caching
 > door codes, key-box codes, alarm codes and WiFi passwords. It is replaced by
 > a threat-model boundary: the cache may hold what the manager deliberately put
@@ -432,6 +441,17 @@
   are to be rotated when a device goes missing. We implement the controls we
   own and disclose the ones we do not — we do not build speculative defences
   against the physical world.
+- **A threshold that gates a state you cannot otherwise reach carries a shorter
+  value in `%dev`.** Where a parameter decides *when* something becomes visible
+  — a staleness escalation, a retention sweep, a token idle-out, a backoff
+  ceiling — production carries the real value and the development profile
+  carries one small enough to reach by hand. The production value remains the
+  single source of truth for behaviour; the development value exists so the
+  state can be exercised without waiting for it or editing a running system,
+  which is how a state ends up shipped untested. Both live side by side in
+  configuration the build selects — **never as one constant edited to test and
+  edited back**, because that edit is invisible in review and survives in
+  someone's working tree.
 - **Second frontend: the manager UI is a second Angular app**
   (`backend/manager-ui/`), shipped inside the Quarkus artifact,
   dependency-lean: no component library, plain CSS, native form controls. The

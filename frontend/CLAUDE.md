@@ -64,6 +64,10 @@ this file only adds what it does not already say.
 - Sizes are `rem`; the root font size is viewport-proportional
   (`global.css`), so the whole UI scales without breakpoints. Do not add a
   media query to compensate for something being the wrong size.
+- **A string a manager or a guest supplies is width you do not control.** Text
+  that interpolates one — Home's headline is `{stay.displayName}` — sets
+  `overflow-wrap: anywhere`: a fixed column width does not break an unbroken
+  token, and the overflow is invisible in every seed-data render.
 
 ## Icons
 
@@ -105,6 +109,12 @@ states and for the staleness chrome — the discreet pill and its escalated
 banner, the latter driven by ageing the cached record's `storedAt` past the
 threshold; it needs the dev backend and drives its state via the manager API
 (and restores it).
+
+`ng test` builds the **development** configuration — `angular.json`'s `test`
+target sets no `buildTarget` and `@angular/build:unit-test` defaults to
+`::development`, so specs see `environment.development.ts`. A test that depends
+on a value the environment pair varies must express it as an offset from the
+imported constant, never as a wall-clock literal.
 
 **`src/test-setup.ts` runs before every spec** (`setupFiles` on the `test`
 target). It supplies `localStorage`/`sessionStorage`, because Node ≥ 26 defines

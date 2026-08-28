@@ -451,7 +451,7 @@ after a 401 wipe, or with storage blocked — says nothing at all. Same shape as
 the other three. Latent today; recorded rather than fixed, on the same reasoning
 that keeps the `401`/`403` case open.
 
-## Awaiting owner — a SECOND proposed `frontend/CLAUDE.md` entry (2026-08-28)
+## ✅ WRITTEN 2026-08-28 — was: a second proposed `frontend/CLAUDE.md` entry
 
 From the dev-threshold review, finding 2. Proposed and **not written**. The fact
 it records is now load-bearing and lives only in three spec comments:
@@ -485,6 +485,64 @@ Chromium process an earlier review blamed.
 **Consequence:** do not quote 441 as a passing baseline. Re-establish it on a
 quiet box before it is used as evidence for anything. No failure has ever been
 an assertion — that part is solid.
+
+## Owner decision 2026-08-28 — unresolvable template placeholders
+
+**The server refuses to store one** (the planner's option 2). A manager cannot
+save content containing a placeholder the template engine cannot resolve;
+validation happens at the write, not at the read.
+
+**Frontend fallback if one slips through anyway: show the raw expression, do
+nothing clever.** No mapper logic, no row-dropping, no substitution — the
+technical text simply appears. That is already `TemplateControl.resolve`'s
+behaviour (it leaves unknown placeholders in place by design), so the fallback
+costs nothing and stays the last-resort visible-error path rather than a second
+mechanism that can itself be wrong.
+
+*Note on syntax for whoever writes this:* this codebase's placeholders are
+`{stay.checkOut|time}` — curly braces, no dollar. The owner wrote `${...}`
+informally; the rule is "show the raw placeholder text as authored", whatever
+its delimiters.
+
+**Not yet folded into `module-content/01-prd.md`** — a `planner` held that file
+when the decision was made. Fold it in with the next round.
+
+## Owner decision 2026-08-28 — empty states are per module type
+
+Consistent with Decision 1 (bespoke type per module): **a module type designs
+its own empty state**, because what "empty" means and what should stand in its
+place depends on what the module shows. There is no shared generic empty state.
+
+**This reclassifies the item rather than answering it.** It was recorded as an
+open question against "the first module type that can legitimately deliver zero
+rows". It is not an open question — it is **a line on the checklist for
+designing any module type**, alongside its layout, its fields and its copy.
+`info` has none, and that is a finding rather than an omission: the check-out
+row is a stay fact that is always present, so the module cannot be empty.
+
+Distinct from the case already settled, and the two need different words:
+
+| case | meaning | renders |
+|---|---|---|
+| menu item carries **no module** | nothing authored for this section yet | `SectionPlaceholderComponent` — "coming soon" |
+| module delivers **zero entries** | authored, and empty right now | the module type's own empty state |
+
+**Nothing to build.** Fold into `module-content/01-prd.md` with the placeholder
+decision above — a `planner` held that file when both were made.
+
+## ✅ All three pending wordings are approved and written (2026-08-28)
+
+The owner approved all three verbatim in one go. Written the same turn:
+
+- `docs/constitution.md` → **v1.10.0**, the dev/prod threshold constraint.
+- `frontend/CLAUDE.md` → **Layout**, the manager/guest-supplied-string width rule.
+- `frontend/CLAUDE.md` → **Tests**, `ng test` builds the development configuration.
+
+**A lead mistake worth not repeating:** the constitution wording was proposed in
+conversation and **never recorded here**, unlike the other two. Had the session
+died in between — it died twice that night — it would have been lost and the
+owner would have had to approve it again. Every proposed gate text goes into this
+file at the moment it is proposed, not when it is approved.
 
 ## Queued work — approved, not yet done
 
