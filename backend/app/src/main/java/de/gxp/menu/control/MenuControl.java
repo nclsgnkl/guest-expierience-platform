@@ -2,6 +2,7 @@ package de.gxp.menu.control;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -9,12 +10,15 @@ import java.util.Set;
 import de.gxp.infrastructure.http.ApiErrors;
 import de.gxp.api.model.ActionCardDto;
 import de.gxp.api.model.ApiErrorDetail;
+import de.gxp.api.model.GuestModule;
 import de.gxp.api.model.GuestMenuItem;
 import de.gxp.api.model.MenuItemConfigEntryDto;
 import de.gxp.api.model.MenuItemDefinitionDto;
 import de.gxp.audit.control.AuditControl;
 import de.gxp.menu.entity.ActionCardConfig;
 import de.gxp.menu.entity.ActionCardConfigTranslation;
+import de.gxp.menu.entity.InfoModuleRow;
+import de.gxp.menu.entity.InfoModuleRowTranslation;
 import de.gxp.menu.entity.MenuItemConfig;
 import de.gxp.menu.entity.MenuItemConfigTranslation;
 import de.gxp.menu.entity.MenuItemDefinition;
@@ -275,6 +279,35 @@ public class MenuControl {
         List<ActionCardConfigTranslation> translations = repository
                 .cardTranslationsOf(cards.stream().map(c -> c.id).toList());
         return cards.stream().map(card -> MenuMapper.toDto(card, translations)).toList();
+    }
+
+    /**
+     * Guest-read: the module content each catalogue key RESOLVES to, with RAW
+     * templates — {@code GuestControl} resolves them per offered language
+     * against the active stay, exactly as it does for
+     * {@link #guestResolvedCards}. Property scope only: module content is
+     * property-scoped (A2) and D11 settled that there is no per-room override.
+     * Not HTTP-mapped.
+     *
+     * <p>Rows come back in the repository's {@code sort_index} order and that
+     * order is re-derived nowhere downstream (REQ-962). A key absent from the
+     * map carries no module, which is how an un-authored section renders the
+     * placeholder unchanged (REQ-975).
+     */
+    @Transactional
+    public Map<String, GuestModule> guestModuleContent() {
+        List<InfoModuleRow> rows = repository.infoModuleRows();
+        List<InfoModuleRowTranslation> translations = repository
+                .infoModuleRowTranslationsOf(rows.stream().map(r -> r.id).toList());
+        Map<String, List<InfoModuleRow>> byKey = new LinkedHashMap<>();
+        for (InfoModuleRow row : rows) {
+            byKey.computeIfAbsent(row.menuItemKey, key -> new ArrayList<>()).add(row);
+        }
+        Map<String, GuestModule> modules = new LinkedHashMap<>();
+        for (Map.Entry<String, List<InfoModuleRow>> entry : byKey.entrySet()) {
+            modules.put(entry.getKey(), MenuMapper.toInfoModule(entry.getValue(), translations));
+        }
+        return modules;
     }
 
     private static MenuItemConfig configOf(List<MenuItemConfig> configs, String menuItemKey) {

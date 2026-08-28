@@ -4,8 +4,12 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 
@@ -96,11 +100,52 @@ class DevDataSeederTest {
                 .body("home.actionCards[0].title.de", equalTo("Check-Out"));
     }
 
+    /** GPath to the `info` catalogue item — by key, never by position. */
+    private static final String INFO_MODULE = "menu.items.find { it.key == 'info' }.module";
+
+    /**
+     * REQ-976 and REQ-967 together, because they are the same fact seen twice.
+     * The {@code %dev} seed authors info.md's two-row copy table against the
+     * {@code info} key, and row 1's value is RESOLVED server-side per offered
+     * language (REQ-964) — so the check-out time it renders must be the very
+     * time Home's first action card renders, both read from the one stay.
+     */
+    @Test
+    void seedsTheInfoModuleAndRendersOneStoredCheckOutTimeTwice() {
+        var body = given().header("Authorization", "Bearer " + DevDataSeeder.DEV_DEVICE_TOKEN)
+                .when().get("/api/guest/content")
+                .then().statusCode(200)
+                .extract().body().jsonPath();
+
+        assertEquals("info", body.getString(INFO_MODULE + ".type"),
+                "the wire discriminant is the mapping key, never the schema name");
+        assertEquals(2, body.getList(INFO_MODULE + ".rows").size(),
+                "the seed authors exactly info.md's two rows");
+        assertEquals("Check-out", body.getString(INFO_MODULE + ".rows[0].label.de"));
+        assertEquals("WLAN-Passwort", body.getString(INFO_MODULE + ".rows[1].label.de"));
+        assertEquals("Wi-Fi password", body.getString(INFO_MODULE + ".rows[1].label.en"));
+        assertEquals("Meeresrauschen-77", body.getString(INFO_MODULE + ".rows[1].value.de"));
+        assertEquals("Meeresrauschen-77", body.getString(INFO_MODULE + ".rows[1].value.en"));
+
+        String checkOutDe = body.getString(INFO_MODULE + ".rows[0].value.de");
+        String checkOutEn = body.getString(INFO_MODULE + ".rows[0].value.en");
+        assertFalse(checkOutDe.contains("{"), "an occupied room's module carries no raw template");
+        assertFalse(checkOutEn.contains("{"), "an occupied room's module carries no raw template");
+        assertFalse(checkOutEn.contains("Uhr"), "the English column carries no \"Uhr\" — info.md's copy table");
+
+        Matcher time = Pattern.compile("\\d{1,2}:\\d{2}").matcher(checkOutDe);
+        assertTrue(time.find(), "row 1 must render a resolved check-out time, not a placeholder");
+        assertEquals("Bis " + time.group() + " Uhr am Abreisetag",
+                body.getString("home.actionCards[0].description.de"),
+                "REQ-967: the check-out time is stored ONCE, in the stay, and rendered twice");
+    }
+
     @Test
     void reseedingIsAFullNoOp() {
         long devices = scalar("select count(*) from device");
         long stays = scalar("select count(*) from stay");
         long cards = scalar("select count(*) from action_card_config");
+        long infoRows = scalar("select count(*) from info_module_row");
         long enabledConfigs = scalar(PROPERTY_SCOPE_ENABLED);
 
         // Arrange a developer turning one section off after the first seed.
@@ -120,6 +165,8 @@ class DevDataSeederTest {
             assertEquals(devices, scalar("select count(*) from device"), "device seed must be idempotent");
             assertEquals(stays, scalar("select count(*) from stay"), "stay seed must be idempotent");
             assertEquals(cards, scalar("select count(*) from action_card_config"), "card seed must be idempotent");
+            assertEquals(infoRows, scalar("select count(*) from info_module_row"),
+                    "info module seed must be idempotent");
             assertEquals(enabledConfigs - 1, scalar(PROPERTY_SCOPE_ENABLED),
                     "re-seeding must not re-enable what a developer turned off — the"
                             + " catalogue-fixture enablement sits inside the devDeviceExists()"

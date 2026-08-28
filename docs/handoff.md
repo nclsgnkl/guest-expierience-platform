@@ -565,9 +565,57 @@ never opens. Its blast radius on today's contract is **provably zero**, because
 `api/openapi.yaml` contains no other `oneOf`; the full diff of the generated Java
 tree between flag-off and flag-on was the three spike files and nothing else.
 
+**Extended 2026-08-28, a SECOND line approved:** *"Jup rein da in die pom.xml und
+der kommentar von dev in der datei ist auch in ordnung"*.
+
+```xml
+<openapiNormalizer>SIMPLIFY_ONEOF_ANYOF=false</openapiNormalizer>
+```
+
+**Why it turned out to be necessary, and why the spike missed it.** The
+generator's `SIMPLIFY_ONEOF_ANYOF` normalizer rule is on by default and collapses
+a **single-member** union into a flat class **before `useOneOfInterfaces` ever
+sees it**. `info` is the only module type, so Part C's union is exactly that
+case: the generated `GuestModule` came out a concrete class carrying the member's
+own fields, `GuestInfoModule` implementing nothing, and `"type":"GuestModule"`
+bound for the wire — the D9 failure mode by a route the spike never covered,
+because the spike used **two** members.
+
+`dev` did not trust the green build: it added a throwaway second member, saw the
+correct interface appear, and reverted byte-identically — proving the approved
+line works and merely arrives too late. It then measured the fix **without**
+editing `pom.xml`, through the plugin's user property. Both executions need it,
+Java for the interface and TypeScript for the alias.
+
+Alternatives were closed, not merely worse: a second contract member is an
+invented module (D17 and D14 forbid it), and Variant C loses the TS union.
+
+**Explanatory comments in `pom.xml` are approved too** — the owner confirmed
+`dev`'s two-line note above the first option. The "nothing else in that file"
+limit still means no version bump, no plugin, no dependency without a fresh word.
+
 Still lands **with the first real union**, not before — on today's contract the
 line changes nothing, so it belongs in the commit where it can be reviewed
 against the thing it affects.
+
+## O-3 closed 2026-08-28 — D10's "two places" became four, and the owner accepted
+
+D10 (the module registry) was approved on the lead's framing of **two** places
+per module type: a `menu_item_definition` row and a frontend registry file, with
+the owner's reasoning *"im Frontend muss ja sowieso entwickelt werden wenn ein
+neues Modul hinzu kommt, dann kann man auch immer die Datei mitziehen"*.
+
+Part C's finished design makes it **four kiosk touchpoints**. The `planner`
+raised it as O-3 rather than letting it pass. The lead put the change to the
+owner explicitly — *"du hast einer Zahl zugestimmt, und die Zahl hat sich
+geändert"* — and he accepted: *"ist alles fine für mich"*.
+
+Two things make it less than it sounds, and both were stated when he accepted:
+**three of the four are compiler-enforced** (forget one and the build breaks),
+and the fourth is REQ-980's exhaustiveness guard, whose entire purpose is to make
+forgetting impossible. Four compiler-checked sites is not four sites kept in sync
+by hand. It is nonetheless the direct consequence of D14 (bespoke type per
+module), whose cost the owner had already named before choosing it.
 
 ## Queued work — approved, not yet done
 

@@ -4,6 +4,8 @@ import java.util.List;
 
 import de.gxp.menu.entity.ActionCardConfig;
 import de.gxp.menu.entity.ActionCardConfigTranslation;
+import de.gxp.menu.entity.InfoModuleRow;
+import de.gxp.menu.entity.InfoModuleRowTranslation;
 import de.gxp.menu.entity.MenuItemConfig;
 import de.gxp.menu.entity.MenuItemConfigTranslation;
 import de.gxp.menu.entity.MenuItemDefinition;
@@ -120,5 +122,27 @@ class MenuRepository implements PanacheRepositoryBase<MenuItemDefinition, String
             translation.cardId = card.id;
             em.persist(translation);
         }
+    }
+
+    /**
+     * Every info module row of the property scope, in delivered order. The
+     * order is established HERE and re-derived nowhere downstream (REQ-962):
+     * by menu item key so the caller can group in one pass, then by the
+     * authored sort_index within a section.
+     */
+    List<InfoModuleRow> infoModuleRows() {
+        return getEntityManager()
+                .createQuery("select r from InfoModuleRow r order by r.menuItemKey, r.sortIndex", InfoModuleRow.class)
+                .getResultList();
+    }
+
+    List<InfoModuleRowTranslation> infoModuleRowTranslationsOf(List<Long> rowIds) {
+        if (rowIds.isEmpty()) {
+            return List.of();
+        }
+        return getEntityManager()
+                .createQuery("select t from InfoModuleRowTranslation t where t.rowId in :ids order by t.language",
+                        InfoModuleRowTranslation.class)
+                .setParameter("ids", rowIds).getResultList();
     }
 }

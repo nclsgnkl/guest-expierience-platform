@@ -16,8 +16,11 @@ import de.gxp.api.model.GuestActionCard;
 import de.gxp.api.model.GuestBrand;
 import de.gxp.api.model.GuestContent;
 import de.gxp.api.model.GuestHome;
+import de.gxp.api.model.GuestInfoModule;
+import de.gxp.api.model.GuestInfoRow;
 import de.gxp.api.model.GuestMenu;
 import de.gxp.api.model.GuestMenuItem;
+import de.gxp.api.model.GuestModule;
 import de.gxp.api.model.GuestPreference;
 import de.gxp.api.model.GuestPreferencesUpdate;
 import de.gxp.api.model.GuestProperty;
@@ -144,6 +147,7 @@ public class GuestControl {
         RoomDto room = roomControl.guestView(roomId);
         List<String> languages = offeredLanguages(property);
         List<GuestMenuItem> menu = menuControl.guestResolvedMenu(roomId, languages);
+        attachModules(menu, menuControl.guestModuleContent(), property, stay, languages);
         GuestContent content = new GuestContent()
                 .property(new GuestProperty()
                         .name(property.getName())
@@ -185,6 +189,58 @@ public class GuestControl {
                 .tag(etag)
                 .cacheControl(cacheControl)
                 .build());
+    }
+
+    /**
+     * Attaches each delivered item's module content, RESOLVED per offered
+     * language (REQ-964). Resolution reuses {@link #resolveLocalized}
+     * unchanged — same timezone, same per-language locale, same main-language
+     * fallback — so this is the mechanism that already satisfies REQ-964 for
+     * {@code home}, not a second one. An item whose key carries no module is
+     * left untouched: absence means "nothing authored yet" and the kiosk
+     * renders its placeholder (REQ-975). Row order is the one
+     * {@code MenuControl} delivered and is not re-derived (REQ-962).
+     *
+     * <p><b>Modules are attached in BOTH occupancy states.</b> They are
+     * property-scoped content (A2) and {@code menu.items} is delivered vacant
+     * already; omitting them when vacant would be a stay-shaped special case
+     * on property-scoped content. The consequence is stated rather than
+     * buried: with {@code stay == null}, {@code {stay.checkOut|time}} resolves
+     * to itself, so a VACANT payload can carry raw placeholder text. Nobody
+     * sees it — a vacant kiosk is on {@code /standby} — and it is not a reason
+     * for placeholder-shaped logic anywhere (D18).
+     *
+     * <p>Therefore {@link #home}'s sentence <i>"no braces ever leave the
+     * server"</i> is scoped to {@code home}, which is occupied-only. It MUST
+     * NOT be generalised to the payload.
+     */
+    private void attachModules(List<GuestMenuItem> menu, Map<String, GuestModule> modules, PropertyDto property,
+            StayDto stay, List<String> languages) {
+        for (GuestMenuItem item : menu) {
+            GuestModule raw = modules.get(item.getKey());
+            if (raw != null) {
+                item.module(resolveModule(raw, property, stay, languages));
+            }
+        }
+    }
+
+    /**
+     * One arm per module type. The {@code default} arm is the stranded-card
+     * precedent above: a defensive skip, never a 500. It is unreachable while
+     * one member exists — {@code GuestModule} is a generated interface and not
+     * sealed, so the compiler requires it and gives no exhaustiveness for
+     * free. The guard against a member added to the contract and forgotten
+     * here is {@code de.gxp.guest.GuestModuleContractTest}, not this switch.
+     */
+    private GuestModule resolveModule(GuestModule raw, PropertyDto property, StayDto stay, List<String> languages) {
+        return switch (raw) {
+            case GuestInfoModule info -> new GuestInfoModule().type("info").rows(info.getRows().stream()
+                    .map(row -> new GuestInfoRow()
+                            .label(resolveLocalized(row.getLabel(), property, stay, languages))
+                            .value(resolveLocalized(row.getValue(), property, stay, languages)))
+                    .toList());
+            default -> null;
+        };
     }
 
     /**

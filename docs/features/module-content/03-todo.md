@@ -25,7 +25,7 @@
 
 ## Phase 1 — The one approval
 
-- [ ] **T-01** ⏸ **Ask the owner for the `pom.xml` generator option — then stop**
+- [x] **T-01** ⏸ **Ask the owner for the `pom.xml` generator option — then stop**
   — *REQ-961*
   - Propose **exactly** this line, in the `jaxrs-spec` execution's
     `<configOptions>` in `backend/app/pom.xml`:
@@ -45,7 +45,7 @@
 
 ## Phase 2 — Contract first (§1, §10)
 
-- [ ] **T-02** The `GuestModule` union, and the approved `pom.xml` line
+- [x] **T-02** The `GuestModule` union, and the approved `pom.xml` line
   — *REQ-961, REQ-963*
   - `api/openapi.yaml`: add `GuestModule` (`oneOf` over `GuestInfoModule`,
     `discriminator: {propertyName: type, mapping: {info: …}}`),
@@ -63,7 +63,7 @@
     `GuestMenu.items.maxItems` is still `50`; **no top-level `modules` array
     exists**.
 
-- [ ] **T-03** Regenerate the client — one reviewable step
+- [x] **T-03** Regenerate the client — one reviewable step
   — *REQ-966*
   - `./mvnw -o generate-sources` (or `verify`), then **read the diff under
     `packages/api-client/`** before touching anything else. Expected: new
@@ -89,7 +89,7 @@
 
 ## Phase 3 — Backend (§2)
 
-- [ ] **T-04** `V12__info_module_content.sql`
+- [x] **T-04** `V12__info_module_content.sql`
   — *REQ-968, REQ-975*
   - The two tables of `02-design.md` §2.2, with its header comment: per-type
     tables (A3/D14), **no room scope** (A2/D11), **no seed rows** (Part A's D5
@@ -102,7 +102,7 @@
     upgraded one both start; on an upgraded instance `/info` still renders the
     placeholder, unchanged.
 
-- [ ] **T-05** Entities and repository, in `de.gxp.menu`
+- [x] **T-05** Entities and repository, in `de.gxp.menu`
   — *REQ-968*
   - `InfoModuleRow` + `InfoModuleRowTranslation` in `de.gxp.menu.entity`
     (`jakarta.persistence` only, no `PanacheEntity`), and the read methods on
@@ -118,7 +118,7 @@
     `FeatureInternalsImportTest`, `ScheduledJobInventoryTest`. **No sixth
     guard is added and no exemption list is edited.**
 
-- [ ] **T-06** `MenuControl.guestModuleContent()` — the raw-template read
+- [x] **T-06** `MenuControl.guestModuleContent()` — the raw-template read
   — *REQ-968, REQ-969*
   - `@Transactional public Map<String, GuestModule> guestModuleContent()`,
     returning generated DTOs carrying **raw** templates, ordered by
@@ -132,7 +132,7 @@
   - Validate: `./mvnw -Dtest=AuditCoverageTest test` green; the audit row count
     is unchanged by a guest content read.
 
-- [ ] **T-07** `GuestControl` — resolve the templates, attach the modules
+- [x] **T-07** `GuestControl` — resolve the templates, attach the modules
   — *REQ-964, REQ-962*
   - `content()` calls `menuControl.guestModuleContent()` and attaches the
     resolved module to the matching delivered item. Resolution reuses
@@ -147,7 +147,7 @@
   - Validate: backend compiles; `GuestResource` still holds **one delegating
     line per method** and gains none; no `if` moves into the Boundary.
 
-- [ ] **T-08** `%dev` — one authored module, and REQ-967's live duplication
+- [x] **T-08** `%dev` — one authored module, and REQ-967's live duplication
   — *REQ-976, REQ-967*
   - Seed two `info` rows against key `info` with `info.md`'s copy table
     **verbatim** (`Check-out` / `{stay.checkOut|date}, {stay.checkOut|time} Uhr`;
@@ -166,7 +166,7 @@
 
 ## Phase 4 — Backend tests (§8, §12.2)
 
-- [ ] **T-09** `GuestModuleContractTest` — the pinned discriminants
+- [x] **T-09** `GuestModuleContractTest` — the pinned discriminants
   — *REQ-961, REQ-971*
   - New test in **`de.gxp.guest`** (**not** in `de.gxp.architecture` — a sixth
     architecture guard would need a constitution amendment, and Part B refused
@@ -181,7 +181,7 @@
   - Validate: green; and once, by hand — rename the mapping key in
     `api/openapi.yaml`, watch this test go red, revert.
 
-- [ ] **T-10** `GuestModuleContentTest` — the wire, per language and per state
+- [x] **T-10** `GuestModuleContentTest` — the wire, per language and per state
   — *REQ-964, REQ-962, REQ-963*
   - Cases: (a) occupied, `de`+`en` offered → row 1's value carries **no `{`**
     and equals the check-out formatted in the property timezone per language,

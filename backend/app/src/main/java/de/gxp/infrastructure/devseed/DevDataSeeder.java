@@ -94,8 +94,14 @@ public class DevDataSeeder {
 
     private static final List<Card> CARDS = List.of(
             new Card(0, "phosphorKey", "info",
-                    "Check-Out", "Bis 11:00 Uhr am Abreisetag",
-                    "Check-out", "By 11:00 on departure day"),
+                    // REQ-967: the check-out time is stored ONCE, in the stay, and
+                    // rendered twice — here and in the info module's row 1. The
+                    // literal "11:00" it replaced went stale the moment a developer
+                    // moved the seeded stay. {stay.checkOut|time} is in
+                    // TemplateControl.ALL_PLACEHOLDERS, so it passes the write-time
+                    // validation that already ships.
+                    "Check-Out", "Bis {stay.checkOut|time} Uhr am Abreisetag",
+                    "Check-out", "By {stay.checkOut|time} on departure day"),
             new Card(1, "phosphorLightbulbFilament", "smart-home",
                     "Smart Home", "Alles im Haus auf einen Blick",
                     "Smart Home", "Everything at a glance"),
@@ -105,6 +111,33 @@ public class DevDataSeeder {
             new Card(3, "phosphorFileText", "info",
                     "Wichtige Infos", "Hausregeln, WLAN, Parken & mehr",
                     "Key info", "House rules, Wi-Fi, parking & more"));
+
+    /** sortIndex, then label/value per language — the raw templates as stored. */
+    private record InfoRow(int sortIndex, String labelDe, String valueDe, String labelEn, String valueEn) {
+    }
+
+    /**
+     * The one authored module of the dev instance (REQ-976): the {@code info}
+     * section's two rows, copied VERBATIM from
+     * {@code docs/design/screens-inhouse/info.md}'s copy table. Row 1 is a raw
+     * template resolved per offered language against the active stay — the
+     * English column carries no "Uhr" on purpose; row 2 is identical in both
+     * languages, which is also deliberate.
+     *
+     * <p>Bound to the catalogue key {@code info}, one of V2's five original
+     * rows, so no catalogue or config work is needed. Nothing outside
+     * {@code %dev} ever writes here: {@code V12} ships no seed rows, and this
+     * Part introduces no manager write path (D16).
+     */
+    private static final List<InfoRow> INFO_ROWS = List.of(
+            new InfoRow(0,
+                    "Check-out", "{stay.checkOut|date}, {stay.checkOut|time} Uhr",
+                    "Check-out", "{stay.checkOut|date}, {stay.checkOut|time}"),
+            new InfoRow(1,
+                    "WLAN-Passwort", "Meeresrauschen-77",
+                    "Wi-Fi password", "Meeresrauschen-77"));
+
+    private static final String INFO_MODULE_KEY = "info";
 
     private final EntityManager entityManager;
 
@@ -192,6 +225,7 @@ public class DevDataSeeder {
         }
         enableCatalogueFixtures();
         seedActionCards();
+        seedInfoModule();
     }
 
     /**
@@ -229,6 +263,35 @@ public class DevDataSeeder {
             insertCardTranslation(cardId.longValue(), "de", card.titleDe(), card.descriptionDe());
             insertCardTranslation(cardId.longValue(), "en", card.titleEn(), card.descriptionEn());
         }
+    }
+
+    /** The `info` module's rows, only when none exist (an empty table is a valid config). */
+    private void seedInfoModule() {
+        Number existing = (Number) entityManager
+                .createNativeQuery("select count(*) from info_module_row")
+                .getSingleResult();
+        if (existing.longValue() > 0) {
+            return;
+        }
+        for (InfoRow row : INFO_ROWS) {
+            Number rowId = (Number) entityManager.createNativeQuery("insert into info_module_row"
+                    + " (menu_item_key, sort_index) values (:key, :sortIndex) returning id")
+                    .setParameter("key", INFO_MODULE_KEY)
+                    .setParameter("sortIndex", row.sortIndex())
+                    .getSingleResult();
+            insertInfoRowTranslation(rowId.longValue(), "de", row.labelDe(), row.valueDe());
+            insertInfoRowTranslation(rowId.longValue(), "en", row.labelEn(), row.valueEn());
+        }
+    }
+
+    private void insertInfoRowTranslation(long rowId, String language, String label, String value) {
+        entityManager.createNativeQuery("insert into info_module_row_translation"
+                + " (row_id, language, label, value) values (:rowId, :language, :label, :value)")
+                .setParameter("rowId", rowId)
+                .setParameter("language", language)
+                .setParameter("label", label)
+                .setParameter("value", value)
+                .executeUpdate();
     }
 
     private void insertCardTranslation(long cardId, String language, String title, String description) {

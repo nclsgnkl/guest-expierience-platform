@@ -48,12 +48,14 @@ class MigrationTest {
     }
 
     @Test
-    void flywayHeadIsV11HomeIsMandatory() {
+    void flywayHeadIsV12InfoModuleContent() {
         // The head is pinned as a LITERAL on purpose: a migration cannot be
         // added silently, and updating this line is the conscious step.
         // sidebar-catalogue-overflow (REQ-903, REQ-910) moved it from V9 to
-        // V10 and guest-payload-consolidation (REQ-948) to V11 — both data
-        // only, no DDL. What V10 actually inserts is asserted in
+        // V10, guest-payload-consolidation (REQ-948) to V11 — both data only,
+        // no DDL — and module-content (REQ-968) to V12, which is DDL only and
+        // ships NO seed rows (REQ-975: an upgraded instance renders exactly
+        // what it rendered before). What V10 actually inserts is asserted in
         // de.gxp.menu.CatalogueExpansionTest, and V11's effect in
         // de.gxp.menu.MandatoryMenuItemTest, not here: this class shares the
         // suite's database and has no @AfterEach, so an enablement assertion
@@ -64,7 +66,12 @@ class MigrationTest {
                 .createNativeQuery("SELECT version FROM flyway_schema_history"
                         + " WHERE success = true ORDER BY installed_rank DESC LIMIT 1")
                 .getSingleResult();
-        assertEquals("11", head, "Flyway head must be V11 (home is mandatory)");
+        assertEquals("12", head, "Flyway head must be V12 (info module content)");
+        Number moduleTables = (Number) entityManager
+                .createNativeQuery("SELECT count(*) FROM information_schema.tables"
+                        + " WHERE table_name IN ('info_module_row', 'info_module_row_translation')")
+                .getSingleResult();
+        assertEquals(2L, moduleTables.longValue(), "V12 adds the two info module content tables");
         Number trustedKeyColumns = (Number) entityManager
                 .createNativeQuery("SELECT count(*) FROM information_schema.columns"
                         + " WHERE table_name = 'update_channel'"

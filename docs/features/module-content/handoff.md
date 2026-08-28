@@ -1,5 +1,193 @@
 # Handoff — module-content (Part C)
 
+**Last session:** 2026-08-28, `reviewer` — **Phases 1–4 (T-01 … T-10) reviewed:
+PASS ✅.** Full report in [`06-review.md`](06-review.md). Nothing was fixed,
+nothing was committed, the tree was restored byte-for-byte after every probe.
+
+**Findings: 🔴 0 · 🟠 0 · 🟡 3 · 🟢 7.** The three 🟡:
+
+1. **F-1** — `GuestControl.resolveLocalized`'s javadoc still says *"`stay == null`
+   only for standby texts, whose allowed placeholder set has no stay fields"*,
+   which §2.5 made false. Comment-only fix, on the one function REQ-964's
+   argument rests on.
+2. **F-2** — `03-todo.md` T-02 and T-22 still say `pom.xml` carries *"only the one
+   approved line"*; there are two approved options now.
+3. **F-3 — read this before writing T-12.** The wire carries **`"module": null`**,
+   not an absent key (measured; `GuestContent.home` already behaves this way).
+   `02-design.md` §4.2's `wire === undefined` guard would reach `wire.type` on
+   `null` and throw — through a branch §3.2 forbids a `try`/`catch` — turning a
+   one-module drop into a blank screen. Use `== null` / `?? null`, matching the
+   shipped mapper's `content.home ?? null`.
+
+**Independently re-measured, all confirming dev:** the union interface and
+`@JsonTypeName("info")` read off the generated tree; `"info"` on the wire proved
+by Jackson including through `GuestModule asUnion = m;`; three clean
+regenerations byte-identical (`90090e21b79278c06e4a789c623371dc`, 91 files); no
+`ZzProbe`/`spike` residue and exactly **one** `GuestModule` implementor in
+`target/classes`; T-09's red probe reproduced (2 of 3 red, reverted to
+`md5 40bd69e30868825aabbc7630926656fe`); suite 438/0F/4E/3S here, all four error
+classes green in isolation, and the full-green total reconstructed as **449**
+(443 from surefire XML + 6 from `SecondFactorLoginTest`, which reported
+`Tests run: 0` when its shared `@TestProfile` sibling failed to boot) — so **441
+was real**. Both `pom.xml` options were removed one at a time and each proved
+load-bearing; with either missing the tree **no longer compiles**, which is a
+third guard nobody claimed.
+
+**Next action: Phase 5 (T-11) may start.** Fix F-1 and F-2 when convenient; carry
+F-3 into T-12.
+
+---
+
+**Previous session:** 2026-08-28, `dev` — **T-03 unblocked and Phases 2, 3 and 4
+finished.** Branch `refactor/bce-subpackages-and-boundary-security`.
+**Nothing committed.**
+
+**Status: T-01…T-10 done ✅. Phase 5 (the kiosk boundary, T-11) is next, after
+the planned review round.**
+
+## The blocker is closed
+
+The owner approved the second `pom.xml` line (2026-08-28). It went in as ONE
+plugin-level `<configuration>` — `<openapiNormalizer>SIMPLIFY_ONEOF_ANYOF=false
+</openapiNormalizer>` — rather than twice, because plugin-level configuration is
+inherited by both executions, and the Java side needs it for the interface while
+the TypeScript side needs it for the alias. Four comment lines beside it, in the
+file's existing style. **Nothing else in `pom.xml` changed:** no version bump, no
+plugin, no dependency.
+
+## The generated union, verified by reading it and by serialising it
+
+All five checks the task named are present, verbatim:
+
+```java
+// target/generated-sources/openapi/.../de/gxp/api/model/GuestModule.java
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type", visible = true)
+@JsonSubTypes({
+  @JsonSubTypes.Type(value = GuestInfoModule.class, name = "info"),
+})
+public interface GuestModule {
+    String getType();
+}
+```
+
+```java
+@JsonTypeName("info")
+public class GuestInfoModule  implements GuestModule {
+```
+
+```ts
+// packages/api-client/model/guestModule.ts
+export type GuestModule = GuestInfoModule;
+```
+
+**The discriminant on the wire is `"info"`, proved from serialisations and not
+from the annotations** — three of them, plus a round-trip:
+
+    MODULE_JSON={"type":"info","rows":[…]}
+    ITEM_JSON={"key":"info",…,"module":{"type":"info","rows":[…]}}
+    UNION_JSON={"type":"info",…}          // serialised through the interface type
+    ROUNDTRIP_CLASS=de.gxp.api.model.GuestInfoModule
+    ROUNDTRIP_TYPE=info
+
+and again over real HTTP, in two committed tests
+(`DevDataSeederTest.seedsTheInfoModuleAndRendersOneStoredCheckOutTimeTwice`,
+`GuestModuleContentTest.anOccupiedRoomGetsEveryRowResolvedPerOfferedLanguage`),
+both asserting `module.type == "info"` off the served payload.
+
+**Regeneration is byte-identical.** Three runs; the 91-file `packages/api-client`
+tree hashed identically each time, and again after the full test suite.
+
+**One orphan was found and removed — on the Java side, not the TypeScript one.**
+`ZzProbeModule.java` (timestamped 10:46 — last session's throwaway probe) had
+survived in `target/generated-sources/openapi/.../de/gxp/api/model/` and,
+compiled, in `target/classes`: the generator does not delete files for removed schemas,
+exactly as warned, and `target/` is gitignored so `git status` could not show it.
+Cleared with `./mvnw clean` (174 → 172 source files). `packages/api-client/`
+itself lost nothing — the `FILES` diff is three additions and no deletions — and
+no `zzProbe` residue exists anywhere. The only `spike` string in the client is
+the deliberate `d9-spike.md` reference inside the schema description.
+
+## Recorded, unchanged
+
+- **`maxLength: 240` under `additionalProperties` does not reach Java.**
+  `GuestInfoRow` is `Map<String, String>` with no `@Size`. Recorded, not a
+  blocker — the kiosk enforces it at T-13.
+- **`maxItems: 10` DOES survive**, as `@Size(max=10)` on
+  `GuestInfoModule.getRows()`. Worth knowing: the two bounds behave differently.
+
+## What each task did
+
+| Task | Change | Verification |
+|---|---|---|
+| T-03 | regenerated `packages/api-client/` (3 new models, 2 index entries, 1 optional property) | union read by hand, wire proved by serialisation, 3× byte-identical, orphan sweep |
+| T-04 | `V12__info_module_content.sql`; `MigrationTest` head re-pinned `V11` → `V12`, method renamed, two-table existence assertion added | `MigrationTest` 6/6, all 12 migrations applied to a fresh schema |
+| T-05 | `InfoModuleRow`, `InfoModuleRowTranslation`, two repository reads, `MenuMapper.toInfoModule` | the **five** architecture guards 10/10 — no sixth guard, no exemption list edited |
+| T-06 | `MenuControl.guestModuleContent()`; one word added to `NOT_A_MANAGER_MUTATION` | `AuditCoverageTest` 5/5 |
+| T-07 | `GuestControl.attachModules` + `resolveModule` (one-arm pattern switch, defensive `default`) | compiles; `GuestResource` still 2 methods, 2 delegating lines, no `if`/`for`/`try` |
+| T-08 | `%dev` seeds info.md's copy table verbatim; `CARDS[0]` becomes `Bis {stay.checkOut\|time} Uhr am Abreisetag` | `DevDataSeederTest` 3/3; `grep -rn "Bis 11:00" backend/app/src/main` empty |
+| T-09 | `de.gxp.guest.GuestModuleContractTest` (plain JUnit, no container, 0.5 s) | 3/3; **and red by hand** — renaming the mapping key to `infoRENAMED` failed 2 of 3 with both literals on screen, then reverted byte-identically (`md5 40bd69e30868825aabbc7630926656fe`) |
+| T-10 | `de.gxp.guest.GuestModuleContentTest` — occupied/vacant/disabled/order | 4/4 first run |
+
+## The suite, measured rather than claimed
+
+`./mvnw -o test`: **449 run, 0 failures, 2 errors, 2 skipped**, 19:43 min.
+
+Both errors are the box, not the code, and both are **before application code**:
+`UntrustedPeerAttributionTest` → `ContainerLaunchException` for `postgres:17.11`;
+`OpenApiDisabledTest` → Flyway `Acquisition timeout while waiting for new
+connection`. Both classes are custom-`@TestProfile` and spin their own database.
+**Re-run in isolation they are 4/4 green.** The 2 skips are the sibling cases of
+those two aborted classes.
+
+449 = the previously reported 441 plus this session's 8 new tests (3 contract,
+4 content, 1 seeder). That is the only reason to believe 441 was ever the real
+number; **it is still not an established baseline** — do not chase container
+startup errors on this box.
+
+## Two things a reviewer should look at rather than skim
+
+1. **`DevDataSeederTest` gained assertions** although T-08 listed only
+   `DevDataSeeder.java`. T-08's validate was written as a hand-check ("a fresh
+   `quarkus:dev` database serves …, and Home's check-out card shows the same
+   time"); it is now mechanical instead, and it is the single place where
+   REQ-967 is actually proved — the test extracts the time from the module row
+   and asserts the action card renders that exact time. No later task touches
+   that file.
+2. **`MigrationTest` gained one `information_schema` assertion** (the two V12
+   tables exist), in the file's established style. Deliberately **not** a
+   row-count assertion: the suite shares one database and `GuestModuleContentTest`
+   seeds rows, so "the tables are empty" would have been order-dependent — the
+   exact hazard that file's own comment names.
+
+## Proposed, NOT written — one nested `CLAUDE.md` entry
+
+`backend/CLAUDE.md`, under **Contract-first**. Exact text:
+
+> - A `oneOf` needs **both** generator settings on the openapi plugin:
+>   `useOneOfInterfaces` (member classes implement an interface) and
+>   `openapiNormalizer=SIMPLIFY_ONEOF_ANYOF=false` (a ONE-member union is not
+>   collapsed first). Without either, the build stays green and the wrong
+>   discriminant goes on the wire. The literals are pinned by hand in
+>   `de.gxp.guest.GuestModuleContractTest` — an ordinary feature test, not a
+>   sixth architecture guard.
+
+**Do not write it without the owner's word on the wording.** No constitution
+amendment is proposed and none is needed.
+
+## Next
+
+**Review round**, then **Phase 5 (T-11)** — the kiosk domain model. Phase 5
+starts from: the contract and the regenerated client in the tree, the backend
+serving `menu.items[].module` for both occupancy states, `V12` applied, and the
+`%dev` instance authoring two `info` rows. `frontend/` is **untouched** so far
+(baseline 311/311, unverified this session).
+
+---
+
+---
+
+# Earlier — planning (superseded above, kept for its decisions)
+
 **Last session:** 2026-08-28, `planner` — **the fourth fold of the day, and the
 one that finished the plan.** Wrote [`02-design.md`](02-design.md),
 [`03-todo.md`](03-todo.md) and [`04-analyze.md`](04-analyze.md), closed the

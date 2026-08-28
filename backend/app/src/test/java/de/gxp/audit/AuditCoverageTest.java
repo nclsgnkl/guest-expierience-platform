@@ -75,7 +75,7 @@ class AuditCoverageTest {
     private static final Set<String> NOT_A_MANAGER_MUTATION = Set.of(
             // reads and lookups
             "list", "get", "getConfig", "getCards", "getCatalogue", "guestView", "guestResolvedMenu",
-            "guestResolvedCards", "requireKind", "requireOffered", "requireExists", "allRoomIds",
+            "guestResolvedCards", "guestModuleContent", "requireKind", "requireOffered", "requireExists", "allRoomIds",
             "lockForStayWrite", "localeOf", "binary", "guestBinary", "activeStayOf", "content",
             "asset", "ready", "info", "listDevices", "verifyToken",
             // kiosk / guest side writes (not manager mutations, REQ-621)

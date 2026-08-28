@@ -37,8 +37,11 @@ model/guestActionCard.ts
 model/guestBrand.ts
 model/guestContent.ts
 model/guestHome.ts
+model/guestInfoModule.ts
+model/guestInfoRow.ts
 model/guestMenu.ts
 model/guestMenuItem.ts
+model/guestModule.ts
 model/guestPreference.ts
 model/guestPreferencesUpdate.ts
 model/guestProperty.ts
