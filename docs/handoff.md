@@ -617,6 +617,31 @@ forgetting impossible. Four compiler-checked sites is not four sites kept in syn
 by hand. It is nonetheless the direct consequence of D14 (bespoke type per
 module), whose cost the owner had already named before choosing it.
 
+## ✅ Both remaining convention entries written 2026-08-28
+
+- **`backend/CLAUDE.md` → Contract-first**: the two generator settings a `oneOf`
+  needs, written **verbatim** in the reviewer-corrected form (the first draft
+  read as if both options applied to both sides; `useOneOfInterfaces` is
+  jaxrs-only, the normalizer is plugin-wide *because* TypeScript needs it too).
+- **`frontend/CLAUDE.md` → the import rule, scoped rather than enforced.** Four
+  files older than this work imported generated symbols outside
+  `core/guest/`/`core/api/` — `OccupancyState`, `PairingCompleted`,
+  `PairingRequestCreated`. The rule now says **content models**, with the reason
+  spelled out: what it prevents is a component reading the wire's shape of the
+  property instead of the resolved domain model, and an enum does not do that.
+
+**One honesty note on the second.** The owner approved the *action*
+(*"die beiden sachen kannst du gerne eintragen"*) and the lead's recommendation
+to scope rather than refactor — but the **exact words are the lead's**, unlike
+every other nested-`CLAUDE.md` text this session, which were read back and
+approved verbatim first. Shown to the owner immediately after writing so he can
+correct them. If a future session finds this wording wrong, that is why.
+
+Also corrected: `module-content/03-todo.md` T-13's validate line, which ticked a
+bare path grep that had been failing since before Part B. It now states the
+property it is actually for. That is the third instance this session of a check
+being ticked that nobody could have run.
+
 ## Queued work — approved, not yet done
 
 ### Two more owner approvals, 2026-08-27 (from the Part B review)

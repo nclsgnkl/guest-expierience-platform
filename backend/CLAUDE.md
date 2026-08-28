@@ -83,6 +83,14 @@ is the working summary, not a replacement.
   interfaces/DTOs live under `target/generated-sources/` (never committed);
   the TypeScript client in `packages/api-client/` is generated, committed and
   **never hand-edited** — a diff there means the contract changed.
+- A `oneOf` needs **both** generator settings: `useOneOfInterfaces` on the
+  **jaxrs execution** (member classes implement an interface — Java only), and
+  `openapiNormalizer=SIMPLIFY_ONEOF_ANYOF=false` **plugin-wide**, because a
+  ONE-member union is otherwise collapsed before that flag sees it and the
+  TypeScript execution needs it too. Without either, the build stays green and
+  the wrong discriminant goes on the wire. The literals are pinned by hand in
+  `de.gxp.guest.GuestModuleContractTest` — an ordinary feature test, not a
+  sixth architecture guard.
 - Workflow: edit `api/openapi.yaml` → `./mvnw verify` (regenerates both
   sides; compile fails until Resources/Controls follow) → commit contract,
   backend code and regenerated client **together**.

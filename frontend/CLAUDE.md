@@ -26,9 +26,15 @@ this file only adds what it does not already say.
   component consuming a raw value.
 - Property content arrives from the guest API: `core/guest/` owns all content
   wire I/O (`GuestDataService`), and only `core/guest/` and `core/api/` may
-  import `@gxp/api-client` models — components keep reading
+  import `@gxp/api-client` **content models** — components keep reading
   `PropertyContentService`. There is no static content fallback; a spec that
-  needs content builds a config double.
+  needs content builds a config double. *(Scoped 2026-08-28: the rule is about
+  content, not about every generated symbol. A handful of files outside those
+  two folders import generated enums and pairing status values — `OccupancyState`,
+  `PairingCompleted`, `PairingRequestCreated` — and that is fine, because the
+  thing being prevented is a component reading the wire's shape of the property
+  instead of the resolved domain model. If you find yourself importing a type
+  that carries property content, you are on the wrong side of this rule.)*
 - **Routes come from the wire, not from a lookup.** Every menu-shaped thing —
   a sidebar entry, an overflow tile, an action card — navigates the
   server-resolved `route` the payload delivers, because enablement and

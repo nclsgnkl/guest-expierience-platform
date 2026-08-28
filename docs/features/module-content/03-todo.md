@@ -287,7 +287,12 @@
   - Files: `…/core/guest/guest-content.mapper.ts`
   - Validate: `ng build` green; `grep -n "sort(" guest-content.mapper.ts` shows
     no sort over `menu.items`; `grep -rn "@gxp/api-client" frontend/src/app`
-    still lists only `core/guest/` and `core/api/`.
+    lists no importer of a **content** model outside `core/guest/`/`core/api/`.
+    *(Amended 2026-08-28: the original wording said the grep "still lists only"
+    those two folders. It has not, since before Part B — a bare path grep is
+    broader than the rule, which `frontend/CLAUDE.md` now scopes to content
+    models. Ticking a check nobody could have run is the pattern this feature's
+    review caught twice; the check now states the property it is really for.)*
   - **Done 2026-08-28.** `ng build` green, `ng test` **311/311**.
     `grep -n "sort(" guest-content.mapper.ts` → **no match**.
   - **One existing assertion was retargeted, and it is the only one.**
