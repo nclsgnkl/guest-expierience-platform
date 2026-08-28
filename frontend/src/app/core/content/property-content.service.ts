@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, type Signal } from '@angular/core';
 
 import { GuestDataService } from '../guest/guest-data.service';
+import { resolveModule } from '../guest/module-registry';
 import type { LanguageCode } from '../i18n/translation.model';
 import { PreferencesService } from '../preferences/preferences.service';
 import type {
@@ -139,10 +140,16 @@ export function resolveProperty(
     menuItems: config.menuItems.map((item) => ({
       ...item,
       label: text(item.label, `menuItems[${item.id}].label`),
+      // One generic line for every module type — `resolveModule` is the switch
+      // the compiler counts the arms of (module-content 02-design.md §5).
+      module: item.module === null ? null : resolveModule(item.module, text),
     })),
     settings: {
       ...config.settings,
       label: text(config.settings.label, 'settings.label'),
+      // App chrome, never a catalogue section (D15): the settings entry carries
+      // no module on the wire, so there is nothing to resolve.
+      module: null,
     },
     standbyHeadline: text(config.standbyHeadline, 'standbyHeadline'),
     standbyMessage: text(config.standbyMessage, 'standbyMessage'),

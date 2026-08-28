@@ -453,25 +453,37 @@ screen and never a missing sidebar entry.
 
 **Validation is by hand, field by field, and does not lean on the types.** Under
 Variant B a `m is GuestInfoModule` predicate is an assertion TypeScript trusts,
-not a proof (REQ-977's note). For `info` the mapper checks: `rows` is an array;
+not a proof (REQ-977's note). **The per-type checks live in the registry, not
+in this file** *(corrected 2026-08-28, review finding F-11 — this paragraph read
+"the mapper checks" until then)*: `mapInfoModule` ships in
+`core/guest/module-registry.ts` beside `MODULE_REGISTRY`, because the mapper
+imports the registry and a `mapInfoModule` in the mapper would have made that
+import circular. `guest-content.mapper.ts`'s share stays the one `mapWireModule`
+line of §3.1. For `info` the registry checks: `rows` is an array;
 `rows.length <= 10`; every row has a `label` and a `value`; each is an object
 carrying a non-blank entry for the property's default language; and **every
 string in every language is `<= 240` characters** — the first string-length
-check this mapper has ever carried, because the contract's first `maxLength`
-arrives with it (§1.2).
+check the kiosk's content mapping has ever carried, because the contract's first
+`maxLength` arrives with it (§1.2).
 
-**Reject, never truncate** — the file's existing posture for `MAX_MENU_ITEMS`
+**Reject, never truncate** — the mapper's existing posture for `MAX_MENU_ITEMS`
 and `MAX_CARDS`, stated in its own comment. A 241-character value costs the
 section its content and shows "coming soon"; it does not silently render a
 truncated password. *(The alternative — drop the offending row and keep the
 module — was considered and rejected: REQ-972's granularity is the module, and
 a partial screen hides a server bug better than an empty one does.)*
 
-**Three things the mapper must not do**, each because it was decided elsewhere:
+**Three things the module path must not do**, each because it was decided
+elsewhere:
 
 - **No `try`/`catch` around the module branch.** It would also swallow the
   envelope failures that must stay fatal. The module path uses null-returning
-  helpers (`localizedOrNull`) beside the existing throwing `localized()`.
+  helpers: `localizedOrNull`, in `module-registry.ts`, is the **sibling in
+  another file** of `guest-content.mapper.ts`'s throwing `localized()`
+  *(corrected 2026-08-28, review finding F-11 — this read "beside the existing
+  `localized()`", which was the argument for why the pair stays consistent)*.
+  Being in two files, the pair **re-states** the default-language contract
+  rather than sharing it, so each one's javadoc names the other.
 - **No placeholder-shaped logic.** A value containing `{…}` is not a drop
   trigger — D18 rejected that option explicitly, and it false-positives on
   legitimately braced authored text.
@@ -530,15 +542,31 @@ export const MODULE_REGISTRY: { [K in ModuleKind]: ModuleEntry<K> } = {
 /** REQ-971: the wire-validation set IS the registration map. No second list. */
 export function mapWireModule(
   registry: typeof MODULE_REGISTRY,
-  wire: GuestModule | undefined,
+  wire: GuestModule | null | undefined,     // null is what actually arrives — see below
   defaultLanguage: string,
 ): AuthoredModule | null {
-  if (wire === undefined || !Object.hasOwn(registry, wire.type)) {
+  if (wire == null || !Object.hasOwn(registry, wire.type)) {
     return null;                       // REQ-973 — a type this build does not know
   }
   return registry[wire.type as ModuleKind].map(wire, defaultLanguage);
 }
 ```
+
+> **`== null`, not `=== undefined`** *(corrected 2026-08-28, review finding
+> F-3 — this block read `wire: GuestModule | undefined` and `wire === undefined`
+> until then, and that was wrong in a way a green build would not have shown).*
+> The generated model types `GuestMenuItem.module` as **optional**, which is
+> what the earlier guard was written against. The server does not omit the key:
+> nothing configures Jackson's inclusion, so the default `ALWAYS` puts
+> **`"module": null`** on the wire — measured, and exactly how
+> `GuestContent.home` already behaves (`mapGuestContent` meets it with
+> `content.home ?? null`). A `=== undefined` guard passes `null` through and
+> then reads `.type` off it, throwing **out of a branch §3.2 forbids a
+> `try`/`catch` around** — so one malformed-or-absent module would take the
+> whole envelope down and REQ-972's per-module isolation would be lost on the
+> commonest path there is. Use `== null` (or `?? null`); the loose comparison
+> is the deliberate one, because both `null` and `undefined` mean "nothing
+> authored".
 
 Four properties fall out, and each is one of this Part's requirements:
 
@@ -695,11 +723,16 @@ reason 2). Then two arms:
 | a module | `<h1>` (the item's resolved label) + `<ng-container *ngComponentOutlet="RENDERERS[module.type]; inputs: { module }">` |
 | `null`, or no item at all | `<app-section-placeholder />`, untouched |
 
-**`SectionPlaceholderComponent` is not modified at all.** It keeps resolving the
+**`SectionPlaceholderComponent` is behaviourally unmodified** *(reworded
+2026-08-28, owner decision — it previously read "not modified at all", which
+T-11's required `module` field made false for its spec's fixture)*: no
+assertion in its spec changes, no case is added or removed, and the only
+permitted edit is type conformance forced by a shared model change. The
+component source itself is untouched. It keeps resolving the
 section from the URL itself and keeps both of its arms (`section.comingSoon`
 for a claimed route, `section.unavailable` for one the menu does not claim), so
-REQ-974's answer costs no change to a shipped component and no spec churn. It
-re-does one `itemForRoute` call; that is a shared pure function over data
+REQ-974's answer costs no change to a shipped component and no behavioural spec
+churn. It re-does one `itemForRoute` call; that is a shared pure function over data
 already held, and the alternative (an input) would rewrite a component and its
 spec to save nothing.
 
@@ -861,7 +894,7 @@ the PRD recorded.**
 | **added** | `GuestModule` (`oneOf` + `discriminator`, **the contract's first union**), `GuestInfoModule`, `GuestInfoRow`, `ModuleText` (**the contract's first `maxLength`**) |
 | **added** | `GuestMenuItem.module` — optional; `required` unchanged |
 | **removed / renamed** | **nothing** — see REQ-966 below |
-| **build** | `backend/app/pom.xml` gains `<useOneOfInterfaces>true</useOneOfInterfaces>` on the `jaxrs-spec` execution (T-01's approval, T-02's edit) |
+| **build** | `backend/app/pom.xml` gains **two** generator options (T-01's approval, T-02's edit; the second added and approved at implementation, recorded here at review — F-2): `<useOneOfInterfaces>true</useOneOfInterfaces>` in the `generate-jaxrs` execution's `<configOptions>`, and `<openapiNormalizer>SIMPLIFY_ONEOF_ANYOF=false</openapiNormalizer>` at **plugin level** — the normalizer collapses a one-member `oneOf` before `useOneOfInterfaces` can act, and both executions need it |
 
 `packages/api-client/` is regenerated, never hand-edited; contract, build,
 backend, client, frontend and docs land in one commit.
@@ -967,8 +1000,12 @@ and not a centimetre.
 The five architecture guards (**no sixth**), `AuditCoverageTest`'s assertions
 (one added entry in `NOT_A_MANAGER_MUTATION` and nothing else),
 `CatalogueExpansionTest`, `MenuDisableGuardTest`, `MandatoryMenuItemTest`, and
-`SectionPlaceholderComponent`'s spec — that component is not modified, so its
-spec must pass unchanged.
+`SectionPlaceholderComponent`'s spec — the component is behaviourally
+unmodified, so **no assertion in that spec changes, no case is added or
+removed, and the only permitted edit is type conformance forced by a shared
+model change** (T-11's `module: null`, 4 sites). Written as a property rather
+than as an exception list, so it still bites if an assertion is quietly
+rewritten.
 
 ---
 

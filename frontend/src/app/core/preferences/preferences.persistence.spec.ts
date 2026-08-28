@@ -477,13 +477,14 @@ const BOOT_CONFIG: PropertyConfig = {
   logoAssetId: null,
   branding: null,
   menuItems: [
-    { id: 'home', label: { de: 'Home', en: 'Home' }, icon: 'phosphorHouse', route: '' },
+    { id: 'home', label: { de: 'Home', en: 'Home' }, icon: 'phosphorHouse', route: '', module: null },
   ],
   settings: {
     id: 'einstellungen',
     label: { de: 'Einstellungen', en: 'Settings' },
     icon: 'phosphorGearSix',
     route: '/einstellungen',
+    module: null,
   },
   settingsConfig: {
     languages: [

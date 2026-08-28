@@ -1,13 +1,14 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { GuestContent } from '@gxp/api-client';
+import type { GuestContent, GuestInfoModule, GuestMenuItem } from '@gxp/api-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { environment } from '../../../environments/environment';
 import { DeviceTokenStore } from '../api/device-token.store';
 import { provideGuestApi } from '../api/provide-guest-api';
 import { GuestAssetService } from './guest-asset.service';
+import { mapGuestContent } from './guest-content.mapper';
 import { CONTENT_CACHE_KEY, GuestDataService } from './guest-data.service';
 
 /**
@@ -58,6 +59,31 @@ const _allowListMatchesTheContract: readonly PayloadKey[] = ALLOWED_PAYLOAD_KEYS
 void _allowListIsExhaustive;
 void _allowListMatchesTheContract;
 
+/**
+ * The same guard, nested (module-content REQ-979, 02-design.md §7). The
+ * top-level table above classifies `menu` as one word, so a field added
+ * **inside** a menu item or inside a module would pass it silently — and the
+ * module is exactly where the WiFi password now lives. Two more tables, one per
+ * level the module introduced, so `api/openapi.yaml` still fails the build.
+ *
+ * Its residual, recorded rather than discovered later: these are hand-written
+ * tables, not recursion. A third level would need a third table, and nothing
+ * here notices that it is missing.
+ */
+type MenuItemKey = keyof Required<GuestMenuItem>;
+const _menuItemIsClassified: Record<MenuItemKey, true> = {
+  key: true,
+  label: true,
+  icon: true,
+  route: true,
+  sortIndex: true,
+  module: true,
+};
+type InfoModuleKey = keyof Required<GuestInfoModule>;
+const _infoModuleIsClassified: Record<InfoModuleKey, true> = { type: true, rows: true };
+void _menuItemIsClassified;
+void _infoModuleIsClassified;
+
 function contentFixture(occupancy: 'OCCUPIED' | 'VACANT' = 'OCCUPIED'): GuestContent {
   return {
     property: {
@@ -103,6 +129,44 @@ function contentFixture(occupancy: 'OCCUPIED' | 'VACANT' = 'OCCUPIED'): GuestCon
   };
 }
 
+/**
+ * The same payload with one module-carrying section appended (module-content
+ * REQ-979). Derived here rather than added to `contentFixture()`: the shared
+ * fixture's single menu item is asserted verbatim by REQ-945's vacancy case,
+ * and this feature must not move an assertion it has no business moving.
+ *
+ * The WiFi row is deliberate. Constitution v1.9.0 says the cache MAY hold it —
+ * a value the property put on a guest-facing screen is one the guest may read
+ * — so what is proved below is that it survives caching **intact**, not that it
+ * is stripped.
+ */
+function contentWithModule(): GuestContent {
+  const content = contentFixture();
+  return {
+    ...content,
+    menu: {
+      ...content.menu,
+      items: [
+        ...content.menu.items,
+        {
+          key: 'info',
+          label: { de: 'Info' },
+          icon: 'phosphorInfo',
+          route: '/info',
+          sortIndex: 1,
+          module: {
+            type: 'info',
+            rows: [
+              { label: { de: 'Check-out' }, value: { de: 'Bis 11:00 Uhr am Abreisetag' } },
+              { label: { de: 'WLAN-Passwort' }, value: { de: 'Meeresrauschen-77' } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 describe('GuestDataService', () => {
@@ -136,10 +200,10 @@ describe('GuestDataService', () => {
     http.expectOne('/api/guest/content').flush(content, { headers: { etag } });
   }
 
-  async function bootOccupied(): Promise<void> {
+  async function bootOccupied(content: GuestContent = contentFixture()): Promise<void> {
     const pending = service.bootstrap();
     await tick();
-    flushContent(contentFixture());
+    flushContent(content);
     await pending;
   }
 
@@ -355,7 +419,7 @@ describe('GuestDataService', () => {
   });
 
   it('caches only classified content — never a credential (REQ-951)', async () => {
-    await bootOccupied();
+    await bootOccupied(contentWithModule());
     const raw = localStorage.getItem(CONTENT_CACHE_KEY) ?? '';
     const record = JSON.parse(raw) as Record<string, unknown>;
 
@@ -373,5 +437,42 @@ describe('GuestDataService', () => {
     expect(raw).not.toContain(DEVICE_TOKEN);
     expect(raw.toLowerCase()).not.toContain('bearer');
     expect(raw.toLowerCase()).not.toContain('authorization');
+
+    /* Reached into EXPLICITLY, not left to the top-level sweep: `menu` is one
+       classified word up there, and everything the module added sits under it
+       (REQ-979, 02-design.md §7). */
+    const payload = record['payload'] as GuestContent;
+    const item = payload.menu.items[1];
+    expect(Object.keys(item as object).sort()).toEqual(
+      ['icon', 'key', 'label', 'module', 'route', 'sortIndex'].sort(),
+    );
+    const module = item?.module as GuestInfoModule;
+    expect(Object.keys(module).sort()).toEqual(['rows', 'type'].sort());
+    expect(module.rows.map((row) => row.value['de'])).toEqual([
+      'Bis 11:00 Uhr am Abreisetag',
+      'Meeresrauschen-77',
+    ]);
+  });
+
+  /**
+   * REQ-979's other half: `/info` must render **identically** from the cache —
+   * no degradation, no hidden row. The module is guest-facing content the
+   * manager chose to display, so purging it would deny the door code to
+   * exactly the guest whose backend is unreachable (constitution v1.9.0).
+   */
+  it('renders the module from the cache when the backend is unreachable', async () => {
+    await bootOccupied(contentWithModule());
+
+    const cached = JSON.parse(localStorage.getItem(CONTENT_CACHE_KEY) ?? '{}') as {
+      payload: GuestContent;
+    };
+    const config = mapGuestContent(cached.payload);
+
+    const module = config.menuItems[1]?.module;
+    expect(module?.type).toBe('info');
+    expect(module?.rows.map((row) => row.value['de'])).toEqual([
+      'Bis 11:00 Uhr am Abreisetag',
+      'Meeresrauschen-77',
+    ]);
   });
 });

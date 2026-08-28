@@ -27,22 +27,24 @@ const CONFIG: PropertyConfig = {
   logoAssetId: null,
   branding: null,
   menuItems: [
-    { id: 'home', label: { de: 'Home' }, icon: 'phosphorHouse', route: '' },
-    { id: 'info', label: { de: 'Info' }, icon: 'phosphorInfo', route: '/info' },
-    { id: 'umgebung', label: { de: 'Umgebung' }, icon: 'phosphorMapPin', route: '/umgebung' },
+    { id: 'home', label: { de: 'Home' }, icon: 'phosphorHouse', route: '', module: null },
+    { id: 'info', label: { de: 'Info' }, icon: 'phosphorInfo', route: '/info', module: null },
+    { id: 'umgebung', label: { de: 'Umgebung' }, icon: 'phosphorMapPin', route: '/umgebung', module: null },
     {
       id: 'smart-home',
       label: { de: 'Smart Home' },
       icon: 'phosphorLightbulbFilament',
       route: '/smart-home',
+      module: null,
     },
-    { id: 'services', label: { de: 'Services' }, icon: 'phosphorShoppingBag', route: '/services' },
+    { id: 'services', label: { de: 'Services' }, icon: 'phosphorShoppingBag', route: '/services', module: null },
   ],
   settings: {
     id: 'einstellungen',
     label: { de: 'Einstellungen' },
     icon: 'phosphorGearSix',
     route: '/einstellungen',
+    module: null,
   },
   settingsConfig: {
     languages: [{ code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' }],

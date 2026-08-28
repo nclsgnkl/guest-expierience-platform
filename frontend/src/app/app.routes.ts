@@ -9,7 +9,7 @@ import {
 import { ConnectionComponent } from './features/connection/connection.component';
 import { HomeContentComponent } from './features/home/home-content.component';
 import { PairingComponent } from './features/pairing/pairing.component';
-import { SectionPlaceholderComponent } from './features/section-placeholder/section-placeholder.component';
+import { SectionHostComponent } from './features/section-host/section-host.component';
 import { SettingsComponent } from './features/settings/settings.component';
 import { StandbyComponent } from './features/standby/standby.component';
 import { ShellComponent } from './layout/shell/shell.component';
@@ -50,16 +50,20 @@ export const routes: Routes = [
          hard-coded section children and their `data: { sectionId }` are gone:
          the catalogue is a database table now, so a route table that
          enumerates it would need editing every time a property enables a
-         section. `SectionPlaceholderComponent` resolves the section from the
-         URL instead, by `route`. */
-      { path: ':sectionKey', component: SectionPlaceholderComponent },
+         section. `SectionHostComponent` resolves the section from the URL
+         instead, by `route`, and renders either the section's registered
+         module or `SectionPlaceholderComponent` (module-content REQ-974).
+         There is deliberately NO `{ path: 'info' }`: that would start
+         re-enumerating the catalogue this table stopped enumerating. The
+         `einstellungen` entry above is app chrome, not a catalogue row. */
+      { path: ':sectionKey', component: SectionHostComponent },
       /* The shell's LAST CHILD, not a top-level route. `''` matches every URL
          as a prefix, so anything that is not /pairing, /standby or /connection
          (declared first, matched first) descends into these children;
          `:sectionKey` catches one segment and this catches everything deeper.
          A top-level `**` would be unreachable, and would render outside the
          shell if it ever were reached. */
-      { path: '**', component: SectionPlaceholderComponent },
+      { path: '**', component: SectionHostComponent },
     ],
   },
 ];

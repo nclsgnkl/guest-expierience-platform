@@ -80,11 +80,43 @@ export interface PropertyBranding {
   secondary: string; // --brand-secondary override
 }
 
+/**
+ * The content of one catalogue section, one member per module type
+ * (module-content REQ-970, 02-design.md §5). A3/D14: each type has its own
+ * fixed shape — the row list is `info`'s layout, never the module model.
+ *
+ * **This union IS properly discriminated, even though the wire union is not.**
+ * The contract spells the member's `type` as a plain `string` (D9's Variant B —
+ * a single-value `enum` provably ships the wrong discriminant), so nothing
+ * above the wire could narrow on it. The literal below is minted by
+ * `guest-content.mapper.ts`, which is the only file that ever sees the
+ * generated model, so `switch (module.type)` narrows and is
+ * exhaustiveness-checked EVERYWHERE above the boundary. D9's loss is confined
+ * to that one file.
+ */
+interface InfoModuleShape<TText> {
+  readonly type: 'info'; // a LITERAL, not a string — see above
+  readonly rows: readonly { label: TText; value: TText }[];
+}
+
+/** The union grows by one member per module type. */
+type ModuleShape<TText> = InfoModuleShape<TText>;
+
 interface MenuItemShape<TText> {
   id: string; // the server's menu item key, e.g. 'home' | 'info' | … | 'einstellungen'
   label: TText;
   icon: string; // Phosphor glyph name (validated against the registered set at the boundary)
   route: string; // e.g. '' for Home, '/info', '/umgebung', …
+  // The section's authored content, or null: nothing authored yet, a type this
+  // build does not know (REQ-973), or a module dropped as structurally invalid
+  // (REQ-972). All three render SectionPlaceholderComponent — the guest is
+  // deliberately not asked to tell them apart (02-design.md §3.2).
+  //
+  // REQUIRED, never optional (02-design.md §3.1): `module?: … | null` would put
+  // `undefined | null` in front of every read site and re-import into the DOMAIN
+  // model exactly the wire ambiguity the boundary exists to remove. A required
+  // field also stops a future menu-item producer omitting it silently.
+  module: ModuleShape<TText> | null;
 }
 
 interface ActionCardShape<TText> {
@@ -119,12 +151,16 @@ interface PropertyConfigShape<TText> {
 }
 
 /** As delivered by the wire: every guest-facing string per offered language. */
+export type AuthoredModule = ModuleShape<Localized<string>>;
+export type AuthoredInfoModule = InfoModuleShape<Localized<string>>;
 export type MenuItem = MenuItemShape<Localized<string>>;
 export type ActionCard = ActionCardShape<Localized<string>>;
 export type HomeContent = HomeContentShape<Localized<string>>;
 export type PropertyConfig = PropertyConfigShape<Localized<string>>;
 
 /** As components see it: one language already chosen (02-design.md §5.2). */
+export type ResolvedModule = ModuleShape<string>;
+export type ResolvedInfoModule = InfoModuleShape<string>;
 export type ResolvedMenuItem = MenuItemShape<string>;
 export type ResolvedActionCard = ActionCardShape<string>;
 export type ResolvedHomeContent = HomeContentShape<string>;

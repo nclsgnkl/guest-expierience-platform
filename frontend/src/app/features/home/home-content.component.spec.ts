@@ -46,6 +46,7 @@ function config(cards: ResolvedActionCard[]): ResolvedPropertyConfig {
       label: 'Einstellungen-Test',
       icon: 'phosphorGearSix',
       route: '/einstellungen',
+      module: null,
     },
     settingsConfig: {
       languages: [{ code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' }],

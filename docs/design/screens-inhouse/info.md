@@ -449,16 +449,21 @@ viewports are the same layout at two sizes. Root = `16px` at 1280×832,
 | content area, left edge | x137.6 | x172 |
 | `<h1>` top | y70.4 | y88 |
 | panel top | y117.8 | y147.2 |
-| panel size (border box) | 491.6 × 137.0 | 614 × 170.8 |
-| panel bottom | y254.8 | y318.0 |
+| panel size (border box) | ~~491.6~~ **490.0** × 137.0 | ~~614~~ **612** × 170.8 |
+| panel bottom | y254.8 → **measured y255** | y318.0 → **measured y318** |
 | **vertical headroom below the panel** | **≈ 494 px** | **≈ 490 px** |
 | value line capacity | ≈ 55 characters | ≈ 55 characters |
 
-*(The `+2 px` on the panel's border box is `--border-glass`'s 1 px hairline on
-each side, which `docs/constitution.md` → Styling exempts from the rem rule —
-the same 2 px `menu-overflow.md` records. **These are computed, not measured:**
-verify with `node tools/measure.mjs` when the screen is built, on every
-route × theme × language × viewport.)*
+*(**Measured 2026-08-28** when the screen was built —
+`node tools/measure.mjs --route /info` over 12 route × theme × language ×
+viewport cells, 0 overflowing and 0 truncated. Everything above holds except the
+panel width, which is **2 px narrower than computed at 1280 and 1.6 px at
+1024**. The `+2 px` for `--border-glass`'s hairline was wrong for this
+codebase: `src/styles/global.css` sets `box-sizing: border-box` globally, so the
+hairline sits **inside** the declared `calc(3 × --size-panel + 2 × --space-4)`
+rather than outside it. The declared width IS the border box — 612 px at 1280,
+489.6 px at 1024. `menu-overflow.md`'s 2 px is a different measurement and is
+not affected.)*
 
 The screen uses under a third of its vertical budget at both sizes, so no-scroll
 is met with ~490 px to spare — a value would have to wrap to ten lines before
@@ -470,9 +475,33 @@ ends at x627 / x784, the bar begins at x832 / x1040.
 **The escalated staleness banner is a near-miss, and it is worth writing down
 rather than re-deriving.** Measured in `connection.md`, the bar occupies
 `x459 y58 w540 h60` at 1024 and `x569 y72 w679 h74` at 1280 — bottom edges
-**y118** and **y146**. The panel's top edge is **y117.8** and **y147.2**: it
-clears by **1.2 px** at 1280 and **overlaps by 0.2 px** at 1024. This is the
-Settings screen's situation exactly, because it is the Settings screen's frame.
+**y118** and **y146**. The panel's top edge is **y117.8** and **y147.2**: the
+arithmetic said it clears by **1.2 px** at 1280 and **overlaps by 0.2 px** at
+1024. This is the Settings screen's situation exactly, because it is the
+Settings screen's frame.
+
+> **Measured 2026-08-28, and the 1024 figure comes out on the other side of
+> zero.** `tools/measure-states.mjs` gained a `/info` variant of the BANNER
+> cell (module-content T-20) and reports the clearance from the raw rects, not
+> from rounded boxes, because 0.2 px cannot survive rounding. Over 8 cells
+> (2 viewports × 2 themes × 2 languages), unchanged by theme or language:
+>
+> | | 1024 × 768 | 1280 × 832 |
+> |---|---|---|
+> | banner box | `x458.83 y58 w540 h59` (bottom **y117.53**) | `x569 y72 w679 h74` (bottom **y146.39**) |
+> | panel top | **y117.75** | **y147.19** |
+> | **clearance** | **+0.219 px — CLEARS** *(predicted −0.2, overlapping)* | **+0.797 px — CLEARS** *(predicted +1.2)* |
+> | rightmost value | x316.78 (`27.09.2026, 13:55 Uhr`) | x391 |
+> | banner's left edge | x458.83 (de) / x500.83 (en) | x569 (de) / x627 (en) |
+> | **horizontal gap** | **142.05 px** (de) / 199.05 px (en) | **178 px** (de) / 252 px (en) |
+>
+> **There is no overlap at either size**, so the paragraph below describes a
+> situation that does not arise on the built screen — it is kept because it is
+> the *rule* that makes an overlap acceptable, and the margin is a fifth of a
+> pixel, which the next copy change could spend. Reason 3 is the one that
+> actually holds the screen: the values end 142–252 px short of the bar's left
+> edge, so even a full overlap would land on empty panel. Nothing was moved to
+> produce these numbers.
 
 Three things make that acceptable rather than a defect, and one of them is a
 design rule:

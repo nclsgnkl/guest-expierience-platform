@@ -18,14 +18,15 @@ import { SIDEBAR_SLOTS } from './menu-split';
 import { SidebarComponent } from './sidebar.component';
 
 const MENU_ITEMS: ResolvedMenuItem[] = [
-  { id: 'home', label: 'Testlabel Home', icon: 'phosphorHouse', route: '' },
-  { id: 'info', label: 'Testlabel Info', icon: 'phosphorInfo', route: '/info' },
+  { id: 'home', label: 'Testlabel Home', icon: 'phosphorHouse', route: '', module: null },
+  { id: 'info', label: 'Testlabel Info', icon: 'phosphorInfo', route: '/info', module: null },
 ];
 const SETTINGS: ResolvedMenuItem = {
   id: 'einstellungen',
   label: 'Testlabel Settings',
   icon: 'phosphorGearSix',
   route: '/einstellungen',
+  module: null,
 };
 
 describe('SidebarComponent', () => {
@@ -130,15 +131,15 @@ describe('SidebarComponent', () => {
  * REQ-903 forbids a test depending on a placeholder catalogue row.
  */
 const NINE_ITEMS: ResolvedMenuItem[] = [
-  { id: 'home', label: 'Slot Eins', icon: 'phosphorHouse', route: '' },
-  { id: 'zwei', label: 'Slot Zwei', icon: 'phosphorCircle', route: '/zwei' },
-  { id: 'drei', label: 'Slot Drei', icon: 'phosphorCircle', route: '/drei' },
-  { id: 'vier', label: 'Slot Vier', icon: 'phosphorCircle', route: '/vier' },
-  { id: 'echo', label: 'Echo', icon: 'phosphorCircle', route: '/echo' },
-  { id: 'alfa', label: 'Alfa', icon: 'phosphorCircle', route: '/alfa' },
-  { id: 'delta', label: 'Delta', icon: 'phosphorCircle', route: '/delta' },
-  { id: 'bravo', label: 'Bravo', icon: 'phosphorCircle', route: '/bravo' },
-  { id: 'charlie', label: 'Charlie', icon: 'phosphorCircle', route: '/charlie' },
+  { id: 'home', label: 'Slot Eins', icon: 'phosphorHouse', route: '', module: null },
+  { id: 'zwei', label: 'Slot Zwei', icon: 'phosphorCircle', route: '/zwei', module: null },
+  { id: 'drei', label: 'Slot Drei', icon: 'phosphorCircle', route: '/drei', module: null },
+  { id: 'vier', label: 'Slot Vier', icon: 'phosphorCircle', route: '/vier', module: null },
+  { id: 'echo', label: 'Echo', icon: 'phosphorCircle', route: '/echo', module: null },
+  { id: 'alfa', label: 'Alfa', icon: 'phosphorCircle', route: '/alfa', module: null },
+  { id: 'delta', label: 'Delta', icon: 'phosphorCircle', route: '/delta', module: null },
+  { id: 'bravo', label: 'Bravo', icon: 'phosphorCircle', route: '/bravo', module: null },
+  { id: 'charlie', label: 'Charlie', icon: 'phosphorCircle', route: '/charlie', module: null },
 ];
 
 describe('SidebarComponent — overflow', () => {

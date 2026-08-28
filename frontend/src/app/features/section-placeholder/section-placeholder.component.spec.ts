@@ -15,15 +15,16 @@ const TEST_PROPERTY: ResolvedPropertyConfig = {
   logoAssetId: null,
   branding: null,
   menuItems: [
-    { id: 'home', label: 'Home-Label', icon: 'phosphorHouse', route: '' },
-    { id: 'info', label: 'Info-Label', icon: 'phosphorInfo', route: '/info' },
-    { id: 'umgebung', label: 'Umgebung-Label', icon: 'phosphorMapPin', route: '/umgebung' },
+    { id: 'home', label: 'Home-Label', icon: 'phosphorHouse', route: '', module: null },
+    { id: 'info', label: 'Info-Label', icon: 'phosphorInfo', route: '/info', module: null },
+    { id: 'umgebung', label: 'Umgebung-Label', icon: 'phosphorMapPin', route: '/umgebung', module: null },
   ],
   settings: {
     id: 'einstellungen',
     label: 'Einstellungen-Label',
     icon: 'phosphorGearSix',
     route: '/einstellungen',
+    module: null,
   },
   settingsConfig: {
     languages: [{ code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' }],

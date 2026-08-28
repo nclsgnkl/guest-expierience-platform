@@ -1,7 +1,7 @@
 # TODO: Module Content
 
 **Feature:** [index.md](../index.md) | **PRD:** [01-prd.md](01-prd.md) | **Design:** [02-design.md](02-design.md)
-**Status:** Not Started — 22 tasks in 8 phases
+**Status:** **Implemented — 22/22 tasks done (2026-08-28).** T-01…T-10 committed as `7d56977` and reviewed PASS; T-11…T-22 are in the working tree, uncommitted. **The owner commits.**
 
 > **Start condition:** Parts A (`sidebar-catalogue-overflow`) and B
 > (`guest-payload-consolidation`) are **committed** — both are, as of
@@ -56,7 +56,15 @@
     `module` property to `GuestMenuItem` and **leave its `required` list
     alone**. Copy the schemas from `02-design.md` §1.1 — the descriptions are
     part of the deliverable, not commentary.
-    In `backend/app/pom.xml`, add the one approved line and nothing else.
+    In `backend/app/pom.xml`, add the approved generator options and nothing
+    else. **Two, not one** *(amended at review, F-2 — the second was found
+    necessary and approved on the same day; T-01's single-line proposal is
+    superseded)*: `<useOneOfInterfaces>true</useOneOfInterfaces>` in the
+    `generate-jaxrs` execution's `<configOptions>` (Java only), and
+    `<openapiNormalizer>SIMPLIFY_ONEOF_ANYOF=false</openapiNormalizer>` at
+    **plugin level**, because both executions need it — without it the
+    normalizer collapses a one-member `oneOf` before `useOneOfInterfaces`
+    runs, and the TypeScript alias disappears too.
   - Files: `api/openapi.yaml`, `backend/app/pom.xml`
   - Validate: `grep -A3 "type:" ` on the two module members shows **no
     `enum`**; `GuestMenuItem.required` is byte-identical to before;
@@ -196,7 +204,7 @@
 
 ## Phase 5 — The kiosk boundary (§3, §4, §5)
 
-- [ ] **T-11** The domain model
+- [x] **T-11** The domain model
   — *REQ-970, REQ-977*
   - `core/content/property.model.ts`: `InfoModuleShape<TText>` with a
     **literal** `type: 'info'`, the `ModuleShape<TText>` union, and
@@ -207,8 +215,16 @@
   - Files: `…/core/content/property.model.ts`
   - Validate: `ng build` green; both the authored and the resolved aliases pick
     the new field up from the one generic shape.
+  - **Done 2026-08-28.** `module` is **required**, per §3.1 and the owner's
+    decision of the same day: `module?: … | null` would put `undefined | null`
+    in front of every read site and re-import the wire's ambiguity into the
+    domain model. Consequence, approved as mechanical: **11 spec files, 42
+    error sites** (41 `TS2741` insertions of `module: null`; the 42nd, a
+    `TS2345` in `heading-block.component.spec.ts`, was a cascade of one of
+    them). **No assertion changed, no case added or removed.** `ng build`
+    green, `ng test` **311/311**.
 
-- [ ] **T-12** The registry, the `never` check and `resolveModule`
+- [x] **T-12** The registry, the `never` check and `resolveModule`
   — *REQ-970, REQ-971, REQ-980*
   - New `core/guest/module-registry.ts`, exactly §4.2–§4.3 and §5:
     `ModuleWireMap` (one line per type), `MODULE_REGISTRY` typed
@@ -225,8 +241,29 @@
     throwaway member to `ModuleWireMap`'s source union, confirm the build fails
     with `TS2344: … does not satisfy the constraint 'never'`, revert. Record
     the error text in the commit message.
+  - **Done 2026-08-28.** `ng build` green, `ng test` 311/311. The guard was
+    driven red by hand — a `GuestWlanModule` member added to
+    `packages/api-client/model/guestModule.ts` produced
+    `module-registry.ts(82,51): error TS2344: Type 'GuestWlanModule' does not
+    satisfy the constraint 'never'.` (and, as §4.2 predicts, a second error
+    where `mapInfoModule` reads `wire.rows` off a now-real union — the entry's
+    own narrowing predicate becoming necessary). Reverted byte-identically,
+    `md5 d74b5f987bfe5eae186c8f3c6264a386`, `git status` clean under
+    `packages/api-client/`.
+  - **F-3 is closed in code and in the design text.** `mapWireModule` takes
+    `GuestModule | null | undefined` and guards `wire == null`; §4.2 no longer
+    says `wire === undefined` and now carries the measurement behind it.
+  - **Deviation from T-13's file list, and the reason.** `mapInfoModule` and
+    `localizedOrNull` live in `module-registry.ts`, not in
+    `guest-content.mapper.ts`. As written the two tasks require
+    `module-registry.ts` to reference `mapInfoModule` while
+    `guest-content.mapper.ts` references `MODULE_REGISTRY` — **a circular
+    import, and the app's first.** Keeping every per-type concern in the
+    registry file makes the dependency one-directional and leaves the mapper's
+    per-type footprint at exactly the one line §3.1 promises. §3.2's rules are
+    implemented in full; only their address changed.
 
-- [ ] **T-13** The mapper — one branch, three drops, and the re-sort deleted
+- [x] **T-13** The mapper — one branch, three drops, and the re-sort deleted
   — *REQ-962, REQ-963, REQ-972, REQ-973, REQ-977*
   - `guest-content.mapper.ts`: `mapMenuItem` gains
     `module: mapWireModule(MODULE_REGISTRY, item.module, defaultLanguage)`.
@@ -235,7 +272,12 @@
     string `<= 240` characters** — returning `null`, never throwing.
     Add `localizedOrNull` beside the existing throwing `localized()`; **no
     `try`/`catch`** around the module branch (it would swallow the envelope
-    failures that must stay fatal). **Delete the `sortIndex` re-sort** from
+    failures that must stay fatal).
+    *(Amended 2026-08-28 at implementation: `mapInfoModule` and
+    `localizedOrNull` shipped in `module-registry.ts` with T-12 — putting them
+    here would have made `module-registry.ts` ↔ `guest-content.mapper.ts` the
+    app's first circular import. This task's remaining work is the one
+    `mapMenuItem` line and the re-sort deletion.)* **Delete the `sortIndex` re-sort** from
     `mapGuestContent` with a comment naming the contract line that makes the
     delivered order authoritative (REQ-962).
     **Three prohibitions, each decided elsewhere:** no placeholder-shaped logic
@@ -246,10 +288,29 @@
   - Validate: `ng build` green; `grep -n "sort(" guest-content.mapper.ts` shows
     no sort over `menu.items`; `grep -rn "@gxp/api-client" frontend/src/app`
     still lists only `core/guest/` and `core/api/`.
+  - **Done 2026-08-28.** `ng build` green, `ng test` **311/311**.
+    `grep -n "sort(" guest-content.mapper.ts` → **no match**.
+  - **One existing assertion was retargeted, and it is the only one.**
+    `guest-content.mapper.spec.ts`'s *"orders menu items by sortIndex
+    regardless of wire order"* asserted exactly the behaviour REQ-962 removes,
+    so it went red the moment the re-sort was deleted. It is now *"renders menu
+    items in delivered order — the client never re-sorts (REQ-962)"*, same
+    fixture, inverted expectation, with the contract line quoted above it.
+    T-17 planned this case; it had to move here because the step may not end
+    with a red suite.
+  - **The `@gxp/api-client` grep was already failing at `HEAD`** and this change
+    did not cause it: `core/preferences/http-preference-gateway.ts{,.spec.ts}`,
+    `features/pairing/pairing.service.ts` and
+    `layout/staleness-banner/staleness-banner.component.ts` import the
+    generated **service class / `OccupancyState` enum**, not a content model —
+    which is what `frontend/CLAUDE.md` actually restricts. This Part adds
+    exactly one new importer, `core/guest/module-registry.ts`, inside
+    `core/guest/`. Flagged, not fixed: the validate line's wording is stale,
+    the rule it stands for is not breached.
 
 ## Phase 6 — The screen (§6)
 
-- [ ] **T-14** `SectionHostComponent`, and the two route entries
+- [x] **T-14** `SectionHostComponent`, and the two route entries
   — *REQ-974, REQ-970, REQ-973*
   - New `features/section-host/`: resolves the section with
     `itemForRoute(items, url)` (**the shared function — no new lookup and no
@@ -260,15 +321,35 @@
     the registry.
     `app.routes.ts`: `:sectionKey` and `**` point at the host.
     **Do not add a `{ path: 'info' }` route** and **do not modify
-    `SectionPlaceholderComponent`** — it survives demoted, untouched, and its
-    existing spec must pass unchanged.
+    `SectionPlaceholderComponent`** — it survives demoted. The check on its
+    spec is behavioural, not a file hash *(amended 2026-08-28, owner decision:
+    an exception list decays, so the check states what it is for)*:
+    **`SectionPlaceholderComponent` is behaviourally unmodified — no assertion
+    in its spec changes, no case is added or removed, and the only permitted
+    edit is type conformance forced by a shared model change.** T-11's
+    `module: null` is exactly such an edit; a rewritten assertion is not, and
+    the check still bites on one.
   - Files: `…/features/section-host/section-host.component.{ts,html,css}`
     *(new)*, `…/app.routes.ts`
   - Validate: `ng build` green; then by hand, once — delete the `info` entry
     from the renderer map and confirm the build fails, revert.
-    `SectionPlaceholderComponent`'s spec green without edits.
+    `SectionPlaceholderComponent`'s spec green, and behaviourally unmodified
+    by the wording above.
+  - **Done 2026-08-28.** `ng build` green, `ng test` 311/311.
+    The renderer map was driven red by hand — emptying `RENDERERS` gave
+    `section-host.component.ts(58,5): error TS1360: Type '{}' does not satisfy
+    the expected type 'Record<"info", Type<unknown>>'.` Reverted
+    byte-identically, `md5 703fff749fa1591f866ffc707a79276b`.
+    `app.routes.ts` gained **no** `{ path: 'info' }`; `:sectionKey` and `**`
+    both point at the host and `einstellungen` still precedes them.
+    `SectionPlaceholderComponent`'s **source** is byte-identical to `HEAD`; its
+    spec's only change is T-11's four `module: null` tokens — no assertion, no
+    case.
+  - **Ordering note.** T-14's `RENDERERS` references `InfoModuleComponent`, so
+    T-15's component had to exist before this step could build. The two were
+    written back to back and verified together.
 
-- [ ] **T-15** `InfoModuleComponent`
+- [x] **T-15** `InfoModuleComponent`
   — *REQ-976, REQ-977, REQ-978*
   - New `features/info-module/`, exactly `docs/design/screens-inhouse/info.md`:
     one glass panel at `calc(3 * var(--size-panel) + 2 * var(--space-4))`,
@@ -284,10 +365,15 @@
   - Validate: `ng build` green; no raw hex and no `px` in the CSS (hairlines
     excepted); no user-visible string in the template; `/info` in
     `quarkus:dev` shows the two seeded rows in both languages and both themes.
+  - **Done 2026-08-28.** `ng build` green. `grep -nE "#[0-9a-fA-F]{3,8}|[0-9]px"
+    info-module.component.css` → **no match**; the template carries no literal
+    text, no new token, no new icon and no new translation key. Both `<dl>`
+    values render `overflow-wrap: anywhere`; `:host { display: contents }` so
+    the panel is `.section-host`'s flex item.
 
 ## Phase 7 — Kiosk tests (§12.1, §7)
 
-- [ ] **T-16** The fabricated second type
+- [x] **T-16** The fabricated second type
   — *REQ-976, REQ-972, REQ-973*
   - `module-registry.spec.ts`: define a module type **that exists only in this
     file** — no contract member, no seed row, no component (D17) — and drive
@@ -300,8 +386,11 @@
   - Files: `…/core/guest/module-registry.spec.ts` *(new)*
   - Validate: `ng test` green; `grep` confirms the fabricated discriminant
     appears in this file and nowhere else in the repository.
+  - **Done 2026-08-28.** 5 cases (the four planned plus F-3's `null`/`undefined`
+    pin). `grep -rn zeitkapsel` outside `node_modules`/`dist` → **5 hits, all in
+    `module-registry.spec.ts`**.
 
-- [ ] **T-17** Mapper cases — bounds, isolation, silence
+- [x] **T-17** Mapper cases — bounds, isolation, silence
   — *REQ-963, REQ-972*
   - `guest-content.mapper.spec.ts`: 11 rows → dropped; a 241-character value →
     dropped; 10 rows and a 240-character value → mapped; a malformed module on
@@ -311,8 +400,11 @@
     after the re-sort's removal (REQ-962's observable half).
   - Files: `…/core/guest/guest-content.mapper.spec.ts`
   - Validate: `ng test` green.
+  - **Done 2026-08-28.** 8 new cases; suite 311 → 324. The order case planned
+    here shipped with T-13 instead (the step could not end red).
+    The console spy covers all six levels and all four drop paths.
 
-- [ ] **T-18** The cache classification guard, nested
+- [x] **T-18** The cache classification guard, nested
   — *REQ-979*
   - `guest-data.service.spec.ts`: add the two compile-time tables of §7
     (`Record<keyof Required<GuestMenuItem>, true>` and
@@ -326,8 +418,22 @@
   - Validate: `ng test` green; then by hand, once — add a property to
     `GuestMenuItem` in the contract, regenerate, confirm the spec **fails to
     compile**, revert.
+  - **Done 2026-08-28.** Probe run for real, not simulated: a
+    `zzProbeUnclassified: string` added to `GuestMenuItem` in
+    `api/openapi.yaml`, `./mvnw -o generate-sources`, then
+    `guest-data.service.spec.ts(74,7): error TS2741: Property
+    'zzProbeUnclassified' is missing in type '{ key: true; label: true; icon:
+    true; route: true; sortIndex: true; module: true; }' but required in type
+    'Record<keyof GuestMenuItem, true>'.` Reverted and regenerated:
+    `api/openapi.yaml` back to `md5 40bd69e30868825aabbc7630926656fe`,
+    `git status` clean under `api/` and `packages/api-client/`, no `zzProbe`
+    residue in either generated tree.
+  - **The shared `contentFixture()` was NOT changed.** REQ-945's vacancy case
+    asserts its single menu item verbatim, so the module-carrying payload is
+    derived in a local `contentWithModule()` instead. No existing assertion in
+    that spec moved.
 
-- [ ] **T-19** Host and component specs
+- [x] **T-19** Host and component specs
   — *REQ-973, REQ-974*
   - `section-host.component.spec.ts`: a module renders its component with the
     resolved input; **no** module renders `SectionPlaceholderComponent`
@@ -339,10 +445,14 @@
     `…/features/info-module/info-module.component.spec.ts` *(new)*
   - Validate: `ng test` green, zoneless `TestBed` with a `PropertyContentService`
     double (never the real data file).
+  - **Done 2026-08-28.** 4 + 4 cases; suite **333/333**. The host spec adds a
+    fourth case beyond the three planned — a live `:sectionKey` change
+    re-resolves without a new instance, the property the reactive `url` read
+    exists for.
 
 ## Phase 8 — Measure, document, sweep
 
-- [ ] **T-20** Measure `/info`, and the banner near-miss
+- [x] **T-20** Measure `/info`, and the banner near-miss
   — *REQ-978*
   - `node tools/measure.mjs` — **`/info` is already in the route grid**, so no
     change to that instrument: every cell must report `scrollWidth <=
@@ -362,8 +472,34 @@
   - Validate: every cell green; the measured banner/panel figures recorded in
     the commit message and, if they differ materially from the arithmetic,
     written back into `info.md` in the same commit.
+  - **Done 2026-08-28.** Measured against a **production** bundle served on
+    :4300 with `/api` proxied to `quarkus:dev`
+    (`GXP_MEASURE_DEVICE_TOKEN=gxp-dev-device-token`).
+    `measure.mjs --route /info`: **12 cells** (3 viewports × 2 themes ×
+    2 languages), **0 overflowing, 0 truncated, 0 findings** — 1024×768
+    `scrollW/H 1024/768`, 1280×832 `1280/832`, 1440×900 `1440/900`, all
+    `NO-SCROLL OK`. `measure-states.mjs` gained the `/info` BANNER variant:
+    **8 cells, 0 findings**, both rows rendered **from the cache** in every one
+    (REQ-979 proved live, not only in jsdom).
+  - **Two figures differ from `info.md`'s arithmetic and are written back.**
+    (a) The panel is **612 px** wide at 1280 and **490 px** at 1024, not 614 /
+    491.6: `global.css` sets `box-sizing: border-box`, so `--border-glass`'s
+    hairline is inside the declared width, not outside. (b) The 1024 banner
+    overlap **does not happen** — measured clearance **+0.219 px (clears)**
+    against a predicted −0.2 px, and **+0.797 px** at 1280 against a predicted
+    +1.2. Nothing was moved to produce either number, and the instrument now
+    computes the clearance from raw rects because 0.2 px cannot survive
+    `box()`'s rounding.
+  - **Frame conformance, measured:** `<h1>` at y88 (the `.settings` baseline
+    exactly), title→panel gap **24 px** (`--space-6`), panel padding **24 px**,
+    radius **32 px** (`--radius-2xl`), row gap **24 px**, label→value **4 px**
+    (`--space-1`), label **14 px** (`--text-body`), value **18 px**
+    (`--text-title`), `overflow-wrap: anywhere` on both values, `:host` computed
+    `display: contents`, **0 focusable elements** in the content area. Every
+    figure scales by 0.8 at 1024 (19.19 / 3.19 / 11.2 / 14.4 px) — proportional,
+    no breakpoint.
 
-- [ ] **T-21** Documentation sweep
+- [x] **T-21** Documentation sweep
   — *REQ-970, REQ-974, REQ-977*
   - `docs/system-context.md`: update the `de.gxp.menu`, `de.gxp.guest`,
     `guest-content.mapper.ts` and `SectionPlaceholderComponent` rows, and add
@@ -376,21 +512,77 @@
   - Validate: no document still says `SectionPlaceholderComponent` is the
     component behind every section route; nothing claims a manager can author
     module content.
+  - **Done 2026-08-28.** `docs/system-context.md`: the
+    `SectionPlaceholderComponent` row now opens with its demotion, and three
+    rows were added (`SectionHostComponent`, `InfoModuleComponent`,
+    `core/guest/module-registry.ts`); the `de.gxp.menu`, `de.gxp.guest` and
+    `guest-content.mapper.ts` rows gained their Part C paragraphs — including
+    that the wire ships `"module": null` and that the mapper no longer re-sorts.
+    `docs/features/index.md`: the row flips to **In Progress — T-01 … T-21
+    done**, owner column `planner` → `dev`. `handoff.md` rewritten; the
+    reviewer's and the previous `dev` session's sections are kept below it.
+    The two remaining `SectionPlaceholderComponent` mentions
+    (`SettingsComponent` "took that route from" it, and the four-row list under
+    `sidebar-catalogue-overflow`) are historical statements and are still true.
 
-- [ ] **T-22** Whole suite, byte-identical client, final checks
+- [x] **T-22** Whole suite, byte-identical client, final checks
   — *REQ-966, REQ-978, REQ-979*
   - `./mvnw verify` twice in a row — `packages/api-client/` **byte-identical**
     on the second build, `git status` clean after it, and **no orphan** under
     `model/`. `ng build` + `ng test`.
-    Confirm: `package.json` untouched; `pom.xml` carries **only** the one
-    approved line; the **five** architecture guards unchanged and no sixth
+    Confirm: `package.json` untouched; `pom.xml` carries **only** the **two**
+    approved generator options — `useOneOfInterfaces` in the `generate-jaxrs`
+    `<configOptions>` and the plugin-level
+    `openapiNormalizer=SIMPLIFY_ONEOF_ANYOF=false` — and no third edit, no
+    version bump, no plugin and no dependency *(amended at review, F-2: the
+    "one approved line" rule was superseded on the day it was written)*; the **five** architecture guards unchanged and no sixth
     added; `AuditCoverageTest` carries exactly the one added exemption entry;
-    `SectionPlaceholderComponent` and its spec unmodified; `registered-icons.ts`
+    `SectionPlaceholderComponent` behaviourally unmodified — **no assertion in
+    its spec changes, no case is added or removed, and the only permitted edit
+    is type conformance forced by a shared model change** *(amended 2026-08-28,
+    owner decision: T-11 made `module` a required field, so 4 sites in that spec
+    gained `module: null`; the check is on behaviour, and is deliberately not
+    written as an exception list, which would decay)*; `registered-icons.ts`
     unmodified (no new icon); the translation catalogues unmodified (no new
     chrome key).
   - Files: none
   - Validate: all green; **one commit** carries contract + `pom.xml` + backend
     + `packages/api-client/` + frontend + docs. **The owner commits.**
+  - **Done 2026-08-28.** `./mvnw -o verify` run **twice** (21:14 min, 23:38 min).
+    Both: **438 run, 0 failures**, 3 then 4 errors, 3 then 4 skipped — **every
+    error is a container/connection-pool startup failure before any application
+    code** (`ContainerLaunchException` for `postgres:17.11`, or Flyway
+    *"Acquisition timeout while waiting for new connection"*), and **the set
+    differs between the two runs**, which is what flakiness looks like.
+    `DevDataSeederTest`, `OpenApiDisabledTest` and `TrustedProxyLoginTest`
+    re-run **in isolation: 11/11, BUILD SUCCESS**.
+    **The full-green total reconstructs to 449, the established baseline,
+    exactly:** 438 counted + 5 (`TrustedProxyLoginTest` has 6 cases and
+    surefire counted 1 before the abort) + 6 (`SecondFactorLoginTest` reported
+    `Tests run: 0` because its shared `@TestProfile` sibling failed to boot —
+    the documented mechanism). No backend test was added or lost this session.
+  - **`packages/api-client/` byte-identical across both builds:** `git status`
+    clean under it after each, 91 files, 60 models, **no orphan** (`grep` finds
+    no `zzProbe` and no fabricated member in either generated tree). The one
+    byte that moved is `.openapi-generator/openapi.yaml-null.sha256`, the
+    generator's own input cache, **explicitly gitignored** at `.gitignore:452`.
+  - **Frontend:** `ng build` green, `ng test` **333/333**. *(The first `ng test`
+    of this step died with a vitest worker `unexpected exit` while the Maven
+    run's containers were still winding down — an OOM on a 3.8 GB box, not an
+    assertion. It passed on the next run with 2.5 GB free.)*
+  - **Every final check, run against `8b3856e` (the pre-Part-C base):**
+    `package.json` and `package-lock.json` **untouched**;
+    `backend/app/pom.xml` carries **exactly the two approved generator
+    options** and nothing else — no version bump, no plugin, no dependency;
+    `de/gxp/architecture/` **has no diff at all** and still holds **five**
+    guards (plus the two long-standing helpers `FeaturePackages` and
+    `ShippedClasses`) — **no sixth**; `AuditCoverageTest`'s only change is the
+    single added word `"guestModuleContent"` in `NOT_A_MANAGER_MUTATION`;
+    `registered-icons.ts` and `core/i18n/` **untouched** — no new icon, no new
+    chrome key; `SectionPlaceholderComponent`'s **source is byte-identical**
+    and its spec's whole diff is the 4 `module: null` tokens, so the component
+    is **behaviourally unmodified** under this file's own definition.
+  - **Not committed.** The tree is staged for one commit by the owner.
 
 ---
 

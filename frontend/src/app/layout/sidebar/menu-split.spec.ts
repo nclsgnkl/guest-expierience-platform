@@ -21,7 +21,7 @@ import {
  * not contain. `Services` and `Umgebung` are original sections, not fixtures.
  */
 function item(id: string, label: string, route = `/${id}`): ResolvedMenuItem {
-  return { id, label, icon: 'phosphorCircle', route };
+  return { id, label, icon: 'phosphorCircle', route, module: null };
 }
 
 /** Nine delivered modules — the `%dev` shape: four sidebar slots + a popover. */

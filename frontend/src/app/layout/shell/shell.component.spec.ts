@@ -43,14 +43,15 @@ const TEST_CONFIG: PropertyConfig = {
   logoAssetId: null,
   branding: null,
   menuItems: [
-    { id: 'home', label: { de: 'Testlabel Home' }, icon: 'phosphorHouse', route: '' },
-    { id: 'info', label: { de: 'Testlabel Info' }, icon: 'phosphorInfo', route: '/info' },
+    { id: 'home', label: { de: 'Testlabel Home' }, icon: 'phosphorHouse', route: '', module: null },
+    { id: 'info', label: { de: 'Testlabel Info' }, icon: 'phosphorInfo', route: '/info', module: null },
   ],
   settings: {
     id: 'einstellungen',
     label: { de: 'Testlabel Settings' },
     icon: 'phosphorGearSix',
     route: '/einstellungen',
+    module: null,
   },
   settingsConfig: {
     languages: [{ code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' }],

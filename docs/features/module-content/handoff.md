@@ -1,6 +1,364 @@
 # Handoff — module-content (Part C)
 
-**Last session:** 2026-08-28, `reviewer` — **Phases 1–4 (T-01 … T-10) reviewed:
+**Last session:** 2026-08-28, `dev` — **round 2's four closing items done
+(F-11, F-12, F-13, F-14).** Branch `refactor/bce-subpackages-and-boundary-security`.
+**Nothing committed.**
+
+**Next action: commit Part C** (one commit: contract + `pom.xml` + backend +
+`packages/api-client/` + frontend + docs — the owner commits).
+
+## What changed, one item at a time
+
+| Item | File | Change |
+|---|---|---|
+| **F-11** | `02-design.md` §3.2 | *"the mapper checks"* → the **registry** checks, naming `mapInfoModule` in `core/guest/module-registry.ts` and the circular import that put it there; *"`localizedOrNull` **beside** the existing `localized()`"* → the **sibling in another file**, with the consequence stated (the pair re-states the contract rather than sharing it, so each javadoc names the other). One further stale word: *"three things **the mapper** must not do"* → *"the module path"*, and *"the file's existing posture"* → *"the mapper's"* |
+| **F-12** | `01-prd.md` REQ-977, D15 note | Amended inline the way REQ-974's was: the field is **required**, not optional (owner, 2026-08-28, reason now a comment on the field); the per-type branch landed in the **registry**, not the menu mapping, and the mapper's share is one line; *"nothing else in the app sees a generated model"* replaced — `module-registry.ts` does (permitted), and three pre-existing files outside `core/guest/`/`core/api/` do too (F-10, owner-gated). What the requirement actually holds — **components** read `PropertyContentService` — is restated |
+| **F-13** | `guest-content.mapper.ts` `localized()` | Five javadoc lines naming `localizedOrNull` in `core/guest/module-registry.ts`, why it returns instead of throwing, and that the two are **not shared code**. `localizedOrNull` already named this one, so the link is now bidirectional |
+| **F-14** | `features/info-module/info-module.component.spec.ts:86` | The one 113-char line reflowed by prettier itself (`rows:` literal → 5 lines). Verified first that prettier's whole-file output differs **nowhere else**, so no assertion moved. The file is now prettier-clean |
+
+## The prettier figure, re-measured rather than taken on report
+
+`npx prettier --list-different` against a clean `git archive` of `HEAD`
+(`--config` pointed at `HEAD`'s own `.prettierrc`), then against the worktree:
+
+| | files differing |
+|---|---|
+| `HEAD` | **13** — the review's number; dev's 9 was wrong |
+| after the cut, before this session | 19 |
+| **now** | **18** |
+
+The five newly non-conforming files are **all swept fixtures**
+(`app.routes.spec.ts`, `property-content.service.spec.ts`,
+`section-placeholder.component.spec.ts`, `settings.component.spec.ts`,
+`shell.component.spec.ts`) — the sixth was the new spec, and it is out of the
+list. The nine fixture lines stay one-line, as the review accepted.
+
+## Suite
+
+`ng test` **333 passed / 37 files, 0 failed** — the baseline, unchanged (the
+reflow is whitespace and the other three items are comments/docs). `ng build`
+green, `main` 467.13 kB / 106.43 kB transfer.
+
+## Not touched, deliberately
+
+- **F-10** — owner-gated. Neither `frontend/CLAUDE.md` nor the three imports were
+  changed, and **the two validate lines in `03-todo.md` T-13/T-22 were left as
+  they are**: they tick against the grep F-10 is about, and they go with whatever
+  the owner decides. F-12's amendment records the fact without pre-empting the call
+- The queued **`backend/CLAUDE.md`** generator-flags entry — still unwritten, still
+  the owner's. No nested `CLAUDE.md` and no constitution file was touched
+- The 🟢 findings (F-15 … F-21) — recorded, not actioned, per the brief
+- **`backend/` and `packages/` are untouched by this session:**
+  `git status --porcelain packages/` and `api/` are **empty**; `backend/` carries
+  only `GuestControl.java`, the round-1 F-1 javadoc from an earlier session
+  (mtime 13:14, 11 insertions / 2 deletions), byte-unchanged here. No JVM, no
+  Maven, no dev server was started
+
+---
+
+---
+
+# Handoff — module-content (Part C)
+
+**Last session:** 2026-08-28, `reviewer` — **Phases 5–8 (T-11 … T-22) reviewed:
+PASS ✅.** Round 2 appended to [`06-review.md`](06-review.md) below the phases
+1–4 round. Nothing was fixed, nothing was committed, the tree was restored
+byte-for-byte after every probe.
+
+**Result: Part C is ready to commit. 🔴 0 · 🟠 0 · 🟡 6 · 🟢 6 —
+19/19 in-scope requirements complete, 1 declared exclusion (REQ-965, D16).**
+
+## Next action
+
+**Fix F-11 and F-12, then commit.** They are four sentences in the two documents
+that get quoted forward, and they now describe a layout the code does not have:
+
+- **F-11** — `02-design.md` §3.2 still says *"For `info` **the mapper** checks
+  …"* and *"`localizedOrNull` **beside** the existing throwing `localized()`"*.
+  Both moved to `module-registry.ts`; "beside" was the argument for why the pair
+  stays consistent, and it is no longer true.
+- **F-12** — `01-prd.md` REQ-977's D15 note still says `MenuItemShape` gains one
+  ***optional*** field (the owner made it required) and that *"nothing else in
+  the app sees a generated model"* (`module-registry.ts` does).
+
+**This is round 1's F-1 recurring** — the relocation was recorded in `03-todo.md`
+and this file, and not in the PRD or the design.
+
+## The four other 🟡, none of them blocking
+
+- **F-10 — put to the owner, do not fix.** The `@gxp/api-client` rule *is*
+  breached by its letter: `PairingCompleted`/`PairingRequestCreated` (in
+  `features/pairing/`) and `OccupancyState` (in a **component**) all live under
+  `packages/api-client/model/` — they are generated **models**, not service
+  classes, so dev's reason is wrong for two of the four files. Intent is intact
+  (none reads property content) and **all four predate this cut**. Either
+  `frontend/CLAUDE.md` gains a carve-out or three imports move — owner-gated
+  both ways. T-13's and T-22's validate lines should stop claiming a grep that
+  has failed since Part B.
+- **F-13** — `localizedOrNull` re-states `localized()`'s default-language
+  contract in a second file with nothing tying them together. One sentence on
+  `localized()` naming its sibling closes it.
+- **F-14** — the nine over-length fixture lines are accepted; the count is
+  wrong (**13** files differ at `HEAD`, not 9, → **19** after the cut), and one
+  newly non-conforming file is a **new** spec, not a swept fixture: reflow the
+  single 113-char line in `info-module.component.spec.ts`.
+- **F-15** — `info.md`'s corrected panel row prints **490.0** where its own prose
+  three lines below derives **489.6**.
+
+## What was re-measured rather than believed
+
+| | dev | reviewer |
+|---|---|---|
+| `ng test` | 333/333 | **333 passed, 37 files** ✅ |
+| the sweep | 11 files, 41 insertions, no assertion moved | **41 added / 27 removed**, per-file counts row for row, and **no added or removed line in any of the 11 contains `expect`/`it(`/`toEqual`** ✅ |
+| `measure.mjs /info` | 12 cells, 0 findings | **12 cells, 0 findings** ✅ |
+| `measure-states.mjs /info` | 8 BANNER cells, 0 findings, both rows from cache | **8 cells, all NO-SCROLL OK, both rows from cache, no finding** ✅ |
+| clearance | +0.219 / +0.797 px | **+0.219 / +0.797 px** ✅ exact |
+| `"module": null` | 12 of 13 | **12 of 13 null, 0 with the key absent**, live off `quarkus:dev` ✅ |
+| client byte-identical | yes | a fresh `generate-sources` left `git status` clean under `packages/api-client/` ✅ |
+
+**Both compile-time guards were driven red again, outside the repo tree** (a
+scratch copy of the real `module-registry.ts` + the real generated models under
+`frontend/tsconfig.json`'s flags): `TS2344 … does not satisfy the constraint
+'never'` and `TS1360: Type '{}' does not satisfy … Record<"info",
+Type<unknown>>`, plus the **reverse** direction nobody had proved
+(`TS2353` on a renderer for a kind that does not exist). A third probe found
+that adding a second **domain** kind fails the build **four times at once** —
+so §4.4's "three compiler-enforced touchpoints and one `never` check"
+understates it: **all four are compiler-enforced and each has now been seen to
+fail.**
+
+## The declared deviations, judged
+
+1. **`mapInfoModule`/`localizedOrNull` in the registry — accepted.** The
+   circularity is real (§4.2 puts `MODULE_REGISTRY = { info: { map:
+   mapInfoModule } }` in the registry while T-13 puts `mapInfoModule` in the
+   mapper, which imports `MODULE_REGISTRY`). Nothing else moved — the mapper's
+   diff is three hunks — and all nine of §3.2's rules are implemented. The
+   registry has become the *module* mapper, which is what a per-type registry
+   is. Its one cost is F-13.
+2. **The retargeted assertion — accepted.** REQ-962 and its acceptance criterion
+   remove the behaviour by name, the fixture is unchanged, and the new case
+   **would fail if the client re-sorted** (`home` sortIndex 0, `info` 1, wire
+   reversed, expects `['info','home']`).
+3. **The `info.md` corrections — the right file was corrected, both times.**
+   `box-sizing: border-box` is set on `*` at `global.css:34`, so the declared
+   width IS the border box (612 / 489.6). The predicted overlap was an artefact
+   of a **rounded input** — `connection.md` recorded the banner as `h 60`; it is
+   `h 59`, raw bottom y117.53 against a panel top of y117.75. `staleness-banner/`
+   is untouched by this cut, so nothing was moved. The instrument change is
+   sound: additive, computes from raw rects that `b()` already returned
+   unrounded, and **adds** failure conditions (`COLLISION`, `CACHE`) rather than
+   removing them.
+
+## Visual check — performed, not skipped
+
+`/info` at 1280×832 light/de and 1024×768 dark/en, and `/umgebung` (the
+placeholder arm) at 1280×832, rendered from the production bundle with `/api`
+proxied to `quarkus:dev` and compared against `info.md`. Panel 612×171 at
+x172/y147, label secondary/14 px over value primary/18 px, no divider, no icon,
+no focusable element, status-bar corner clear. The placeholder arm renders
+unchanged with its sidebar entry intact.
+
+## Confirmed clean
+
+No Boundary file changed at all (D16); `de/gxp/architecture/` has no diff and
+still holds five guards; `pom.xml`, `package.json` and the lockfile untouched by
+this cut; `registered-icons.ts` and `core/i18n/` untouched; nothing logs on the
+module path; no placeholder-shaped logic; `zeitkapsel` appears only in
+`module-registry.spec.ts`; the property-wording refinement is in all four places
+with **no "except for `module: null`" surviving anywhere**;
+`SectionPlaceholderComponent`'s source is byte-identical and its spec's `it(`
+and `expect(` counts are unchanged; and **`backend/CLAUDE.md`,
+`frontend/CLAUDE.md`, `CLAUDE.md` and `docs/constitution.md` are all
+unmodified** — the generator-flags entry is still queued for the owner.
+
+**The backend suite cannot have moved this session and that is checkable:**
+`git status --porcelain backend/app/src/test/` is empty. Round 1's independent
+reconstruction of **449** stands. The container-startup errors were not chased.
+
+---
+
+---
+
+# Handoff — module-content (Part C)
+
+**Last session:** 2026-08-28, `dev` — **Phases 5–8 implemented and swept:
+T-11 … T-22 done. All 22 tasks are complete.** Branch
+`refactor/bce-subpackages-and-boundary-security`. **Nothing committed — the
+owner commits, in one commit.**
+
+**Next action: review** (`06-review.md` covers Phases 1–4 only; Phases 5–8 have
+not been reviewed).
+
+## The two owner decisions this session ran on
+
+1. **`MenuItemShape.module` stays REQUIRED** (§3.1). `module?: … | null` would
+   put `undefined | null` in front of every read site and re-import the wire's
+   ambiguity into the **domain** model — which is what F-3 was a bug about. The
+   reason is now a comment on the field itself.
+2. **The `SectionPlaceholderComponent` check is a property, not an exception
+   list.** T-14, T-22, `02-design.md` §6.2/§12.4 and `01-prd.md`'s REQ-974 all
+   now read: *behaviourally unmodified — no assertion in its spec changes, no
+   case is added or removed, and the only permitted edit is type conformance
+   forced by a shared model change.* It still bites on a rewritten assertion.
+
+## The other two review findings, closed earlier in the same working tree
+
+- **F-1** — `GuestControl.resolveLocalized`'s javadoc now names **both** routes
+  by which `stay == null` reaches it (standby texts, and `attachModules` on a
+  vacant room, where raw braces are the documented §2.5 outcome). Comment only.
+- **F-2** — `03-todo.md` T-02/T-22 and `02-design.md` §10 now say **two**
+  approved `pom.xml` generator options and name each one's placement.
+
+## The sweep, counted
+
+**11 files, 42 error sites, 41 physical insertions.** The 42nd was a `TS2345`
+in `heading-block.component.spec.ts` that fell out when the `settings` literal
+three lines away was fixed. **No assertion moved, no case was added or
+removed** — every changed line is the identical line plus `module: null`.
+
+| file | sites |
+|---|---|
+| `layout/sidebar/sidebar.component.spec.ts` | 12 |
+| `features/settings/settings.component.spec.ts` | 6 |
+| `app.routes.spec.ts` | 6 |
+| `features/section-placeholder/section-placeholder.component.spec.ts` | 4 |
+| `layout/shell/shell.component.spec.ts` | 3 |
+| `core/content/property-content.service.spec.ts` | 3 |
+| `features/standby/standby.component.spec.ts` | 2 |
+| `core/preferences/preferences.persistence.spec.ts` | 2 |
+| `features/home/heading-block/heading-block.component.spec.ts` | 1 (+1 cascade) |
+| `features/home/home-content.component.spec.ts` | 1 |
+| `layout/sidebar/menu-split.spec.ts` | 1 |
+
+Nine of the resulting lines run 102–113 characters, over `.prettierrc`'s
+`printWidth: 100`. Left one-line on purpose: prettier is **not** enforced here,
+and exploding each fixture to six lines would have buried a one-token diff.
+*(Count corrected 2026-08-28, review finding F-14: **13** files already differ at
+`HEAD`, not 9 — re-measured against a clean `git archive` of `HEAD` with the
+repo's own prettier. The cut took it to 19; after reflowing the one new spec
+line it is **18**, five newly non-conforming files, all of them swept fixtures.)*
+
+## F-3, closed twice and then confirmed a third time
+
+- **Code:** `mapWireModule(registry, wire: GuestModule | null | undefined, …)`
+  guards `wire == null`. A spec case pins both `null` and `undefined`.
+- **Design text:** `02-design.md` §4.2's block no longer says
+  `wire === undefined`; it carries a quoted correction naming the measurement.
+- **Measured live**, not inferred: `GET /api/guest/content` off `quarkus:dev`
+  returns `"module": null` on twelve of thirteen menu items and the real object
+  on `info`. Root cause named in the design: nothing configures Jackson's
+  inclusion, so the default `ALWAYS` emits the key.
+
+## T-13's row bound — where the number comes from, and where it does not
+
+`MAX_INFO_ROWS = 10` and `MAX_MODULE_TEXT = 240` live in `module-registry.ts`
+under a comment that says **the contract is their source and not their
+enforcement**, with both halves measured:
+
+- `rows: maxItems: 10` **does** become `@Size(max=10)` on
+  `GuestInfoModule.getRows()` — and is **inert**, because
+  `GuestApi.getGuestContent`'s return carries no `@Valid` and Bean Validation
+  does not walk an unannotated response;
+- `ModuleText`'s `maxLength: 240` does not reach Java at all (`GuestInfoRow.label`
+  is a bare `Map<String, String>`), and `V12`'s `label`/`value` columns are
+  unbounded `text`.
+
+That is Part A's invented `MAX_MENU_ITEMS = 5` avoided rather than repeated: the
+bound is real, and the code does not claim a rule nothing applies.
+
+## One deviation from the TODO's file lists, and its reason
+
+`mapInfoModule` and `localizedOrNull` shipped in **`module-registry.ts`**, not
+in `guest-content.mapper.ts` where T-13 put them. As written the two tasks
+require the registry to reference `mapInfoModule` while the mapper references
+`MODULE_REGISTRY` — **a circular import, and the app's first**. Keeping every
+per-type concern in the registry makes the dependency one-directional and leaves
+the mapper's per-type footprint at exactly the one line §3.1 promises. §3.2's
+rules are all implemented; only their address changed.
+
+## Three guards driven red by hand, each reverted byte-identically
+
+| guard | error it produced | revert |
+|---|---|---|
+| REQ-980's `never` check | `module-registry.ts(82,51): error TS2344: Type 'GuestWlanModule' does not satisfy the constraint 'never'.` | `guestModule.ts` `md5 d74b5f987bfe5eae186c8f3c6264a386` |
+| the renderer map's totality | `section-host.component.ts(58,5): error TS1360: Type '{}' does not satisfy the expected type 'Record<"info", Type<unknown>>'.` | `section-host.component.ts` `md5 703fff749fa1591f866ffc707a79276b` |
+| REQ-979's nested cache table | `guest-data.service.spec.ts(74,7): error TS2741: Property 'zzProbeUnclassified' is missing …` — driven through the **contract** and a real `./mvnw generate-sources`, not simulated | `api/openapi.yaml` `md5 40bd69e30868825aabbc7630926656fe`, no `zzProbe` residue in either generated tree |
+
+## Measured in a real browser, not looked at
+
+Production bundle served on :4300 with `/api` proxied to `quarkus:dev`.
+
+- `measure.mjs --route /info`: **12 cells** (3 viewports × 2 themes ×
+  2 languages) — **0 overflowing, 0 truncated, 0 findings.**
+- `measure-states.mjs` gained a `/info` BANNER variant: **8 cells, 0 findings**,
+  and **both rows rendered from the cache** in every one (REQ-979 proved live).
+- Frame against `info.md`, at 1280×832: `<h1>` y88 (the `.settings` baseline
+  exactly), title→panel 24 px, panel 612×171 at y147, padding 24, radius 32,
+  row gap 24, label→value 4, label 14 px, value 18 px, `overflow-wrap: anywhere`,
+  `:host` computed `display: contents`, **0 focusable elements**. Every figure
+  ×0.8 at 1024.
+
+**Two `info.md` figures were wrong and are corrected in that file:**
+
+1. The panel is **612 px** (1280) / **490 px** (1024), not 614 / 491.6.
+   `info.md` added `--border-glass`'s hairline **outside** the declared width;
+   `global.css` sets `box-sizing: border-box`, so it is inside.
+2. **The predicted 0.2 px banner overlap at 1024 does not happen.** Measured
+   clearance **+0.219 px (clears)** at 1024 and **+0.797 px** at 1280, against
+   a predicted −0.2 and +1.2. Nothing was moved to get there; the instrument
+   now computes the clearance from raw rects, because 0.2 px cannot survive
+   rounding. The rightmost value ends **142–252 px** short of the bar's left
+   edge in every cell, which is the reason the near-miss was acceptable in the
+   first place.
+
+## Suite
+
+`ng build` green. `ng test` **333/333** (311 baseline + 5 registry + 8 mapper +
+1 cache + 4 host + 4 info-module). Backend untouched this session; its last full
+run remains **449 / 0 failures**, 2 environmental container-startup errors.
+
+## T-22 — the sweep, and what the backend numbers actually say
+
+`./mvnw -o verify` ran **twice** (21:14 min, 23:38 min). Both reported
+**438 run, 0 failures**; 3 errors / 3 skipped on the first, 4 / 4 on the second.
+**Every error is a container or connection-pool failure before any application
+code runs** — `ContainerLaunchException` for `postgres:17.11`, or Flyway
+*"Acquisition timeout while waiting for new connection"* — and **the set is not
+the same between the two runs**, which is the signature of the environmental
+flakiness this box has. `DevDataSeederTest`, `OpenApiDisabledTest` and
+`TrustedProxyLoginTest` re-run **in isolation: 11/11, BUILD SUCCESS.**
+
+**The full-green total reconstructs to 449 — the established baseline, exactly:**
+438 counted + 5 (`TrustedProxyLoginTest` holds 6 cases; surefire counted 1
+before the abort) + 6 (`SecondFactorLoginTest` reported `Tests run: 0`, the
+documented consequence of its shared `@TestProfile` sibling failing to boot).
+**No backend test was added or lost this session.** Do not chase these.
+
+`packages/api-client/` is **byte-identical across both builds** — `git status`
+clean under it after each, 91 files, 60 models, no orphan. The one byte that
+moves is `.openapi-generator/openapi.yaml-null.sha256`, the generator's own
+input cache, **explicitly gitignored** at `.gitignore:452`.
+
+Every final check against `8b3856e` (the pre-Part-C base): `package.json` and
+its lockfile untouched; `pom.xml` carrying **exactly the two approved generator
+options** and nothing else; `de/gxp/architecture/` with **no diff at all** and
+still **five** guards — no sixth; `AuditCoverageTest`'s only change the single
+added word `"guestModuleContent"`; `registered-icons.ts` and `core/i18n/`
+untouched; `SectionPlaceholderComponent`'s source byte-identical.
+
+## Still proposed, still NOT written
+
+The `backend/CLAUDE.md` entry about the two generator flags, queued for the
+owner from the previous session. **Do not write it and do not duplicate it.**
+No constitution amendment is proposed and none is needed.
+
+---
+
+---
+
+**Previous session:** 2026-08-28, `reviewer` — **Phases 1–4 (T-01 … T-10) reviewed:
 PASS ✅.** Full report in [`06-review.md`](06-review.md). Nothing was fixed,
 nothing was committed, the tree was restored byte-for-byte after every probe.
 

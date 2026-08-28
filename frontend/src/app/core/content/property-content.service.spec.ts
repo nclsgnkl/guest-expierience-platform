@@ -22,14 +22,15 @@ const CONFIG: PropertyConfig = {
   logoAssetId: 7,
   branding: { primary: '#f45aa8', primaryDeep: '#cc49af', secondary: '#8a5cf6' },
   menuItems: [
-    { id: 'home', label: { de: 'Startseite', en: 'Home' }, icon: 'phosphorHouse', route: '' },
-    { id: 'info', label: { de: 'Info', en: 'Info' }, icon: 'phosphorInfo', route: '/info' },
+    { id: 'home', label: { de: 'Startseite', en: 'Home' }, icon: 'phosphorHouse', route: '', module: null },
+    { id: 'info', label: { de: 'Info', en: 'Info' }, icon: 'phosphorInfo', route: '/info', module: null },
   ],
   settings: {
     id: 'einstellungen',
     label: { de: 'Einstellungen', en: 'Settings' },
     icon: 'phosphorGearSix',
     route: '/einstellungen',
+    module: null,
   },
   settingsConfig: {
     languages: [

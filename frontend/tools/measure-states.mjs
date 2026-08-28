@@ -214,6 +214,28 @@ function collectState() {
           /* The tri-state, measured rather than assumed: the pill must be
              gone while the banner is up (REQ-952). */
           pillStillUp: !!document.querySelector('.staleness-pill'),
+          /* module-content REQ-978: `/info` is the first SECTION route on
+             which the banner and real content are on screen together, and
+             info.md computes the near-miss it produces (the bar clears the
+             panel by 1.2 px at 1280 and overlaps by 0.2 px at 1024). Those
+             are arithmetic; these are the boxes. Null on every other route. */
+          infoTitle: b(document.querySelector('.section-host__title')),
+          infoPanel: b(document.querySelector('.info-module')),
+          /* The rendered extent of the values, not their element boxes: the
+             `<dd>` is the panel's full inner width whatever the copy does, so
+             only the line rects say how far a value actually reaches — which
+             is the number info.md's third reason rests on (the values stay in
+             the left half, the bar lands on the empty right-hand side). */
+          infoValues: [...document.querySelectorAll('.info-module__value')].map((el) => {
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            const rects = [...range.getClientRects()];
+            return {
+              text: el.textContent.trim(),
+              lines: rects.length,
+              right: rects.length ? Math.max(...rects.map((r) => r.right)) : null,
+            };
+          }),
         }
       : null,
     pill: document.querySelector('.staleness-pill')
@@ -524,6 +546,41 @@ function reportBanner(m, label, w, h, host, theme, language) {
   }
 }
 
+/** The `/info` variant's own report: the two boxes info.md's arithmetic names. */
+function reportInfoBanner(m, label) {
+  reportScroll(m, label);
+  const bn = m.banner;
+  if (!bn) {
+    note('MISSING', `banner not rendered for ${label}`);
+    return;
+  }
+  const banner = box(bn.box);
+  const panel = box(bn.infoPanel);
+  if (!panel) {
+    note('MISSING', `the info panel is not rendered from cache at ${label} (REQ-979)`);
+    return;
+  }
+  /* Computed from the RAW rects, not from `box()`'s rounded ones: info.md's
+     figure is 0.2 px, so a report rounded to whole pixels could not see it. */
+  const clearance = +(bn.infoPanel.y - bn.box.bottom).toFixed(3);
+  const valueRight = Math.max(...bn.infoValues.map((v) => v.right ?? 0));
+  console.log(
+    `  banner ${JSON.stringify(banner)} | title ${JSON.stringify(box(bn.infoTitle))} | panel ${JSON.stringify(panel)} ` +
+      `| clearance panel.y - banner.bottom = ${clearance}px (${clearance >= 0 ? 'CLEARS' : 'OVERLAPS'}) ` +
+      `| values ${JSON.stringify(bn.infoValues)} rightmost=${+valueRight.toFixed(2)} vs banner.x=${+bn.box.x.toFixed(2)} ` +
+      `| horizontal gap = ${+(bn.box.x - valueRight).toFixed(2)}px`,
+  );
+  if (bn.infoValues.length !== 2) {
+    note('CACHE', `${label} rendered ${bn.infoValues.length} value rows from cache, expected 2 (REQ-979)`);
+  }
+  if (valueRight > bn.box.x && clearance < 0) {
+    /* The ONLY combination that turns the designed overlap into a real one:
+       a value actually reaching the band the bar occupies. */
+    note('COLLISION', `${label} a value reaches x${valueRight}, inside the bar's band from x${bn.box.x}`);
+  }
+  if (bn.pillStillUp) note('TRI-STATE', `pill and banner both up at ${label}`);
+}
+
 console.log('\n######## BANNER — shell (occupied): cache aged 61 min, /api blocked ########');
 for (const [w, h] of VIEWPORTS) {
   const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
@@ -547,6 +604,52 @@ for (const [w, h] of VIEWPORTS) {
       await setThemeAndLanguage(page, theme, language);
       const m = await page.evaluate(collectState);
       reportBanner(m, `banner-shell ${w}x${h} ${theme} ${language}`, w, h, 'shell', theme, language);
+    }
+  }
+  await context.close();
+}
+
+/* --------------- BANNER on /info (module-content REQ-978) --------------- */
+/**
+ * The same cell, on a SECTION route. `measure.mjs`'s grid already covers
+ * `/info` online, but the banner is a kiosk *state* and no route grid can
+ * reach it — and `/info` is the first screen where the escalated bar and real
+ * property content (the WiFi row) are up together by design.
+ *
+ * `docs/design/screens-inhouse/info.md` -> "No-scroll and the banner" computes
+ * that the bar CLEARS the panel by 1.2 px at 1280 and OVERLAPS it by 0.2 px at
+ * 1024, and says plainly that both are arithmetic and must be measured. This
+ * block prints both boxes and the signed clearance.
+ *
+ * **An overlap here is not a defect and must not be "fixed" by moving
+ * anything.** The banner is an overlay by construction (constitution v1.9.0,
+ * `connection.md`), the 0.2 px is against its padding rather than its copy, and
+ * the values are left-aligned so the bar lands on the panel's empty right-hand
+ * side. What is worth knowing is whether the figure is a fifth of a pixel or a
+ * centimetre — and whether a *value* ever reaches the band the bar occupies,
+ * which is the only thing that would make it real.
+ */
+console.log('\n######## BANNER — /info (occupied): the section route, cache aged 61 min ########');
+for (const [w, h] of VIEWPORTS) {
+  const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+  const page = await context.newPage();
+  await page.addInitScript((token) => localStorage.setItem('gxp.device-token', token), DEV_TOKEN);
+  await page.goto(baseUrl + '/info', { waitUntil: 'load', timeout: 120000 });
+  await page.waitForSelector('.info-module', { timeout: 60000 }); // online — cache written
+  if (!(await page.evaluate(ageTheCache, AGED_CACHE_MINUTES))) {
+    note('NO CACHE', `nothing cached to age at /info ${w}x${h}`);
+  }
+  await context.route('**/api/**', (route) => route.abort('connectionrefused'));
+  await page.reload({ waitUntil: 'load', timeout: 120000 });
+  await page.waitForSelector('.staleness-banner', { timeout: 30000 });
+  /* REQ-979: the module must render from the cache exactly as it did online —
+     no degradation, no hidden row. */
+  await page.waitForSelector('.info-module', { timeout: 30000 });
+  for (const theme of THEMES) {
+    for (const language of LANGUAGES) {
+      await setThemeAndLanguage(page, theme, language);
+      const m = await page.evaluate(collectState);
+      reportInfoBanner(m, `banner-info ${w}x${h} ${theme} ${language}`);
     }
   }
   await context.close();

@@ -33,13 +33,14 @@ function config(language: string): ResolvedPropertyConfig {
     menuItems: [
       /* Deliberately present in the CONFIG: the menu exists server-side, but
          the standby screen must not render any navigation from it. */
-      { id: 'info', label: `Info-${language}`, icon: 'phosphorInfo', route: '/info' },
+      { id: 'info', label: `Info-${language}`, icon: 'phosphorInfo', route: '/info', module: null },
     ],
     settings: {
       id: 'einstellungen',
       label: `Einstellungen-${language}`,
       icon: 'phosphorGearSix',
       route: '/einstellungen',
+      module: null,
     },
     settingsConfig: {
       languages: [

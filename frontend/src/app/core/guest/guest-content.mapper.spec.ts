@@ -1,5 +1,5 @@
 import type { GuestContent, GuestHome } from '@gxp/api-client';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CONTENT_FALLBACK_ICON } from '../icons/registered-icons';
 import {
@@ -106,12 +106,21 @@ describe('mapGuestContent', () => {
     expect(config.home?.cards[0]?.route).toBe('/info');
   });
 
-  it('orders menu items by sortIndex regardless of wire order', () => {
+  /**
+   * REQ-962's observable half, and it REPLACES an assertion that pinned the
+   * opposite. This case used to be "orders menu items by sortIndex regardless
+   * of wire order" — the client's own re-sort, deleted in module-content T-13.
+   * `api/openapi.yaml` → `GuestMenu.items` says "Resolved-enabled items only,
+   * ordered by resolved sort index", so the delivered order is authoritative
+   * and a second client-side opinion about it could only ever disagree with
+   * the server.
+   */
+  it('renders menu items in delivered order — the client never re-sorts (REQ-962)', () => {
     const content = contentFixture();
     content.menu.items = [...content.menu.items].reverse();
 
     const config = mapGuestContent(content);
-    expect(config.menuItems.map((i) => i.id)).toEqual(['home', 'info']);
+    expect(config.menuItems.map((i) => i.id)).toEqual(['info', 'home']);
   });
 
   it('a vacant payload maps to home: null, property half intact', () => {
@@ -229,6 +238,113 @@ describe('mapGuestContent', () => {
     const content = contentFixture();
     content.settings.defaultAppearance = 'system';
     expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
+  });
+});
+
+/**
+ * The module branch (module-content REQ-963/972). Two properties are load
+ * bearing and are asserted separately because they fail differently:
+ *
+ *   - the **bounds** are the kiosk's own. The contract declares
+ *     `rows.maxItems: 10` and `ModuleText.maxLength: 240`, but neither binds a
+ *     served payload — the response DTO carries no `@Valid` and V12's columns
+ *     are unbounded `text` (see `module-registry.ts`). This is where they are
+ *     enforced, so this is where they are tested.
+ *   - the **isolation** is REQ-972: one malformed module is dropped, every
+ *     other item and the whole envelope survive, and `mapGuestContent` does not
+ *     throw. Only a bad envelope is fatal.
+ */
+describe('mapGuestContent — modules', () => {
+  function withModule(module: unknown): GuestContent {
+    const content = contentFixture();
+    (content.menu.items[1] as { module?: unknown }).module = module;
+    return content;
+  }
+
+  function infoModule(rowCount: number, valueLength: number): unknown {
+    return {
+      type: 'info',
+      rows: Array.from({ length: rowCount }, (_, index) => ({
+        label: { de: `Label ${index}`, en: `Label ${index}` },
+        value: { de: 'x'.repeat(valueLength), en: 'x'.repeat(valueLength) },
+      })),
+    };
+  }
+
+  it('maps 10 rows with a 240-character value — both bounds exactly met', () => {
+    const config = mapGuestContent(withModule(infoModule(10, 240)));
+
+    const module = config.menuItems[1]?.module;
+    expect(module?.type).toBe('info');
+    expect(module?.rows).toHaveLength(10);
+    expect(module?.rows[0]?.value['de']).toHaveLength(240);
+  });
+
+  it('drops the module at 11 rows (REQ-963)', () => {
+    expect(mapGuestContent(withModule(infoModule(11, 10))).menuItems[1]?.module).toBeNull();
+  });
+
+  it('drops the module at a 241-character value (REQ-963)', () => {
+    expect(mapGuestContent(withModule(infoModule(1, 241))).menuItems[1]?.module).toBeNull();
+  });
+
+  it('drops a module with no entry for the default language', () => {
+    const module = {
+      type: 'info',
+      rows: [{ label: { en: 'Check-out' }, value: { en: 'By 11:00' } }],
+    };
+    expect(mapGuestContent(withModule(module)).menuItems[1]?.module).toBeNull();
+  });
+
+  it('a null module is the absent case, not a crash (F-3 — the wire sends null)', () => {
+    const config = mapGuestContent(withModule(null));
+
+    expect(config.menuItems[1]?.module).toBeNull();
+    expect(config.menuItems).toHaveLength(2);
+  });
+
+  it('renders an unknown module type as no module, never a throw (REQ-973)', () => {
+    const config = mapGuestContent(withModule({ type: 'wlan', ssid: 'Haus' }));
+
+    expect(config.menuItems[1]?.module).toBeNull();
+  });
+
+  it('one malformed module leaves every other item and the envelope intact (REQ-972)', () => {
+    const content = withModule({ type: 'info', rows: 'not-an-array' });
+    (content.menu.items[0] as { module?: unknown }).module = infoModule(1, 10);
+
+    const config = mapGuestContent(content);
+
+    expect(config.menuItems.map((item) => item.id)).toEqual(['home', 'info']);
+    expect(config.menuItems[0]?.module?.type).toBe('info');
+    expect(config.menuItems[1]?.module).toBeNull();
+    expect(config.home).not.toBeNull();
+    expect(config.settings.id).toBe('einstellungen');
+  });
+
+  /**
+   * Constitution principle 3. A dropped module could carry the WiFi password,
+   * and `info.md` names that row as exactly where somebody will be tempted to
+   * add a diagnostic. A console warning is not exempt.
+   */
+  it('logs nothing on any drop path — not even the fact of a drop', () => {
+    const spies = (['log', 'info', 'warn', 'error', 'debug', 'trace'] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation(() => undefined),
+    );
+    try {
+      mapGuestContent(withModule(infoModule(11, 10)));
+      mapGuestContent(withModule({ type: 'wlan', ssid: 'Haus' }));
+      mapGuestContent(withModule({ type: 'info', rows: 'not-an-array' }));
+      mapGuestContent(withModule(infoModule(1, 241)));
+
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      for (const spy of spies) {
+        spy.mockRestore();
+      }
+    }
   });
 });
 

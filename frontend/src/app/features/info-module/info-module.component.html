@@ -1,0 +1,10 @@
+<dl class="info-module">
+  <!-- The delivered array order IS the order and there is no wire row id, so
+       the index is the honest track key (info.md, Decision 3). -->
+  @for (row of module().rows; track $index) {
+    <div class="info-module__row">
+      <dt class="info-module__label">{{ row.label }}</dt>
+      <dd class="info-module__value">{{ row.value }}</dd>
+    </div>
+  }
+</dl>

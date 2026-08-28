@@ -7,6 +7,7 @@ import {
 } from '@gxp/api-client';
 
 import { TRANSLATION_CATALOGS } from '../i18n/catalog';
+import { MODULE_REGISTRY, mapWireModule } from './module-registry';
 import { CONTENT_FALLBACK_ICON, isRegisteredIcon } from '../icons/registered-icons';
 import type {
   ActionCard,
@@ -97,9 +98,11 @@ export function mapGuestContent(content: GuestContent): PropertyConfig {
     propertyName: name,
     logoAssetId: content.property.logoAssetId ?? null,
     branding: mapBranding(content),
-    menuItems: [...items]
-      .sort((a, b) => a.sortIndex - b.sortIndex)
-      .map((item) => mapMenuItem(item, defaultLanguage)),
+    // NOT re-sorted. `api/openapi.yaml` → `GuestMenu.items`: "Resolved-enabled
+    // items only, ordered by resolved sort index." The delivered order IS the
+    // order (REQ-962), and `MenuItemShape` carries no `sortIndex` to re-derive
+    // it from — a client re-sort was a second, silent opinion about ordering.
+    menuItems: items.map((item) => mapMenuItem(item, defaultLanguage)),
     settings: mapSettingsEntry(settingsEntry, defaultLanguage),
     settingsConfig,
     standbyHeadline: localized(content.standby?.headline, 'standby.headline', defaultLanguage),
@@ -182,6 +185,12 @@ function mapMenuItem(item: GuestMenuItem, defaultLanguage: string): MenuItem {
     label: localized(item.label, `menu.items[${item.key}].label`, defaultLanguage),
     icon: safeIcon(item.icon),
     route: requireRoute(item.route, `menu.items[${item.key}].route`),
+    // The whole of the per-type branching outside the registry (§3.1). `null`
+    // covers all three cases the guest is deliberately not asked to tell apart:
+    // nothing authored (D15), a type this build does not know (REQ-973), and a
+    // known type that failed validation (REQ-972). Returns, never throws — the
+    // envelope failures above must stay fatal, one bad module must not be.
+    module: mapWireModule(MODULE_REGISTRY, item.module, defaultLanguage),
   };
 }
 
@@ -191,6 +200,9 @@ function mapSettingsEntry(entry: GuestSettingsEntry, defaultLanguage: string): M
     label: localized(entry.label, 'menu.settingsEntry.label', defaultLanguage),
     icon: safeIcon(entry.icon),
     route: requireRoute(entry.route, 'menu.settingsEntry.route'),
+    // App chrome, never a catalogue section: `GuestSettingsEntry` carries no
+    // module on the wire and never will (D15 put the module on the menu item).
+    module: null,
   };
 }
 
@@ -222,6 +234,12 @@ function mapHome(home: GuestHome, defaultLanguage: string): HomeContent {
  * A localized map is valid when it exists and carries a non-blank entry for
  * the property's default language — the same construction-time strictness the
  * static config enjoyed (`resolveText`'s fallback needs that entry).
+ *
+ * **This rule is stated twice.** `localizedOrNull` in
+ * `core/guest/module-registry.ts` applies the same default-language contract
+ * but returns `null` instead of throwing, because the module path may not be
+ * wrapped in a `try`/`catch` (§3.2). The two are not shared code — change this
+ * rule and change that one with it.
  */
 function localized(
   value: { [key: string]: string } | undefined,

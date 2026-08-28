@@ -374,8 +374,17 @@ public class GuestControl {
      * timezone, each language's configured locale. A language the manager
      * has not filled in falls back to the main language's template — the
      * kiosk must always find every offered key (REQ-426), and honest
-     * untranslated text beats a hole. {@code stay == null} only for standby
-     * texts, whose allowed placeholder set has no stay fields.
+     * untranslated text beats a hole.
+     * <p>
+     * {@code stay == null} reaches this method by TWO routes, and they differ:
+     * standby texts, whose allowed placeholder set has no stay fields, and
+     * {@link #attachModules} on a VACANT room (module-content 02-design.md
+     * §2.5 — modules are property-scoped content and are delivered in both
+     * occupancy states). On the second route a stay placeholder resolves to
+     * ITSELF, so raw braces are the documented outcome, asserted by
+     * {@code GuestModuleContentTest}. That is why the "no braces ever leave
+     * the server" sentence elsewhere in this class is scoped to {@code home}
+     * and must not be generalised to the payload.
      */
     private Map<String, String> resolveLocalized(Map<String, String> templates, PropertyDto property,
             StayDto stay, List<String> languages) {
