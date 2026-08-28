@@ -498,7 +498,8 @@ rides the title's row because it costs no width there and keeps the bar flat.
   starts at x459 / x569 — **≥ 9 px / ≥ 7 px for any name**. Measured with a
   37-character unbroken display name: five lines, reaching x450 / x560, 9 px
   clear at both viewports. Without that CSS line the same name renders one
-  line to x935 / x1173, straight under the bar — which is a **pre-existing**
+  line to x935…953 / x1173…1195 — the lower figure of each pair is the German
+  cell, the higher the English one — straight under the bar — which is a **pre-existing**
   overflow this round closes, and the instrument's `OVERFLOW` check is its
   ratchet.
 - Sizes are `rem` and the root is viewport-proportional, but the *copy* is not,

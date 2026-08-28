@@ -24,7 +24,6 @@ import type {
  *   - `property` — the config with the active language resolved per field
  *     (REQ-108/514): a language switch re-renders from data already held and
  *     fetches nothing.
- *   - `getSectionRoute()` — targetSectionId → route, unknown id throws.
  *
  * New, wire-era surface:
  *
@@ -82,27 +81,6 @@ export class PropertyContentService {
         ?.locale ?? language
     );
   });
-
-  /**
-   * Resolves a `targetSectionId` (e.g. an `ActionCard`'s) to the route the
-   * matching `menuItems`/`settings` entry carries. Routes are not localised,
-   * so this reads the raw config directly and its signature is unchanged.
-   * Throws on an unknown id: a dangling reference should fail loudly in
-   * tests, not silently do nothing for a guest on a touch kiosk. (Cards
-   * additionally carry the server-resolved `route` directly — REQ-511.)
-   */
-  getSectionRoute(targetSectionId: string): string {
-    const property = requireConfig(this.raw());
-    const match = [...property.menuItems, property.settings].find(
-      (item) => item.id === targetSectionId,
-    );
-
-    if (!match) {
-      throw new Error(`Unknown targetSectionId: "${targetSectionId}"`);
-    }
-
-    return match.route;
-  }
 }
 
 function requireConfig(config: PropertyConfig | null): PropertyConfig {
@@ -117,7 +95,7 @@ function requireConfig(config: PropertyConfig | null): PropertyConfig {
  * language — not the app's idea of a default, and not the first key in the
  * object — else throw (REQ-108). The mapper guarantees the default-language
  * entry exists, so the throw is unreachable for wire-fed configs; it stays
- * for the same loud-failure reason as `getSectionRoute`'s.
+ * so that a hand-built config double fails loudly in a test instead.
  */
 function resolveText(
   value: Localized<string>,

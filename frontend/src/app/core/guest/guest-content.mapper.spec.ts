@@ -104,7 +104,6 @@ describe('mapGuestContent', () => {
     expect(config.standbyMessage['de']).toBe('Herzlich willkommen');
     expect(config.home?.headline['de']).toBe('Willkommen im Airbnb von Anna & Tom!');
     expect(config.home?.cards[0]?.route).toBe('/info');
-    expect(config.home?.cards[0]?.targetSectionId).toBe('info');
   });
 
   it('orders menu items by sortIndex regardless of wire order', () => {

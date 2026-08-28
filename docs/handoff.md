@@ -7,8 +7,8 @@ instruction: stay on it**, even though the name does not match the work
 auch gerne"*). Commit at **coherent checkpoints** — a reviewed block, a
 finished amendment — never mid-implementation while a `dev` agent is writing.
 Committed so far: `0ed4f03` constitution v1.9.0 · `c8081a8` the split and Part
-B's plan · `33f745a` Part A phases 1–3 · `14c005e` Part A complete. The tree was
-clean after each.
+B's plan · `33f745a` Part A phases 1–3 · `14c005e` Part A complete · `4459859`
+Part B complete. The tree was clean after each.
 
 ## What this session did
 
@@ -19,7 +19,7 @@ and **split into three features** (owner decision D1):
 | Feature | Part | REQ | State |
 |---|---|---|---|
 | `sidebar-catalogue-overflow` | A — the owner's actual ask | 901…935 | **Done, committed** `33f745a` + `14c005e`. Two review rounds, both closed |
-| `guest-payload-consolidation` | B | 941…952 | Planned, `04_analyze` **PASS**. Phases 1–3 in progress |
+| `guest-payload-consolidation` | B | 941…952 | **Done, committed** `4459859`. Three review rounds, final PASS |
 | `module-content` | C | 961…979 | **Not ready to plan** — blocked on D9 and on a real module screen existing |
 
 `modular-menu-catalogue/` is retired to a `README.md` pointer.
@@ -214,9 +214,13 @@ So the check is **not** limited to the 16 banner cells. `tools/measure.mjs`'s
 in Part A (`14c005e`). A shift there is a regression in a landed feature, not in
 Part B.
 
-The lead's fix-round brief asked for `measure-states.mjs` and did **not** name
-`measure.mjs`. If `dev`'s report does not show a 168-cell run, **run it before
-committing.** Do not accept the banner cells as sufficient.
+**Closed 2026-08-28 by the round-3 review**, which ran the grid: **168/168, 0
+findings**, and Home's committed baselines **unmoved** — `heading.y 88 vs 88`,
+`cardRow.bottom 744 vs 744`. It went further than asked and diffed the headline's
+own `Range.getClientRects()` extent across the eight shell cells with and without
+the CSS line: `{lines:3, right:391}`, `{446}`, `{491}`, `{558}` — **identical in
+both trees**. The property costs nothing on any ordinary render. Risk closed by
+measurement, not by argument.
 
 Also recorded: the reviewer's round-2 verdict was measured against the
 **pre-fix** tree — the 8 COLLISION findings, the 441/313 suite numbers and the
@@ -237,6 +241,215 @@ invisible in every seed render, and only surfaced because a reviewer drove a
 37-character name by hand. That is exactly the class of thing a convention entry
 is for. But it is the owner's call and nothing is written until he says the
 words are right.
+
+## Open disagreement for the reviewer to settle — `measure.mjs`'s timeout
+
+The round-3 reviewer's 🟢 4 asked for **report-and-continue**. `dev` deliberately
+chose **raise-the-timeout** instead (`COLD_COMPILE_TIMEOUT_MS = 60000` via
+`page.setDefaultTimeout()` at all five `newPage()` sites) and argued it:
+
+> a cold compile is a *wait*, not a broken cell, so skipping trades "slow" for
+> "no numbers" — the exact failure the review argues against for ARTWORK;
+> `guarded()` in `measure-states.mjs` protects state-mutating blocks with real
+> preconditions, which the grid loop has none of, and wrapping 168 cells would
+> swallow genuine layout failures; and the file **already concedes 60 s for this
+> same cold compile** one line below the `goto` that kept the 30 s default.
+
+The lead's read: both are right about different things, and the distinction they
+are talking past each other on is **setup step vs. measurement cell**. The
+finding was about `applyPreferences`, a *setup* step — guarding that costs one
+unmeasured axis, not a wrong number. Guarding the 168 *cells* would indeed
+swallow real layout failures, which is `dev`'s strongest point and is not what
+was asked for. **Reviewer decides.** It is the third occurrence of this class, so
+"we made the window bigger" needs to be a judgement someone signed, not a default.
+
+### ⚖️ RULED 2026-08-28 by the cleanup-round review — the window is **not** the fix
+
+Full reasoning: `docs/features/cleanup-2026-08-28-review.md` → "The ruling".
+
+**`dev` is right about the 168 cells and that half is now settled**: nobody may
+wrap the route loop — a `try/catch` there turns a real layout failure into a
+skipped cell, which is the "no numbers" failure both sides argue against.
+
+**`dev` is wrong that this closes 🟢 4, and it is mechanical, not a matter of
+taste.** `COLD_COMPILE_TIMEOUT_MS` moves the *default*; the line that expires
+is `waitForSelector('.setting-choice', { timeout: 60000 })`, which carries an
+**explicit** 60 s that already wins over the default. Raising the default to
+the same 60 s buys that line nothing — `dev`'s own "the file already concedes
+60 s one line below the `goto`" is, read carefully, the argument against the
+fix. Reproduced live on this tree, with the fix in place:
+`node tools/measure.mjs http://localhost:4200 --route / --viewport 1024x768
+--theme light --lang de` died on `Timeout 60000ms exceeded … locator('.setting-choice')`,
+uncaught, **before `SUMMARY` printed** — so the already-measured cells lose
+their findings too. The same command after `/einstellungen` compiled: 1/1,
+0 findings.
+
+**What must be wrapped:** the `applyPreferences` **call**, per `(theme,
+language)` axis, with `note('INSTRUMENT', …)` and a mandatory `continue` —
+never the 14-route loop. `continue` is load-bearing: measuring 14 routes
+against unknown theme/language yields *mislabelled* numbers, which is worse
+than none. Cost when it fires: **14 of 168 cells, 8.3 %**, and the run still
+reaches `SUMMARY`. Today the same expiry costs up to 168 cells and the summary.
+Same guard on the four later `applyPreferences` calls (`:791 :844 :912 :1012`).
+
+**Keep the constant** — it genuinely helps the `goto` and the two clicks. The
+answer is *both*, not either. Filed as the round's only 🟠. Fourth pass at this
+class; if it ships unguarded again it is 🟠 on sight, not 🟢.
+
+**Correction to the bullet below:** `frontend/README.md:47` is **not** broken
+and must not be "fixed". `ng serve` runs the `development` configuration, whose
+`environment.development.ts` supplies `devDeviceToken`, and `DeviceTokenStore`
+falls back to it when `localStorage` is empty — tested: a clean context with no
+seeded token renders the full shell at `/einstellungen` (`.setting-choice`
+count 2), not `/pairing`. `GXP_MEASURE_DEVICE_TOKEN` is a **production-build**
+concern (`measure.mjs:167-171`; the script's default base URL is `4300`). What
+killed `dev`'s first run — and the reviewer's — is the cold compile above.
+**Scope note 2026-08-28:** "do not fix the README" applies to the **withdrawn
+`/pairing` diagnosis only**. A *different* and true reason to mention the
+variable emerged later — without it the preference guard is inert — and one
+qualified paragraph was added on those grounds. See the decision below.
+
+## Two stale claims `dev` found and did not touch (lead's files, or out of brief)
+
+- ~~**`frontend/README.md:47`**~~ — **withdrawn 2026-08-28, the diagnosis was
+  wrong.** `dev` reported that following the README lands on `/pairing` because
+  `GXP_MEASURE_DEVICE_TOKEN` is unset, and the lead repeated it. The reviewer
+  disproved it live: `ng serve` runs the `development` configuration, whose
+  `environment.development.ts` supplies `devDeviceToken`, and
+  `DeviceTokenStore.load()` falls back to it when `localStorage` is empty —
+  tested with a clean Playwright context, `/einstellungen` renders the full
+  shell. `GXP_MEASURE_DEVICE_TOKEN` is a **production-build** concern
+  (`measure.mjs:167-171`, default base URL 4300). What actually killed both
+  first runs was the cold compile. **Do not "fix" the README.**
+- **`docs/system-context.md:148`** still says `PropertyContentService` is *"backed
+  by static TS today, swappable for the future Quarkus backend"* (wire-fed since
+  REQ-510), and *"**Two signals:**"* now introduces three.
+
+## ✅ CLOSED — the `getSectionRoute` cleanup round, reviewed 2026-08-28
+
+**NEEDS CHANGES ❌ — 🔴 0 · 🟠 1 · 🟡 2 · 🟢 7.** Full round:
+`docs/features/cleanup-2026-08-28-review.md`.
+
+**Job 1 is clean.** The owner-approved `frontend/CLAUDE.md` bullet is verbatim
+(whitespace-normalised comparison against `docs/handoff.md:415`: equal — the
+re-wrap changed no word), the sentence is *true* as well as approved
+(`routeMatches` `menu-split.ts:39`, `itemForRoute` `:44`; callers at
+`sidebar.component.ts:82` and `section-placeholder.component.ts:56`), and it is
+finally **complete** — third pass at that sentence. `getSectionRoute` and
+`targetSectionId` are now **zero** in `frontend/src/`; `card.targetKey` still
+builds the `@for` track key at `guest-content.mapper.ts:211` and the wire field
+is untouched.
+
+**Reviewer's own numbers:** `tsc` 0 · `ng test` **34 files / 311 passed**
+(static per-file `it(` diff vs. HEAD is exactly −2 in exactly one file, so the
+313→311 arithmetic is honest and no case was lost) · `ng build` clean, **main
+460.08 kB** · `measure.mjs` **168/168, 0 overflowing, 0 truncated, 0 findings**
+with `heading.y 88 / cardRow.bottom 744` in all four 1280×832 cells ·
+`measure-states.mjs` **44/44, 0 findings, 8 blocks**, all five restores
+successful, dev instance verified back to `Anna & Tom` / artwork `null` ·
+backend untouched so **441 · 0** stands · Home screenshot compared against
+`docs/design/assets/home-no-artwork.png`, no regression. `restore()` probed
+independently against six fabricated responses (two more than `dev` tried):
+**0 throws, 5 findings**.
+
+**Blocking:** the 🟠 above — guard `applyPreferences`. **Non-blocking but
+belongs in the same edit:** `docs/system-context.md:148` still says
+`PropertyContentService` is *"backed by static TS today"* and *"Two signals:"*
+for three, **inside the clause `dev` just corrected** — the same defect class
+this round exists to close.
+
+## Carry-forward for the review of the `getSectionRoute` round
+
+The round-3 reviewer, watching that round land while reaping a stale monitor,
+flagged one thing it will not review itself:
+
+**🟢 4 asked for *report and continue*, not merely a longer wait.** The in-flight
+work appears to raise `measure.mjs`'s cold-compile timeout and document it. **A
+raised timeout still ends all 168 cells when it expires.** Whoever reviews that
+round must check the grid genuinely **survives** a cold `ng serve` — i.e. that a
+timing-out block `note()`s itself and the remaining cells still run, the way
+`measure-states.mjs`'s `guarded()` already behaves. This is the third occurrence
+of the class; re-timing it a third time is not closing it.
+
+Confirmed good in the same glance: `measure-states.mjs` gained a `restore()`
+helper that checks `response.ok` and emits `note('INSTRUMENT', 'restore FAILED …')`
+for both the display-name and artwork restores, which closes the silent
+half-restore of finding 🟡 2.
+
+## A defect Part B shipped, found 2026-08-28 and fixed the same night
+
+`measure.mjs:546`'s preference race guard confirmed a server-side write by
+polling **`GET /api/guest/session`** — the endpoint **Part B retired**. Since
+commit `4459859` it received a `404`, which
+`if (!res.ok) return true; // offline states measure what they render` swallowed,
+so the guard returned instantly and checked nothing. Observed, not inferred: a
+full grid emitted `PREFERENCE NOT APPLIED: / asked light/de got dark/de` on the
+first cell of the first axis — precisely the reload-races-the-PUT failure the
+poll's own docblock describes.
+
+**This was the lead's miss.** Part B's brief said to merge and rename the two
+guest reads; nobody grepped for what else called the old paths, and the review
+rounds looked at `src/` rather than at `tools/`. The lesson for the next
+endpoint rename is one line: **an instrument is a client too.**
+
+Fixed in the same night's cleanup round, with a grep for any other caller of
+`/api/guest/session` or `/api/guest/screens/home`.
+
+## Environment note for the next session — read before running the backend
+
+**There is no JDK on `PATH` and `JAVA_HOME` is unset on this box.** Every backend
+run this session used `/tmp/gxp-jdk/jdk-21.0.12+8`, left behind by an earlier
+session. It is in `/tmp`, so **it will not survive a reboot**, and the next agent
+that needs `quarkus:dev` or `./mvnw` will hit *"JAVA_HOME is not defined
+correctly"* and may not find it. `docker` also needs `sg docker -c "…"` here.
+Worth a permanent JDK and a line in `backend/README.md` — owner's call.
+
+## The `unpaired` guard — decided and closed 2026-08-28
+
+`measure.mjs`'s preference guard had **three** independent inertnesses in three
+lines, all found and fixed in one night: it polled the endpoint Part B retired;
+`page.waitForFunction` resolves on the truthiness of what the predicate
+**returns**, so an `async` predicate returns an always-truthy Promise and the
+poll **never blocked since it was written** (the real old predicate resolved in
+**103 ms** holding `false`); and `if (!token) return 'unpaired'` short-circuits
+before any fetch while the dev build keeps no token in `localStorage`.
+
+**Lead's decision on the third**, a fourth option beyond `dev`'s three: report it
+**once at startup**, not per axis. Noting it per cell would add 12 findings to
+every unseeded run and destroy the "0 findings" reading — but that is an argument
+about *where* the note belongs, not about whether to note. Defaulting the token
+to the dev literal was rejected: it would silently pair a production build that
+the seeding comment deliberately lets fail.
+
+**Why it was worth the thread.** The reviewer forced the condition the race
+needs — a 2 s delay on `PUT /api/guest/preferences` — and ran the same command
+twice: unseeded, **23 findings** including one entire axis of 14
+`PREFERENCE NOT APPLIED` plus 8 spurious contrast findings inherited from it;
+seeded, **0**. The inert guard did not merely stay quiet, it silently mislabelled
+whole axes.
+
+`frontend/README.md` gained one qualified paragraph on those grounds — it states
+that the app renders identically either way and that the *measurements* differ
+only under that race, with the measured numbers.
+
+## Recorded, deliberately not fixed — the `401`/`403` case, and a fourth `unpaired` path
+
+`measure.mjs`'s preference poll still lumps `401`/`403` — a stale or wrong
+`GXP_MEASURE_DEVICE_TOKEN`, i.e. the **instrument's** fault, the same family as
+the `404` that was just closed — together with `5xx`, which is a genuine offline.
+`dev` argued it is **latent, not live**: a rejected token makes the kiosk wipe
+itself to `/pairing`, the axis is then skipped with a loud note, so it cannot
+fire silently today. The lead accepted that and did **not** grow the round —
+consistent with the owner's standing preference for not building against
+conditions that are not yet real. If it is ever wanted, it is one line beside the
+404 check: `if (res.status === 401 || res.status === 403) return 'bad-token';`
+
+**A fourth, found by the reviewer and deferred for the same reason.** The
+`unpaired` return is silent *unconditionally*, but the startup note that speaks
+for it is gated on `!seedToken`. So a **seeded** run whose page has no token —
+after a 401 wipe, or with storage blocked — says nothing at all. Same shape as
+the other three. Latent today; recorded rather than fixed, on the same reasoning
+that keeps the `401`/`403` case open.
 
 ## Queued work — approved, not yet done
 

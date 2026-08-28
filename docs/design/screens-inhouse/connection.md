@@ -235,7 +235,9 @@ Two consequences worth writing down rather than re-deriving:
   **≥ 9 px / ≥ 7 px for any name**. Measured with a 37-character unbroken
   display name the headline takes five lines and reaches x450 / x560 — 9 px of
   clearance at both viewports. Without that one CSS line the same name renders
-  **one** line to x935 / x1173 and passes under the bar; the instrument's
+  **one** line to x935…953 / x1173…1195 (the lower figure of each pair is
+  the German cell, the higher the English one) and passes under the bar; the
+  instrument's
   `OVERFLOW` check is the ratchet that says so (removing the line reproduces
   8 findings in exactly those 4 cells).
 

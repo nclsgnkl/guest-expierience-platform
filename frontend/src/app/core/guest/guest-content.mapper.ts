@@ -212,7 +212,6 @@ function mapHome(home: GuestHome, defaultLanguage: string): HomeContent {
         icon: safeIcon(card.icon),
         header: localized(card.title, `actionCards[${index}].title`, defaultLanguage),
         description: localized(card.description, `actionCards[${index}].description`, defaultLanguage),
-        targetSectionId: requireText(card.targetKey, `actionCards[${index}].targetKey`),
         route: requireRoute(card.targetRoute, `actionCards[${index}].targetRoute`),
       }),
     ),

@@ -272,6 +272,28 @@ async function guarded(label, run) {
   }
 }
 
+/**
+ * A restore inside a block's `finally` is the one call whose failure outlives
+ * the run: a 4xx there leaves the dev property renamed or a stay missing for
+ * every later run, on the kiosk and in the next reviewer's screenshots, while
+ * the log claims it was put back. It must never throw — that would mask
+ * whatever sent us into the `finally` — so it reports through `note()`, which
+ * `guarded()` already makes impossible to mistake for a clean run.
+ */
+async function restore(description, call) {
+  try {
+    const response = await call();
+    if (response.ok) {
+      console.log(`  (${description})`);
+      return;
+    }
+    const detail = await response.text().catch(() => '');
+    note('INSTRUMENT', `restore FAILED — ${description}: ${response.status} ${detail}`);
+  } catch (error) {
+    note('INSTRUMENT', `restore FAILED — ${description}: ${error?.message ?? String(error)}`);
+  }
+}
+
 const browser = await chromium.launch();
 
 /* --------------------------- PAIRING --------------------------------- */
@@ -566,8 +588,7 @@ if (ADMIN_PW === null) {
         await context.close();
       }
     } finally {
-      await putStay(active);
-      console.log(`  (display name restored to "${active.displayName}")`);
+      await restore(`display name restored to "${active.displayName}"`, () => putStay(active));
     }
   });
 }
@@ -612,18 +633,19 @@ if (ADMIN_PW === null) {
         await context.close();
       }
     } finally {
-      await fetch(API + '/api/manager/stays', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomId: active.roomId,
-          displayName: active.displayName,
-          checkIn: active.checkIn,
-          checkOut: active.checkOut,
-          status: 'BOOKED',
+      await restore('stay recreated', () =>
+        fetch(API + '/api/manager/stays', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId: active.roomId,
+            displayName: active.displayName,
+            checkIn: active.checkIn,
+            checkOut: active.checkOut,
+            status: 'BOOKED',
+          }),
         }),
-      });
-      console.log('  (stay recreated)');
+      );
     }
   });
 }
@@ -689,18 +711,19 @@ if (ADMIN_PW === null) {
         await context.close();
       }
     } finally {
-      await fetch(API + '/api/manager/stays', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomId: active.roomId,
-          displayName: active.displayName,
-          checkIn: active.checkIn,
-          checkOut: active.checkOut,
-          status: 'BOOKED',
+      await restore('stay recreated', () =>
+        fetch(API + '/api/manager/stays', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId: active.roomId,
+            displayName: active.displayName,
+            checkIn: active.checkIn,
+            checkOut: active.checkOut,
+            status: 'BOOKED',
+          }),
         }),
-      });
-      console.log('  (stay recreated)');
+      );
     }
   });
 }
@@ -832,9 +855,12 @@ if (ADMIN_PW === null) {
         await context.close();
       }
     } finally {
-      await putProperty({ ...property, artworkAssetId: previousArtwork });
-      await fetch(API + `/api/manager/assets/${asset.id}`, { method: 'DELETE', headers: auth });
-      console.log('  (property artwork restored, throwaway asset deleted)');
+      await restore('property artwork restored', () =>
+        putProperty({ ...property, artworkAssetId: previousArtwork }),
+      );
+      await restore('throwaway asset deleted', () =>
+        fetch(API + `/api/manager/assets/${asset.id}`, { method: 'DELETE', headers: auth }),
+      );
     }
   });
 }

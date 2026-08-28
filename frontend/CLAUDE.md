@@ -29,10 +29,17 @@ this file only adds what it does not already say.
   import `@gxp/api-client` models — components keep reading
   `PropertyContentService`. There is no static content fallback; a spec that
   needs content builds a config double.
-- Routes for menu-shaped things are resolved with
-  `PropertyContentService.getSectionRoute(id)`. Action cards are not
-  menu-shaped any more: they navigate the server-resolved `route` the wire
-  delivers, because enablement/ceiling resolution lives on the server.
+- **Routes come from the wire, not from a lookup.** Every menu-shaped thing —
+  a sidebar entry, an overflow tile, an action card — navigates the
+  server-resolved `route` the payload delivers, because enablement and
+  ceiling resolution live on the server. For the reverse direction, from the
+  current URL back to the item that claims it, use
+  `layout/sidebar/menu-split.ts`'s `routeMatches(item, url)` /
+  `itemForRoute(items, url)`; `SidebarComponent` and
+  `SectionPlaceholderComponent` share them, so a route normalises identically
+  in both. There is no id→route lookup service —
+  `PropertyContentService.getSectionRoute(id)` was retired in 2026-08-27 once
+  nothing called it.
 - Every in-app route renders inside `ShellComponent`; a section without a real
   design yet gets `SectionPlaceholderComponent`, never a standalone stub page.
   The three kiosk **state** screens — `/pairing`, `/standby`, `/connection` —

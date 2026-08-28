@@ -8,11 +8,9 @@ import type { ResolvedActionCard } from '../../../core/content/property.model';
  * Glass Panel action card (docs/design/screens/home.md -> Glass Panel).
  * Navigates via the card's **server-resolved `targetRoute`**
  * (guest-frontend-integration REQ-511): route resolution moved server-side
- * with the ceiling rule, so the wire value is authoritative — the client
- * re-deriving it from `targetSectionId` would re-implement enablement
- * resolution the server already owns (REQ-515). `getSectionRoute()` remains
- * the mechanism for anything menu-shaped; a card simply is not menu-shaped
- * any more.
+ * with the ceiling rule, so the wire value is authoritative — re-deriving it
+ * client-side from the card's target key would re-implement enablement
+ * resolution the server already owns (REQ-515).
  */
 @Component({
   selector: 'app-action-card',

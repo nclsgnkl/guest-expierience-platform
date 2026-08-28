@@ -13,10 +13,9 @@ const TEST_CARD: ResolvedActionCard = {
   icon: 'phosphorKey',
   header: 'Test-Header',
   description: 'Test-Beschreibung',
-  targetSectionId: 'info',
-  /* The server-resolved route (REQ-511) — used directly; no
-     getSectionRoute() lookup, so no content service is provided here at
-     all: the component became purely input-driven. */
+  /* The server-resolved route (REQ-511) — used directly; nothing is looked
+     up, so no content service is provided here at all: the component is
+     purely input-driven. */
   route: '/info',
 };
 

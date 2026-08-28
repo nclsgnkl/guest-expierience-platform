@@ -31,7 +31,6 @@ function card(id: string, icon: string): ResolvedActionCard {
     icon,
     header: `H-${id}`,
     description: `D-${id}`,
-    targetSectionId: 'info',
     route: '/info',
   };
 }

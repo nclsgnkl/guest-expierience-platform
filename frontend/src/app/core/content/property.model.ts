@@ -92,7 +92,6 @@ interface ActionCardShape<TText> {
   icon: string; // Phosphor glyph name
   header: TText;
   description: TText;
-  targetSectionId: string; // the server's targetKey — kept for getSectionRoute() parity
   route: string; // the server-resolved targetRoute, used directly (REQ-511)
 }
 

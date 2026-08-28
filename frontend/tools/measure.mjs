@@ -78,6 +78,33 @@ const VIEWPORTS = [
   [1280, 832],
   [1440, 900],
 ];
+/**
+ * Playwright's 30 s default is a *cold-compile* timeout here, not a health
+ * check: against a freshly started `ng serve` the first hit on a lazy route
+ * pays for its compile — `/aktivitaeten` alone has been measured at 13 s —
+ * and one expiry inside `applyPreferences` took all 168 cells of a grid run
+ * down with it (Part A review 12, Part B round 1 finding 6, round 3 finding
+ * 4: three recorded occurrences of the same class). Raised so that a slow
+ * compile stays a wait: the *measurement cells* are never caught, because a
+ * `try/catch` there would turn a real layout failure into a skipped cell and
+ * trade "slow" for "no numbers", the failure this instrument exists to
+ * prevent. 60 s is the value `applyPreferences` already concedes for the same
+ * cold compile, one line below the `goto` that kept the default. Explicit
+ * per-call timeouts (the 5 s dropdown waits, the 10 s preference-write poll)
+ * still win, so the deliberately short waits stay short.
+ *
+ * This window is *not* the containment, and must not be re-raised as if it
+ * were: the line that actually expired in every recorded occurrence is
+ * `waitForSelector('.setting-choice')`, whose own explicit 60 s already beats
+ * this default. Containment is `preferencesApplied()` below. Both are needed
+ * — the window buys the `goto` and the clicks their compile time, the guard
+ * keeps an expiry from costing the run.
+ */
+const COLD_COMPILE_TIMEOUT_MS = 60000;
+/** How long the server-side preference write gets to land, and how often the
+    confirmation below re-reads `GET /api/guest/content` while it waits. */
+const PREFERENCE_CONFIRM_TIMEOUT_MS = 10000;
+const PREFERENCE_POLL_INTERVAL_MS = 500;
 const THEMES = ['light', 'dark'];
 const LANGUAGES = ['de', 'en'];
 
@@ -496,10 +523,32 @@ function collect() {
  * buttons — the real write path. Since `guest-frontend-integration` the
  * choice persists SERVER-side (the stay's preference record), so surviving
  * the route loop's `goto()`s needs the fire-and-forget `PUT` to have landed
- * before the next reload hydrates from the session — the second wait below
- * polls the session until the server holds the chosen values (the old
+ * before the next reload hydrates from it — the second wait below polls
+ * `GET /api/guest/content` until the server holds the chosen values (the old
  * sessionStorage stand-in was synchronous and needed no such wait; without
  * it, a reload can race the write and re-render the previous preference).
+ *
+ * That poll addressed `GET /api/guest/session` — the endpoint Part B retired
+ * — from 4459859 until 2026-08-28, and the `!res.ok` escape below swallowed
+ * its `404`, so the guard returned instantly and confirmed nothing. A `404`
+ * from THIS endpoint is therefore no longer treated as offline: it means the
+ * instrument is pointed at a path the server does not serve, and it is
+ * reported under its own heading rather than passing silently.
+ *
+ * The loop is driven from node on purpose. `page.waitForFunction` resolves on
+ * the *truthiness of what the predicate returns*, and an `async` predicate
+ * returns a Promise — always truthy — so it resolves on the first tick no
+ * matter what the check decides (measured 2026-08-28: a deliberately
+ * mismatching server state "confirmed" in 311 ms, the returned handle holding
+ * `false`). `page.evaluate` does await, so the fetch stays in the page and the
+ * polling lives out here.
+ *
+ * Two states are not failures and end the wait: `unpaired` — no token in
+ * `localStorage`, so nothing was persisted to confirm against (the dev build
+ * carries its token as a build-time fallback, so a run without
+ * `GXP_MEASURE_DEVICE_TOKEN` lands here and this guard cannot help it;
+ * reported ONCE at startup, not from here — see the `seedToken` check before
+ * PASS 1) — and `offline`, where the kiosk measures what it renders.
  */
 async function applyPreferences(page, theme, language) {
   await page.goto(baseUrl + '/einstellungen', { waitUntil: 'load' });
@@ -514,23 +563,56 @@ async function applyPreferences(page, theme, language) {
     [theme, language],
     { timeout: 5000 },
   );
-  try {
-    await page.waitForFunction(
+  const deadline = Date.now() + PREFERENCE_CONFIRM_TIMEOUT_MS;
+  let outcome = false;
+  while (outcome === false && Date.now() < deadline) {
+    outcome = await page.evaluate(
       async ([t, l]) => {
         const token = localStorage.getItem('gxp.device-token');
-        if (!token) return true; // unpaired — nothing to persist against
-        const res = await fetch('/api/guest/session', {
+        if (!token) return 'unpaired'; // nothing to persist against
+        const res = await fetch('/api/guest/content', {
+          cache: 'no-store', // never revalidate: a version-stamp ETag can 304 a stale body back
           headers: { Authorization: 'Bearer ' + token },
         });
-        if (!res.ok) return true; // offline states measure what they render
-        const session = await res.json();
-        return session.preference?.appearance === t && session.preference?.language === l;
+        if (res.status === 404) return 'endpoint-missing'; // the instrument is wrong, not the kiosk
+        if (!res.ok) return 'offline'; // offline states measure what they render
+        const content = await res.json();
+        return content.preference?.appearance === t && content.preference?.language === l;
       },
       [theme, language],
-      { timeout: 10000, polling: 500 },
     );
-  } catch {
+    if (outcome === false) await page.waitForTimeout(PREFERENCE_POLL_INTERVAL_MS);
+  }
+  if (outcome === 'endpoint-missing') {
+    note(
+      'INSTRUMENT',
+      'GET /api/guest/content answered 404 — the preference guard confirmed nothing',
+    );
+  } else if (outcome === false) {
     note('PREFERENCE WRITE NOT CONFIRMED', `${theme}/${language} — reloads may show stale values`);
+  }
+}
+
+/**
+ * `applyPreferences` as a guarded *setup* step. It produces no measurement —
+ * it only puts the page into a known state — so an expiry there must cost the
+ * axis, not the process: uncaught it kills the run before `SUMMARY` prints,
+ * losing the findings of every cell already measured. The caller MUST
+ * `continue` on `false`; running the routes anyway would measure them against
+ * an unknown theme and language, and 14 mislabelled numbers are worse than
+ * 14 missing ones. Cost when it fires is one axis — 14 of 168 cells.
+ *
+ * This is deliberately not the shape used for the cells themselves, which
+ * stay unguarded (see `COLD_COMPILE_TIMEOUT_MS`).
+ */
+async function preferencesApplied(page, theme, language, where) {
+  try {
+    await applyPreferences(page, theme, language);
+    return true;
+  } catch (error) {
+    const reason = error?.message ?? String(error);
+    note('INSTRUMENT', `preferences ${theme}/${language} at ${where} skipped: ${reason}`);
+    return false;
   }
 }
 
@@ -662,6 +744,27 @@ console.log(
     `${viewports.length} viewports = ${routes.length * themes.length * languages.length * viewports.length} combinations`,
 );
 
+/* The preference-write guard in `applyPreferences` re-reads the server's
+ * stored preference over `Authorization: Bearer <token>`, and reads that token
+ * from `localStorage` — where only `GXP_MEASURE_DEVICE_TOKEN` ever puts one.
+ * The development build supplies `devDeviceToken` as an in-memory fallback in
+ * `DeviceTokenStore.load()` and deliberately does not persist it, so an
+ * unseeded run against `ng serve` renders and measures exactly as a seeded one
+ * does — but every `applyPreferences` returns `unpaired` before it fetches,
+ * and the guard confirms nothing. That is worth saying out loud; it is not
+ * worth saying twelve times. It is one property of the run, so it is reported
+ * once, here, rather than per (theme, language) axis, which would bury the
+ * finding count the grid's health is read from.
+ */
+if (!seedToken) {
+  note(
+    'INSTRUMENT',
+    'no GXP_MEASURE_DEVICE_TOKEN: no token is written to localStorage, so the ' +
+      'preference-write guard short-circuits as `unpaired` and confirms nothing ' +
+      'this run (the measurements themselves are unaffected)',
+  );
+}
+
 console.log('\n############ PASS 1 — no-scroll grid, status-bar box, wrapping ############');
 
 for (const [w, h] of viewports) {
@@ -672,9 +775,10 @@ for (const [w, h] of viewports) {
     }),
   );
   const page = await context.newPage();
+  page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
   for (const theme of themes) {
     for (const language of languages) {
-      await applyPreferences(page, theme, language);
+      if (!(await preferencesApplied(page, theme, language, `${w}x${h}`))) continue;
       console.log(`\n=== ${w} x ${h} · ${theme} · ${language} ===`);
       for (const route of routes) {
         await page.goto(baseUrl + route, { waitUntil: 'load' });
@@ -770,7 +874,11 @@ for (const [w, h] of viewports.filter(([vw]) => vw === 1024 || vw === 1280)) {
         }),
       );
       const page = await context.newPage();
-      await applyPreferences(page, theme, language);
+      page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
+      if (!(await preferencesApplied(page, theme, language, `${w}x${h}`))) {
+        await context.close();
+        continue;
+      }
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
       await page.waitForSelector('.status-bar');
       await page.waitForTimeout(120);
@@ -822,7 +930,11 @@ for (const [w, h] of viewports) {
         }),
       );
       const page = await context.newPage();
-      await applyPreferences(page, theme, language);
+      page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
+      if (!(await preferencesApplied(page, theme, language, `${w}x${h}`))) {
+        await context.close();
+        continue;
+      }
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
       await page.waitForSelector('.status-bar');
       for (const [which, name] of [
@@ -889,7 +1001,11 @@ for (const [w, h] of viewports.filter(([vw]) => vw === 1024 || vw === 1280)) {
         }),
       );
       const page = await context.newPage();
-      await applyPreferences(page, theme, language);
+      page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
+      if (!(await preferencesApplied(page, theme, language, `${w}x${h}`))) {
+        await context.close();
+        continue;
+      }
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
       await page.waitForSelector('.sidebar');
       const closed = await page.evaluate(collect);
@@ -988,7 +1104,11 @@ for (const theme of themes) {
     }),
   );
   const page = await context.newPage();
-  await applyPreferences(page, theme, 'de');
+  page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
+  if (!(await preferencesApplied(page, theme, 'de', `${w}x${h}`))) {
+    await context.close();
+    continue;
+  }
   await page.goto(baseUrl + '/', { waitUntil: 'load' });
   await page.waitForSelector('.action-card');
   await page.waitForTimeout(250);

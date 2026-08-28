@@ -15,8 +15,7 @@ import type { PropertyConfig } from './property.model';
  * a writable signal — the static data file was deleted per D6, and the
  * boundary strictness moved to `guest-content.mapper.spec.ts`). What this
  * spec owns: the component-facing semantics — per-field language resolution
- * over server maps, the settings entry in `getSectionRoute()`, the loud
- * throws on unknown ids and on reads before any config is held.
+ * over server maps and the loud throw on a read before any config is held.
  */
 const CONFIG: PropertyConfig = {
   propertyName: 'Testhaus',
@@ -54,7 +53,6 @@ const CONFIG: PropertyConfig = {
         icon: 'phosphorKey',
         header: { de: 'Check-Out', en: 'Check-out' },
         description: { de: 'Bis 11:00', en: 'By 11:00' },
-        targetSectionId: 'info',
         route: '/info',
       },
     ],
@@ -154,18 +152,6 @@ describe('PropertyContentService', () => {
   it('a rejected wire brand reads as null — the defaults stay in force (REQ-512)', () => {
     const { service } = setup('de', { ...CONFIG, branding: null });
     expect(service.branding()).toBeNull();
-  });
-
-  it('getSectionRoute() resolves menu items AND the settings entry', () => {
-    const { service } = setup();
-    expect(service.getSectionRoute('info')).toBe('/info');
-    expect(service.getSectionRoute('home')).toBe('');
-    expect(service.getSectionRoute('einstellungen')).toBe('/einstellungen');
-  });
-
-  it('getSectionRoute() throws for an unknown id — loudly, in tests, not silently on a kiosk', () => {
-    const { service } = setup();
-    expect(() => service.getSectionRoute('does-not-exist')).toThrowError(/does-not-exist/);
   });
 
   it('reading content before anything is loaded throws — a guard let a route through early', () => {

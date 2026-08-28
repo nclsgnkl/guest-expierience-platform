@@ -352,7 +352,7 @@ touched**, so the backend baseline (441 run · 0 failures · 2 environmental
 | 🟠 1 | `measure-states.mjs` no longer guards `.home-content__screen` (Home's whole left flex item, x138…**794** / x172…**992**, sized by the card row). It collects `.heading-block` — fixed `--size-heading`, x138…**450** / x172…**562** — and, tighter, the headline's own `Range.getClientRects()` extent, and reports a `COLLISION` against each. `.home-content__screen` and `.home-content__widgets` are still **logged**, so the corrected doc figures are reproducible from a run; neither is guarded, because the bar legitimately lies over both |
 | 🟠 2 | `connection.md` → "Where the bar lands, measured" and `02-design.md` §6.3 corrected to the measured values, with the element renamed and the root cause recorded (x475 = x449.6 + `--space-7`, i.e. the gap measured from the heading **block**). The anchor is restated as **"the empty band between Home's heading and its card row"** |
 | 🟠 3 | The owner question was **withdrawn**, not re-posed — see "What must happen next" above |
-| 🟡 4 | `overflow-wrap: anywhere` on `.heading-block__headline`. Mutation-probed: removing that one line makes a 37-character unbroken name render **one** line to x935 (1024) / x1173 (1280) and the instrument reports **8 findings in exactly the 4 long-name cells**; with it, five lines reaching x450 / x560 and **0 findings** |
+| 🟡 4 | `overflow-wrap: anywhere` on `.heading-block__headline`. Mutation-probed: removing that one line makes a 37-character unbroken name render **one** line to x935 de / x953 en (1024) and x1173 de / x1195 en (1280) and the instrument reports **8 findings in exactly the 4 long-name cells**; with it, five lines reaching x450 / x560 and **0 findings** |
 | 🟡 5 | `docs/features/index.md:19` rewritten against the redesign (status → In Review, owner → `dev → reviewer`, the closed clamp finding removed, the verification sentence taken from the re-run) |
 | 🟡 6 | `staleness-banner.component.ts` and `shell.component.html` say **BAR**, matching the CSS comment and the spec's retirement of "the pill grown into a panel" |
 | 🟢 7 | The stronger option taken: the instrument gained a **display-name axis** — it renames the active stay to a 37-character unbroken name through the manager API, measures 4 cells (2 viewports × 2 languages) and renames it back inside a `finally`. That is also finding 4's ratchet, and it makes the "24 cells" claim reproducible: the run is now **20 banner cells** of 44 |
@@ -371,8 +371,14 @@ after it.
 **Style note for whoever reviews the instrument diff:** `measure-states.mjs` is
 **not** Prettier-clean at HEAD (printWidth 100 vs. its long template-literal
 log lines). A `prettier --write` slipped in during this round and was reverted
-line by line, so the diff carries no drive-by reformatting; the file keeps its
-existing style.
+line by line, so the file keeps its existing style. The revert is one line
+short of complete, and round 3 measured it: of the 24 hunks of
+`git diff -U0 measure-states.mjs`, normalised for whitespace, **exactly one is
+a pure reflow** — `@@ -249 +353,2 @@`, the STALE-pill
+`if (heading && …) note('COLLISION', …)` line broken across two, in a block
+this round did not otherwise touch. It is semantically identical and moves the
+file *toward* Prettier-clean, so it was left in place; the other 23 hunks are
+intended changes.
 
 ---
 
