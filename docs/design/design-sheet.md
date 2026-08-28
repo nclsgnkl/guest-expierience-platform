@@ -421,11 +421,23 @@ unter [`screens-inhouse/`](screens-inhouse/) — bewusst **nicht** unter
 `screens/`, das ausschließlich den Figma-Bestand dokumentiert. Jede Datei
 trägt ein Provenienz-Banner; ein Figma-Re-Import bringt nichts davon zurück.
 
+> **Abgeglichen 2026-08-28.** Diese Tabelle ist der **Index der In-Repo-Designs**
+> und lag zwei Einträge zurück: `menu-overflow.md` (2026-08-27) und `info.md`
+> (2026-08-28) waren nie aufgenommen worden, obwohl beide Dateien existieren.
+> Nachgetragen — eine reine Dokumentations-Abgleichung, keine Design-Änderung.
+> Zwei Zeilen tragen dabei eine Einschränkung, die 📋 allein nicht ausdrückt:
+> der **Menü-Überlauf ist Chrome, kein Screen** (keine Route, keine URL), und
+> **Info ist entworfen, aber noch nicht gebaut** — anders als die vier übrigen
+> Einträge, die alle laufen. Wer das 📋 dieser Tabelle als „selbst entworfen
+> **und gebaut**“ liest, läge bei Info falsch.
+
 | Screen | Kurzfassung | Spezifikation |
 |---|---|---|
 | **Pairing** 📋 | Markenneutral (vor der Session gibt es kein Branding): ein Glas-Panel, Kopplungs-Code als Held in `--text-display`, Status-Zeile mit Punkt, keinerlei Bedienelemente — der Ablauf ist kiosk-seitig unbeaufsichtigt | [`screens-inhouse/pairing.md`](screens-inhouse/pairing.md) |
 | **Standby** 📋 | Leeres Zimmer (`VACANT`): Mesh, zentrierter Block aus Logo + server-aufgelösten Standby-Texten, Statusleiste bleibt funktional, keine Navigation (Datensparsamkeit bis in die UI) | [`screens-inhouse/standby.md`](screens-inhouse/standby.md) |
 | **Connection lost** 📋 | Gepaart, Server unerreichbar, kein Cache: ein Glas-Panel, `WifiSlash` in `--color-status-offline` (erste Verwendung der Status-Palette, dekorativ), selbstheilend ohne Button; spezifiziert dort auch die **Stale-Pille** (Chrome) | [`screens-inhouse/connection.md`](screens-inhouse/connection.md) |
+| **Menü-Überlauf** 📋 — *Chrome, kein Screen* | Ab mehr als fünf freigeschalteten Sektionen wird der fünfte Sidebar-Slot zum Auslöser (`DotsThree`, Label `nav.more`) und der Rest des Katalogs liegt in einem Popover — alphabetisch sortiert, ohne Obergrenze, ohne Route und ohne URL. Entworfen 2026-08-27 (`sidebar-catalogue-overflow`, D6), **gebaut** | [`screens-inhouse/menu-overflow.md`](screens-inhouse/menu-overflow.md) |
+| **Info** 📋 — *entworfen, **noch nicht gebaut*** | Erster **Modul**-Screen überhaupt und damit die Vorlage für die rund zwanzig folgenden: Titel = das Katalog-Label der Sektion, ein Glas-Panel, zwei gestapelte Label/Wert-Zeilen (Check-out aus `{stay.checkOut\|…}`, fiktiver WLAN-Code). Keine neuen Tokens, keine neuen Icons, kein fokussierbares Element im Inhaltsbereich. Entworfen 2026-08-28; **implementiert wird er erst, wenn `module-content` (Part C) die Werte auf die Leitung legt** | [`screens-inhouse/info.md`](screens-inhouse/info.md) |
 
 ---
 
