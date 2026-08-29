@@ -28,8 +28,17 @@ import { GuestAssetService } from '../../../core/guest/guest-asset.service';
  * `max-width: 18rem` flex item scrolled Home horizontally at both reference
  * viewports; frontend/CLAUDE.md -> Layout, defect D7's lesson). Offsets are
  * relative to `.home-content` (which is the positioned, stacking-context
- * parent), i.e. the frame coordinate minus the content area's own origin
- * (x 172 / y 24 — see the measured baseline in `home.md` -> Layout).
+ * parent), i.e. the frame coordinate minus the content area's own origin.
+ * That origin is **derived, not a literal**: horizontally it is
+ * `--space-7` (the shell's inline padding) + `--size-sidebar` + `--space-8`
+ * (the shell's gap), vertically `--space-6` (the shell's block padding).
+ *
+ * 2026-08-29 (review pass 2, finding #1): `left` used to be the literal
+ * `14.03125rem`, i.e. `396.5 - 172` computed against the content origin of
+ * the day. When `--size-sidebar` went 6.25rem -> 6.5rem the content column
+ * moved to x 176 and this layer moved with it, measured x 396.5 -> 400.5 at
+ * 1280 x 832 and 317.19 -> 320.38 at 1024 x 768, off its specified box. It
+ * is derived from the token now, so the next rail change costs nothing here.
  */
 @Component({
   selector: 'app-hero-artwork',
@@ -41,11 +50,15 @@ import { GuestAssetService } from '../../../core/guest/guest-asset.service';
   styles: `
     :host {
       position: absolute;
-      /* 396.5 - 172 = 224.5px; 77.5 - 24 = 53.5px; 775 x 499.5px — all at the
-         16px baseline root, expressed in rem so the box scales with the
-         viewport-proportional root like every other size. */
-      left: 14.03125rem;
-      top: 3.34375rem;
+      /* The specified frame coordinates minus .home-content's own origin;
+         775 x 499.5px for the box. 24.78125rem = 396.5px and 4.84375rem =
+         77.5px at the 16px baseline root — every length is in rem so the
+         whole box scales with the viewport-proportional root like the rest
+         of the layout. The x expression subtracts the three lengths that
+         make up the content origin instead of the 172px it once resolved to
+         (see the class comment): 396.5 - 32 - 40 - 104 = 220.5px today. */
+      left: calc(24.78125rem - var(--space-7) - var(--size-sidebar) - var(--space-8));
+      top: calc(4.84375rem - var(--space-6));
       width: 48.4375rem;
       height: 31.21875rem;
       /* Behind the layout, above the mesh: .home-content is a stacking

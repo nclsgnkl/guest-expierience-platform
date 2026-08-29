@@ -110,21 +110,32 @@ grid-template-columns: repeat(5, calc(var(--size-sidebar) - 2 * var(--space-3)))
 gap: var(--space-2);
 ```
 
-The track width is the **sidebar item's own derived box** — `6.25rem − 2 ×
-0.5rem` = **5.25rem** — so the panel's tiles and the sidebar's items stay one
+The track width is the **sidebar item's own derived box** — `6.5rem − 2 ×
+0.5rem` = **5.5rem** — so the panel's tiles and the sidebar's items stay one
 number (`sidebar.component.css` sets the same precedent: *derived, not
 tokenised*).
 
+> **The panel grew with the rail on 2026-08-29** (owner decision on
+> `--size-sidebar`, 6.25rem → 6.5rem — `../tokens.md` → Sizing). Nothing in
+> this file was decided again: the track is the same expression it always was,
+> so a wider rail item is a wider tile, and the table below moved with it. The
+> pre-2026-08-29 figures were 5.25rem tracks, a 29.25rem panel and **376 px /
+> 470 px**.
+
 | Columns | Panel content+padding | Border box (what a browser reports) | at 1024×768 | at 1280×832 |
 |---|---|---|---|---|
-| 5 | 29.25rem | 29.25rem + 2px | **376 px** | **470 px** |
-| 6 | 34.875rem | 34.875rem + 2px | **448 px** | **560 px** |
+| 5 | 30.5rem | 30.5rem + 2px | **392 px** | **490 px** |
+| 6 | 36.375rem | 36.375rem + 2px | ≈ 468 px | 584 px |
 
 The `+ 2px` is `--border-glass`'s 1 px hairline on each side. It is deliberately
 not expressible in `rem` — `docs/constitution.md` → Styling exempts hairline
 borders and blur radii from the rem rule — which is why the rem column and a
 measured `getBoundingClientRect().width` differ by exactly 2 px and always will.
-Measured 2026-08-27: 376 px / 470 px.
+Measured 2026-08-29 (`tools/measure.mjs`), 5 columns, panel border box:
+**392 × 167 px** at 1024×768 and **490 × 208 px** at 1280×832 — was 376 × 160
+and 470 × 200. Still inside the viewport at both, grid not scrolling. **The
+6-column row is arithmetic only** — six columns has never been built, so it has
+never been measured, and it was not measured at 5.25rem tracks either.
 
 Both fit at the 1024×768 minimum, so measurement does not decide it. **5 wins on
 three stated grounds:** the panel stays visually subordinate to the content area;
@@ -134,21 +145,68 @@ menu*; and the `%dev` catalogue puts 9 sections in it, filling 5 + 4. Moving to
 
 Each tile:
 
-- square (`aspect-ratio: 1`), 5.25rem — **67 px at the 1024×768 floor**, well
+- square (`aspect-ratio: 1`), 5.5rem — **70 px at the 1024×768 floor**, 88 px
+  at 1280×832 (67 / 84 px before 2026-08-29), well
   above `--size-touch-min` (2.75rem = 35 px there). *(The token is
   `--size-touch-min`. `--size-touch-target` does not exist.)*
 - flex column, `gap: var(--space-1)`, centred — the sidebar item's internals;
 - glyph `--size-icon-md`, the section's own configured icon;
 - label `--text-label`, **wrapping to at most 2 lines** and clamped
   (`-webkit-line-clamp: 2`) — the longest fixture labels ("Anreise & Abreise",
-  "Ärztliche Versorgung") need two lines at 5.25rem. *(Until 2026-08-28 this
+  "Ärztliche Versorgung") need two lines at 5.5rem. *(Until 2026-08-28 this
   was "the one place the panel diverges from the sidebar, which sets
   `white-space: nowrap` and lets a long label overflow". The rail now carries
   the same two-line clamp — owner decision, see
   `../../features/home-screen-prototype/01-prd.md` → REQ-007 — so the panel
   and the rail agree. The tile keeps `--size-icon-md` where the rail item
   stepped down to `--size-icon-sm`: the tile spends `--space-2` on padding
-  where the rail item spends `--space-4`, so it has the height to spare.)*;
+  where the rail item spends `--space-4`, so it has the height to spare.
+  ⚠️ **The second half of that sentence expired on 2026-08-29**: the rail went
+  back to `--size-icon-md` after a measurement (the item stays 88 × 88 / 70.41²
+  square with a 26px glyph, one- and two-line labels alike). Both render `md`
+  again, so there is no divergence left to explain.)*
+  *(2026-08-29: the rail's corrections of that morning were checked here and
+  **deliberately not applied** — the cause they fix does not exist in a tile.
+  The tile reserves no second line, so its one-line labels are already
+  optically centred: measured at 1280×832 in the then-84px tile, a one-line
+  tile has glyph top 19.2px / ink bottom 19.8px, against 11.41 / 12 for a
+  two-line one — the whole group is centred by the flex column, and the price
+  is that tile glyphs do not share a line, which the panel accepts and the
+  rail does not. Nor is the tile's label pinched by the `--space-2` padding
+  the way the rail's was by `--space-4`/`--space-3`: it takes its max-content
+  width and, for an unbreakable word, its min-content width — "Hausordnung"
+  renders 78px wide inside the then-72px content box and stays 3px clear of
+  the tile's edge. Nothing clamped in either language at either viewport.
+  **The four figures in this paragraph were measured in the 84px tile, before
+  the same day's widening** to 88px; the run after it reports 0 truncated and
+  0 clamped tiles again, but the offsets themselves were not re-measured, and
+  the conclusion does not turn on them — nothing in a tile reserves space, so
+  the flex column keeps centring whatever is there. `Hausordnung`'s ink is a
+  property of the string, not of the tile, so its clearance is 5px per side in
+  an 88px tile by the same arithmetic — arithmetic, not a new measurement.)*
+  *(**2026-08-29, review finding: "deliberately not applied" covered the
+  centring, and only the centring.** The rail's other guard — a two-line
+  `max-height` **cap** beside the clamp — was never assessed for the tile, and
+  the tile needed it. **The reason first written here was wrong and is
+  corrected 2026-08-29 (review pass 2, finding #3):** it said the rail item's
+  height is pinned by `width: 100%` + `aspect-ratio: 1` alone and that the
+  tile, unlike it, is not. `aspect-ratio` does not pin a flex item whose
+  content overflows — **both** boxes need `aspect-ratio`/grid raster **plus**
+  the two-line cap, for the same reason. Measured with `-webkit-line-clamp`
+  forcibly neutralised on one overlong label **and the cap removed from each
+  in turn**: the tile goes **88 → 135.56 px** at 1280×832 and
+  **70.39 → 108.39 px** at 1024×768, and the rail item **88 → 131.97 px** and
+  **70.41 → 117.98 px** — both out of their square raster. *(The floor figure
+  for the rail item depends on how many lines the chosen string takes in the
+  narrower box; review pass 2 measured 105.52 px with its own label. The
+  1280×832 pair and the tile reproduce the review exactly.)* (The earlier
+  figures here — tile 104.38 / 83.45, rail item "stays square" — were measured
+  with the *rail's* cap still in place, which is exactly what hid the point.) `.sidebar-overflow__tile-label`
+  now carries the same `max-height: calc(2 * var(--text-label-line-height) *
+  1em)`; re-measured with the clamp neutralised the tile is square again, and
+  with the clamp armed — Chromium 151, where it does arm — **nothing about the
+  rendered panel changes**: tiles 88 / 70.39, panel 490 × 208 / 392.33 × 166.77,
+  one- and two-line labels identical before and after.)*;
 - `border-radius: var(--radius-md)`, transparent background;
 - focus ring identical to `.sidebar-item:focus-visible`;
 - **no active variant.** A tile in the panel is by definition not the active

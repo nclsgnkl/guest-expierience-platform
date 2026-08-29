@@ -115,13 +115,24 @@ staleness hint" — is the requirement:
     place — it is the status bar's drop to Home's **heading ink**, measured in
     the heading column. Measured in the same render, the pill does not overlap
     that column at all: the horizontal separation is **562px at 1280**
-    (heading x172…562, pill x1124…1248) and **447px at 1024** (heading
-    x137.6…449.6, pill x896.4…998.4). The pill hangs over the **widget
+    (heading ~~x172…562~~ **x176…566** since 2026-08-29, pill x1124…1248) and
+    **447px at 1024** (heading ~~x137.6…449.6~~ **x140.78…452.78**, pill
+    x896.4…998.4). The pill hangs over the **widget
     column**, which the banner section below records as *empty by design in
     both directions*, and the nearest content underneath is Home's card row at
     y548…744 / y541…698 — ~644px from the pill's bottom edge to that row's
     bottom at 1280. So: **it collides with nothing because the region under
     the anchor is empty**, not because it fits in a 20px band.
+    > **Heading extents re-measured 2026-08-29** (`tools/measure.mjs` /
+    > `tools/measure-states.mjs` against a live dev backend), because
+    > `--size-sidebar` went 6.25rem → 6.5rem and Home's content column slid
+    > 4px right at 1280 × 832 / 3.19px at 1024 × 768 — an owner decision
+    > recorded in [`../tokens.md`](../tokens.md) → Sizing, not a correction.
+    > The two **separation** figures are the pre-move ones: the pill is
+    > right-anchored and did not move, so each is ~4px / ~3.2px smaller today
+    > (**arithmetic, not a fresh measurement** — the pill's own x depends on
+    > the clock string in the render, which is why it is not restated here).
+    > The conclusion is untouched: the region under the anchor is empty.
   - The pill is **8px wider at 1280 / 6.4px at 1024** than with the dot (the
     glyph is wider than 0.5rem, minus the tightened gap). It is right-anchored,
     so it grows leftwards into the recorded 48px/38px horizontal clearance to
@@ -269,14 +280,28 @@ before and after. Re-measured to confirm rather than assumed.
 | bar, longest German cell (shell) | `x459 y58 w540 h60` | `x569 y72 w679 h74` |
 | bar, longest English cell (standby) | `x446 y58 w553 h60` | `x554 y72 w694 h74` |
 | chrome (glyph + gap + padding + border) | 51.6 px | 64.0 px |
-| `.heading-block` — the headline's own column, `--size-heading` wide | x138…**450** | x172…**562** |
-| `.home-content__screen` — Home's whole left flex item, sized by the card row at its bottom | x138…**794** | x172…**992** |
-| `.home-content__widgets` — the empty widget column | **x819**…998 (179 px) | **x1024**…1248 (224 px) |
+| `.heading-block` — the headline's own column, `--size-heading` wide ⚠️ | x140.78…**452.78** | x176…**566** |
+| `.home-content__screen` — Home's whole left flex item, sized by the card row at its bottom ⚠️ | x140.78…**796.75** | x176…**996** |
+| `.home-content__widgets` — the empty widget column ⚠️ | **x822.34**…998 (176.06 px) | **x1028**…1248 (220 px) |
 | Home's card row | y541…698 | y548…744 |
 | body / title / timestamp lines | 1 / 1 / 1 in every cell | 1 / 1 / 1 in every cell |
 | **the bar's worst text-to-arc clearance** — body's bottom-right corner, perpendicular | **4.4 → 6.4 px** | **5.1 → 7.7 px** |
 | timestamp's top-right corner → the same arc | 6.4 → 12.4 px | 7.8 → 15.5 px |
 | glyph → the left edge (straight there; 0.3–0.5 px lost to the arc) | 9.4 → 6.4 px | 11.5 → 7.7 px |
+
+> ⚠️ **The three marked rows were re-measured 2026-08-29** (`tools/measure.mjs`
+> and `tools/measure-states.mjs` against a live dev backend) and are **not**
+> what this table carried before. `--size-sidebar` went 6.25rem → 6.5rem, an
+> owner decision recorded in [`../tokens.md`](../tokens.md) → Sizing, so Home's
+> content column starts 4px further right at 1280 × 832 and 3.19px at
+> 1024 × 768. Previous values, for the record: heading block x138…450 /
+> x172…562, screen column x138…794 / x172…992, widget column x819…998 (179 px)
+> / x1024…1248 (224 px). **The rail took its 4px entirely out of the widget
+> column** — the screen column keeps its width to the pixel (655.97 / 820) and
+> only the empty column shrinks. Every other row of this table is unchanged and
+> was re-confirmed in the same run: the bar's boxes came back `x459 y58 w540
+> h60` / `x569 y72 w679 h74` (German, shell) and `x446 y58 w553 h60` /
+> `x554 y72 w694 h74` (English, standby), exactly as recorded.
 
 The last three rows are the only thing 2026-08-28 changed, and they are read
 as *before → after*. Note the third: after the revision the bar's tightest
@@ -296,12 +321,15 @@ nothing further without also widening the left.
 Two consequences worth writing down rather than re-deriving:
 
 - **The bar lies over the empty band between Home's heading and its card row.**
-  Home's left item runs to x794 / x992 and lays its two children out with
+  Home's left item runs to x796.75 / x996 and lays its two children out with
   `space-between` — heading at the top, cards at the bottom — so the band
   beside the heading is deliberately empty. Of the bar's 540 px at 1024:
-  **335 px** sit over that band (x459…794), 25 px over the gutter and 179 px
-  over the widget column; at 1280, **423 px** of 679 over the band, 32 px
-  gutter, 224 px widget column. *(The 1024 figure read 360 px until the third
+  **338 px** sit over that band (x458.83…796.75), 25.6 px over the gutter and
+  176.06 px over the widget column; at 1280, **427 px** of 679 over the band,
+  32 px gutter, 220 px widget column. *(Updated 2026-08-29 from ~~335 / 25 /
+  179~~ and ~~423 / 32 / 224~~ — the three parts are **arithmetic on the
+  re-measured edges above**, not separate measurements, and they still sum to
+  the bar's measured width: 539.6 of 540, 679 of 679.)* *(The 1024 figure read 360 px until the third
   review round re-measured it: 360 is the distance from the bar's left edge to
   the widget column's left edge — 819.2 − 458.8 — which already contains the
   25 px gutter, so the three parts summed to 564 of a 540 px bar.)* The old claim — "the bar overlaps the empty

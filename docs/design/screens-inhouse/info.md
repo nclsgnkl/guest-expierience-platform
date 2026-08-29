@@ -446,13 +446,23 @@ viewports are the same layout at two sizes. Root = `16px` at 1280×832,
 
 | | 1024 × 768 | 1280 × 832 |
 |---|---|---|
-| content area, left edge | x137.6 | x172 |
+| content area, left edge ⚠️ | ~~x137.6~~ **x140.78** | ~~x172~~ **x176** |
 | `<h1>` top | y70.4 | y88 |
 | panel top | y117.8 | y147.2 |
 | panel size (border box) | ~~491.6~~ **490.0** × 137.0 | ~~614~~ **612** × 170.8 |
 | panel bottom | y254.8 → **measured y255** | y318.0 → **measured y318** |
 | **vertical headroom below the panel** | **≈ 494 px** | **≈ 490 px** |
 | value line capacity | ≈ 55 characters | ≈ 55 characters |
+
+> ⚠️ **The content edge was re-measured 2026-08-29** (`tools/measure.mjs
+> --route /info` and `tools/measure-states.mjs`, live dev backend):
+> `--size-sidebar` went 6.25rem → 6.5rem, an owner decision recorded in
+> [`../tokens.md`](../tokens.md) → Sizing and **not a correction** — a
+> re-import brings 6.25rem back. Everything else in this table is unchanged
+> and was re-confirmed in the same run: `<h1>` top y70.4 / y88, panel
+> x140.78…630 (490 wide) at 1024 and x176…788 (612 wide) at 1280, panel top
+> y117.8 / y147.2, bottom y255 / y318. The screen simply starts 3.19 / 4 px
+> further right; its own boxes did not change size.
 
 *(**Measured 2026-08-28** when the screen was built —
 `node tools/measure.mjs --route /info` over 12 route × theme × language ×

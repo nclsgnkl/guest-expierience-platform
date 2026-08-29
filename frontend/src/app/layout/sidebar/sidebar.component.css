@@ -47,7 +47,7 @@
   flex-direction: column;
   align-items: center;
   /* Both groups span the sidebar's inner width so their items derive the
-     same 84px square from it (REQ-022) — without this the settings group
+     same 88px square from it (REQ-022) — without this the settings group
      shrink-wraps its label and its item comes out wider than the nav ones. */
   width: 100%;
 }
@@ -59,8 +59,9 @@
   justify-content: center;
   gap: var(--space-1);
   /* Derived, not tokenised (REQ-022): the item is the sidebar's inner width
-     (--size-sidebar minus 2x --space-3 = 84px), square. --size-sidebar-item
-     (72px) is the Figma component's own box and is 12px narrower than what
+     (--size-sidebar minus 2x --space-3 = 88px since --size-sidebar went to
+     6.5rem on 2026-08-29; 84px before), square. --size-sidebar-item
+     (72px) is the Figma component's own box and is narrower than what
      the reference render shows, which is why "Smart Home" wrapped (D5).
      Deriving keeps one source of truth — see docs/design/tokens.md -> Sizing. */
   width: 100%;
@@ -80,25 +81,87 @@
 }
 
 .sidebar-item__label {
-  /* TWO LINES ARE RESERVED FOR EVERY ITEM, one-liners included (2026-08-28,
-     owner decision — this replaces `white-space: nowrap`). D5's cause was
-     never the wrap: it was that the item's height followed its text, so the
-     item that wrapped grew and pushed its own icon out of the column's
-     rhythm. A fixed two-line box removes the dependency at its root — the
-     item is 84px square whatever a property calls its sections, every icon
-     in the column sits on the same line, and so does every first text line.
-     `nowrap` fixed the symptom and bought it with a label that ran out of
-     its item, which is the overflow this replaces.
+  /* AT MOST TWO LINES, AND NO RESERVED HEIGHT (2026-08-29, owner decision
+     "variant B2" — this replaces the fixed two-line box of 2026-08-28).
 
-     The box is the item's full content width, so what fits is measurable:
-     ink vs. this box is exactly what `tools/measure.mjs` compares. Anything
-     past two lines is clamped with an ellipsis rather than clipped. */
-  width: 100%;
-  height: calc(2 * var(--text-label-line-height) * 1em);
+     D5's cause was never the wrap: it was that the ITEM's height followed its
+     text, so the item that wrapped grew and pushed its own icon out of the
+     column's rhythm. That dependency is broken by TWO rules together, and
+     BOTH are load-bearing: `.sidebar-item`'s `width: 100%` + `aspect-ratio: 1`
+     above, AND the two-line `max-height` cap on this label below.
+     `aspect-ratio` alone does NOT pin a flex item whose content overflows it
+     — corrected 2026-08-29 (review pass 2, finding #3). Re-measured here on
+     an overlong label with the clamp neutralised AND this cap removed: the
+     item goes 88 -> 131.97px at 1280x832 and 70.41 -> 117.98px at 1024x768
+     (the floor's figure depends on how many lines that particular string
+     takes in the narrower box; the review measured 105.52 with its own). The
+     comment that used to stand here said the pair held the item square on
+     its own; it does not, and the `max-height` rule's own comment 50 lines
+     below always said so. Delete the cap and D5 comes back on any engine that
+     ignores `-webkit-line-clamp`. With both rules in place the item is 88px
+     square whatever a property calls its sections.
+
+     Reserving two lines *inside* the item was the 2026-08-28 way of breaking
+     that same dependency, and it cost something the owner rejected on
+     2026-08-29: with the second line reserved but empty, a
+     one-line item's visible icon+label pair sat 4.20px above the item's
+     centre at 1280x832 (3.37px at 1024x768), because the pair was centred
+     inside a box half of which was blank. `align-content: center` moved the
+     line within that box and could not fix it.
+
+     B2 lets the label be exactly as tall as its text and lets
+     `.sidebar-item`'s own `justify-content: center` centre the real pair. The
+     owner chose it over B1 (keep the reservation, keep every icon in the
+     column on one line) in full knowledge of the price, which is recorded in
+     01-prd.md -> REQ-007: WHEN TWO ITEMS TAKE A DIFFERENT NUMBER OF LINES,
+     THEIR ICONS NO LONGER SHARE A LINE (measured 7.79px apart at 1280x832,
+     6.23px at 1024x768). The rail as it renders today is not affected — all
+     six labels it shows are one-liners — but 6 of the 26 seeded catalogue
+     labels DO take two lines in a rail item ("Anreise & Abreise",
+     "Müll & Recycling", "Ärztliche Versorgung", "Essen & Trinken",
+     "Arrival & departure", "Waste & recycling"), so enabling one of them into
+     a sidebar slot is enough to show it. Measured, not assumed.
+
+     `-webkit-line-clamp: 2` is a CAP here, not a reservation: a third line is
+     clamped with an ellipsis, never clipped and never rendered. Both layout
+     models behave the same way, and both were measured (see the comment on
+     `overflow` below).
+
+     THE BOX IS THE ITEM'S FULL WIDTH MINUS --size-sidebar-label-inset PER
+     SIDE. `width: 100%` would be the item's *content* box — 72px inside the
+     88px item — while "Einstellungen" needs 77px on one line at 1280x832
+     (measured; identical at --text-label-weight and --text-label-active-weight,
+     which round to the same advances at 12px). So the label gives the item's
+     `--space-3` inline padding back and spans the pill edge to edge, less the
+     1px inset the owner asked for on 2026-08-29 so the ink is not flush
+     against the pill's border. Nothing else in the item wants that padding:
+     the glyph is centred and 26px wide. */
+  width: calc(100% + 2 * var(--space-3) - 2 * var(--size-sidebar-label-inset));
+  margin-inline: calc(-1 * var(--space-3) + var(--size-sidebar-label-inset));
+  /* A CAP, never a reservation — this is the whole difference from the
+     2026-08-28 `height` it replaces. A one-line label is one line tall and B2
+     holds; a label the clamp does not stop (an engine that ignores
+     `-webkit-line-clamp` entirely) is still cut off at two lines rather than
+     growing the item back into D5. Measured with the clamp forcibly removed:
+     without this the item goes 70.41 -> 103.91px on a five-line label; with
+     it the item stays square and nothing else moves. `1em`, not a token
+     multiple, so the cap follows whichever of the two label sizes applies. */
+  max-height: calc(2 * var(--text-label-line-height) * 1em);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+  /* `overflow: hidden` is what arms the clamp in BOTH layout models, and both
+     exist: with `-webkit-line-clamp` set, Chromium 151 computes `display` to
+     `flow-root` and clamps in modern block layout; with the clamp removed the
+     same declarations compute to a real legacy `-webkit-box`. There is no
+     documented minimum browser version for the kiosk
+     (docs/system-context.md -> NEEDS DECISION), so neither model may be
+     assumed away. Nothing here depends on which one runs: since B2 the label
+     box is exactly as tall as its own text, so there is no free space inside
+     it to distribute — `align-content` / `-webkit-box-pack` would both be
+     no-ops, and neither is set. Measured in both models on 2026-08-29 (see
+     02-design.md -> "Text must not wrap"). */
   overflow: hidden;
   text-align: center;
   /* A menu label is manager-configurable, so its width is not ours to
@@ -112,8 +175,6 @@
 }
 
 .sidebar-item--active .sidebar-item__label {
-  /* `1em` above, not a token multiple, so the reserved height follows
-     whichever of the two label sizes applies without being restated. */
   font-size: var(--text-label-active);
   font-weight: var(--text-label-active-weight);
 }
@@ -161,7 +222,8 @@
 .sidebar-overflow__grid {
   display: grid;
   /* Derived, not tokenised — the same expression `.sidebar-item` derives its
-     own square from (--size-sidebar minus 2x --space-3 = 5.25rem), so a tile in
+     own square from (--size-sidebar minus 2x --space-3 = 5.5rem since
+     --size-sidebar went to 6.5rem on 2026-08-29; 5.25rem before), so a tile in
      the panel and an item in the sidebar stay one number. 5 columns: the panel
      stays subordinate to the content area and echoes the sidebar's 5 slots. */
   grid-template-columns: repeat(5, calc(var(--size-sidebar) - 2 * var(--space-3)));
@@ -188,12 +250,11 @@
   cursor: pointer;
 }
 
-/* The same two-line clamp the sidebar item now carries (2026-08-28): the
-   longest configured labels need two lines at 5.25rem, and a third row of
-   type would push the tile out of square. The tile keeps `--size-icon-md`
-   where the rail item stepped down to `--size-icon-sm`, because a tile
-   spends its height on `--space-2` of padding where the rail item spends
-   `--space-4`. */
+/* The same two-line clamp the sidebar item carries (2026-08-28): the longest
+   configured labels need two lines at 5.5rem, and a third row of type would
+   push the tile out of square. Both render `--size-icon-md` again since
+   2026-08-29 (the rail's step down to `--size-icon-sm` on 2026-08-28 was
+   reverted — see `.sidebar-item__label` above). */
 .sidebar-overflow__tile-label {
   font-size: var(--text-label);
   font-weight: var(--text-label-weight);
@@ -203,6 +264,22 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+  /* THE SAME CAP `.sidebar-item__label` CARRIES, AND FOR THE SAME REASON
+     (2026-08-29, review finding): the clamp above is not load-bearing on an
+     engine that ignores `-webkit-line-clamp`, so without a cap the label's
+     text drives the tile's height. THE RAIL ITEM IS NO DIFFERENT — corrected
+     2026-08-29 (review pass 2, finding #3): the earlier version of this
+     comment claimed the tile needed the cap "unlike the rail item", whose
+     `width: 100%` + `aspect-ratio: 1` supposedly held it alone. Measured
+     with the clamp forcibly neutralised on one overlong label AND each cap
+     removed in turn, both leave the square raster: the tile goes
+     88 -> 135.56px at 1280x832 and 70.39 -> 108.39px at 1024x768, the rail
+     item 88 -> 131.97px and 70.41 -> 117.98px. Same failure, same fix, one
+     cap each. With this cap both stay square, and in
+     Chromium 151 — where the clamp does arm — nothing about the rendered
+     tile changes (measured before and after: 88 / 70.39, one- and two-line
+     labels alike). `1em`, like the rail's, so it follows the label size. */
+  max-height: calc(2 * var(--text-label-line-height) * 1em);
   overflow: hidden;
 }
 

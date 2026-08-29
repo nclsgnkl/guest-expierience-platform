@@ -1,11 +1,34 @@
 # Review: Home Screen Prototype
 **Feature:** [index.md](../index.md) | **PRD:** [01-prd.md](01-prd.md) | **Design:** [02-design.md](02-design.md) | **TODO:** [03-todo.md](03-todo.md) | **Analyze:** [04-analyze.md](04-analyze.md)
-**Result:** **PASS ✅** (round 3 final verification — see "Round 3 — final
-verification" at the bottom of this file, which supersedes every earlier result
-for status purposes: 🔴 0 · 🟠 0 · 🟡 1 · 🟢 4, against constitution **v1.3.0**)
+**Result:** **PASS ✅** (sidebar-rail review, pass 3 — see
+"Sidebar-rail review — pass 3" at the bottom of this file, which supersedes
+every earlier result for status purposes: 🔴 0 · 🟠 0 · 🟡 4 · 🟢 3, against
+constitution **v1.10.0**)
 **Reviewed:** 2026-08-18 (round 1) · **Re-verified after fixes:** 2026-08-18 ·
 **Round 3 (visual-defect correction, first review with the visual check):** 2026-08-18 ·
-**Round 3 final verification (rounds 4 + 5 fixes re-measured):** 2026-08-18
+**Round 3 final verification (rounds 4 + 5 fixes re-measured):** 2026-08-18 ·
+**Sidebar-rail review, pass 1 (the four UI rounds of 2026-08-28/29):** 2026-08-29 ·
+**Sidebar-rail review, pass 2 (verification of the pass-1 fixes):** 2026-08-29 ·
+**Sidebar-rail review, pass 3 (final verification of the pass-2 fixes):** 2026-08-29
+
+> **A note on numbering, because this file now has two kinds of "round".**
+> *Rounds 1–6* elsewhere in this file and in `handoff.md` are **implementation**
+> rounds (`dev`); *round 1 / round 3 / round 3 final verification* above are
+> **review** passes. The three 2026-08-29 sections at the bottom are review
+> passes over the sidebar-rail work and are deliberately named by subject
+> rather than given a number that would collide with either sequence.
+
+> ⚠️ **The 2026-08-18 PASS below is history, not the current status.**
+> Four owner-requested UI rounds landed on the sidebar rail after it (see
+> `handoff.md`), and the three sidebar-rail passes at the bottom of this file
+> are about those.
+> **Updated 2026-08-29 by pass 3:** pass 2's three 🟠 Major findings are all
+> **closed and independently re-measured**; nothing 🔴 or 🟠 is open against
+> this feature. The rail stack is still **uncommitted** on
+> `refactor/bce-subpackages-and-boundary-security` (**15** modified files, 0
+> untracked — 13 was pass 2's count, before the pass-2 fix run touched
+> `hero-artwork.component.ts` and `06-review.md`). The owner commits; no agent
+> does.
 
 > Round 1's result below was **PASS ✅** (findings #1–#5 fixed and spot-verified;
 > #6–#8 remain as non-blocking Info notes). It is kept verbatim as history.
@@ -308,6 +331,12 @@ re-screenshot of the heading and card row — no full re-review needed.
 the single 🟡 (finding 1) was approved verbatim by the user and written on
 2026-08-18; see "Proposed `frontend/CLAUDE.md` amendment (finding 1) —
 WRITTEN" below. Nothing is open against this feature.**
+> **Superseded for status purposes 2026-08-29** by the two sidebar-rail review
+> passes at the bottom of this file. *"Nothing is open against this feature"* was
+> true of the code as it stood on 2026-08-18; four owner-requested UI rounds have
+> landed on the sidebar rail since, and pass 2 leaves three 🟠 Major open. Everything
+> in this section is kept verbatim — it is still an accurate record of what was
+> verified on 2026-08-18, and none of it was contradicted by the later rounds.
 
 > **Scope:** verification that rounds 4 and 5 closed the round-3 findings above,
 > against `docs/constitution.md` **v1.3.0** (re-read in full — v1.2.0's
@@ -572,3 +601,564 @@ and written on 2026-08-18, so **no finding from any round remains open**.
    end-to-end framework (the moment anyone wants `measure.mjs`'s numbers to
    *fail* a build) and the 12px-label legibility check at the 1024 floor, which
    the constitution itself records as able to raise the minimum viewport.
+
+---
+
+# Sidebar-rail review — pass 1 (2026-08-29, `reviewer`)
+
+**Result: NEEDS CHANGES ❌** · 🔴 0 · 🟠 5 · 🟡 6 · 🟢 4
+
+> ⚠️ **Reconstructed, not verbatim — read this before quoting anything below.**
+> This pass was run by a **different `reviewer` session and its report was never
+> written to this file**; the working tree carried no record of it at all, which
+> is itself finding #8 of pass 2. The section below was reconstructed on
+> 2026-08-29 by the pass-2 reviewer from a **condensed relay** of the findings,
+> read against the diffs, `handoff.md` and the code. What is round-1-accurate:
+> the **severities, the file:line targets, the counts and the verdict**. What is
+> *not*: the wording — every finding text below is the pass-2 reviewer's
+> paraphrase, so do not cite it as pass 1's own reasoning. Where pass 2 later
+> measured a finding itself, that is recorded in the next section under
+> "Pass-1 findings — verification"; where it could not, it says so.
+>
+> **A second 2026-08-29 review is missing too, and this file cannot reconstruct
+> it.** `frontend/tools/measure.mjs` carries two comments citing *"review
+> 2026-08-29, **Major 1**"* (the `truncated()` / `labelBoxes` rebuild) and
+> *"review 2026-08-29, **Nit 13**"* (the overflow trigger's label being the only
+> rail label still measured as `singleLine`). Neither matches #1 or #13 below,
+> and that file's mtime (10:54) precedes this pass's fix run (12:22–13:09). So
+> an **earlier** 2026-08-29 review exists, is also unrecorded, and its findings
+> are not available. Recorded as a gap rather than smoothed over — and it is the
+> reason `handoff.md`'s *"the review's 🟡 #12–#14 … are untouched"* does not line
+> up with the list below, where #12–#14 are 🟢, not 🟡.
+
+> **Scope:** the four owner-requested UI rounds that landed on the sidebar rail
+> *after* the 2026-08-18 PASS above — 2026-08-28 (two label lines reserved per
+> item; rail glyph `--size-icon-md` → `--size-icon-sm`; **committed in
+> `63fcc6d`**), 2026-08-29 morning (the label box becomes the item's full width;
+> the single line centred) and 2026-08-29 afternoon (`--size-sidebar` 6.25rem →
+> **6.5rem**, new `--size-sidebar-label-inset`, and variant **B2**: the two-line
+> reservation replaced by a `max-height` cap) — against `docs/constitution.md`
+> **v1.10.0**, `docs/design/tokens.md`, `docs/design/screens/home.md` and
+> `docs/design/screens-inhouse/`.
+>
+> **The measurement instruments could not be run in this pass.** Without the
+> Quarkus backend the frontend boots to `/pairing` and the sidebar renders zero
+> items, so `tools/measure.mjs` and `tools/measure-states.mjs` had nothing to
+> measure; this pass fell back to a hand-rolled browser harness. That limitation
+> is why several findings below are about numbers *recorded as measured* rather
+> than about the rendering itself — and it is why finding #5 could be raised at
+> all: the 24px glyph's only written justification was arithmetic that nobody
+> had ever put in front of a browser.
+
+## Findings
+
+| # | Severity | Category | File | Finding | Fix |
+|---|----------|----------|------|---------|-----|
+| 1 | 🟠 Major | Docs vs. code | `docs/features/home-screen-prototype/01-prd.md:403` | **REQ-014 still pins the card row's left edge at `x = 172`, which the shipped code deliberately fails** — it measures **176** since `--size-sidebar` went to 6.5rem. REQ-007's box and REQ-022's `w = 100` were both rewritten for exactly this reason in the same session; REQ-014 was left standing, so the PRD now carries one criterion the implementation is knowingly outside of. A criterion the code deliberately fails is a broken criterion, not a deviation. | Rewrite `x = 172` → `x = 176` the way REQ-022's `w = 100` → `w = 104` was rewritten, and keep the *derivation* ("the sidebar plus one `--space-8` gap, with no additional offset"), which is the part that did not change. Record the Figma deviation once, in `docs/design/tokens.md` → Sizing. |
+| 2 | 🟠 Major | Impact analysis | `frontend/src/app/layout/staleness-banner/staleness-banner.component.css:24` | **`--size-sidebar` has a third consumer and no document names it.** Every write-up lists `.sidebar` and `.sidebar-overflow__grid`; the escalated staleness banner bounds itself with `max-width: calc(100% - var(--size-sidebar) - var(--space-8) - 2 * var(--space-7))`. First order the bound is not binding, but the **second-order** effect is real and unassessed: the bar is right-anchored and did not move, while Home's headline column slid 4px towards it — i.e. the clearance recorded in `docs/features/guest-payload-consolidation/06-review.md:288–290` (the margin that review itself called *"four and five pixels of luck"*) got thinner, on a **manager-authored** headline. Changing a token without enumerating its consumers is the defect; the outcome happening to be safe is not the fix. | Enumerate the three consumers wherever the widening is recorded, and re-measure the banner-vs-headline clearance in the worst instrument cell (37-character unbroken display name) rather than reasoning about it. |
+| 3 | 🟠 Major | As-built record | `docs/design/screens-inhouse/connection.md:118–119, 272–274`, `docs/design/screens-inhouse/info.md:449`, `docs/design/tokens.md:409` | **Four places still carry the pre-widening coordinates.** `connection.md`'s pill-vs-heading separation and its `.heading-block` / `.home-content__screen` / `.home-content__widgets` rows, `info.md`'s content-area left edge, and `tokens.md`'s `--size-widget-col` note ("measured: 224px") were all derived from a 100px rail and were not re-derived. These files are the **as-built** record — their whole value is that they say what the build does — so a stale number here is worse than no number. | Re-measure and update all four, marking which figures are fresh measurements and which are arithmetic on them. |
+| 4 | 🟠 Major | Factual accuracy | `docs/features/home-screen-prototype/handoff.md:117, 233`, `docs/features/index.md:8` | **"All three rounds are uncommitted" is false.** The 2026-08-28 round — including the three rail glyphs stepping to `--size-icon-sm` — is **committed in `63fcc6d` ("frontend adjustments")**. That is not a bookkeeping detail: it decides whether putting `--size-icon-md` back is *repairing an uncommitted mistake* or *a new change on top of a commit*, and the two need different records. | Correct all three places and state the consequence explicitly where the glyph decision is written down. |
+| 5 | 🟠 Major | Design fidelity | `docs/design/screens/home.md:203–215`, `frontend/src/app/layout/sidebar/sidebar.component.html:18, 39, 90` | **The rail glyph's step down to `--size-icon-sm` is now justified by an argument that no longer holds, and it was never measured.** The one recorded reason was arithmetic: `26 + 4 + 2 × 15.6 = 61.2px` against the *then* 84px item's 60px vertical content box. Both terms have since expired — the item is **88px** (a 64px content box) since `--size-sidebar` went to 6.5rem, and the two-line **reservation** the 24px was paid for became a `max-height` **cap** under variant B2. `--size-icon-md` is the extracted Figma value, so the build is sitting 2px below the design for a reason that is gone. | Owner's call ("measure, then decide"). Measure a 26px glyph in a live rail item at both reference viewports, active and inactive, one- and two-line, before changing anything — and if it holds the item square, put `--size-icon-md` back and close the 2026-08-28 deviation in `home.md` rather than restating it. |
+| 6 | 🟡 Minor | Stale comment | `frontend/src/app/layout/sidebar/sidebar.component.css:212, 240` | Two comments still derive the popover track as `--size-sidebar − 2 × --space-3 = **5.25rem**`. The expression is unchanged and correct; the number it resolves to is **5.5rem** since the widening. A comment that states a resolved value has to be re-resolved when the input moves. | `5.25rem` → `5.5rem` in both, noting the previous value and the date. |
+| 7 | 🟡 Minor | Consistency | `frontend/src/app/layout/sidebar/sidebar.component.css:245–255` | **The popover tile did not get the rail's two-line `max-height` cap.** The docs say the tile was "checked and deliberately left alone" — but that assessment covered the **centring** only; the cap was never considered for it. The tile carries the same `-webkit-line-clamp: 2`, and a clamp is not load-bearing on an engine that ignores it. | Give `.sidebar-overflow__tile-label` the same `max-height: calc(2 * var(--text-label-line-height) * 1em)`, and measure with the clamp neutralised so the claim is evidence rather than symmetry. |
+| 8 | 🟡 Minor | Stated as measured | `docs/design/tokens.md:453`, `docs/design/screens/home.md:232` | **"`Einstellungen` is the longest label in the catalogue" is false.** `Hausordnung` measures wider. The superlative is load-bearing in the write-up — it is the reason `Einstellungen` is presented as *the* worst case — so it must be either measured or dropped. (The **decision** is unaffected: the cell it turned on is the 1024 × 768 floor, where `Einstellungen` active genuinely is the tightest.) | Correct the superlative wherever it was written, keep the decision, and state per viewport which label is actually tightest. |
+| 9 | 🟡 Minor | In-place correction incomplete | `docs/features/home-screen-prototype/handoff.md:166, 170, 171, 173, 174` | The afternoon section opens with an explicit promise that every statement it overtook was "corrected in place, dated and pointed here, rather than left standing". Five figures in the morning section were left standing — the label box, two `in 84` box references, the icon top and the single-line ink pair — and one of them (*"icon top inside the item … unchanged"*) was already wrong when it was written. A handoff that promises in-place correction and does not deliver it is worse than one that promises nothing. | Annotate all five in place, dated, with re-measured values. |
+| 10 | 🟡 Minor | Counting error | `docs/design/tokens.md:544` | "The other **six** are colourless and identical in both themes" — adding `--size-sidebar-label-inset` to the in-house table makes it **seven**. Same failure mode the constitution itself records twice (v1.6.1 (c), v1.7.1): a thing is added and the sentence counting the things is not touched. | Six → seven; also check the "nine rows / ten rows" sentence in the same section. |
+| 11 | 🟡 Minor | Attribution | `docs/design/tokens.md`, `docs/features/home-screen-prototype/01-prd.md` → REQ-014, `02-design.md` | **"The content area is 4px narrower" is true of `.shell__content` and misleading about everything inside it** — and the owner rejected `+0.5rem` as *"too expensive for the content area"* on precisely that reading. The card row is sized by its four cards and the heading column by `--size-heading`; the only thing that can absorb the difference is the `flex: 1` widget column REQ-014 requires to exist **and to be empty**. | Measure both `--size-sidebar` values in one live render and record where the 4px actually lands. Record it as a fact about the cost — **not** as an argument to reopen a decision the owner took. |
+| 12 | 🟢 Info | Instrument | `frontend/tools/measure.mjs` | The border-box switch and the new `labelBoxes` invariant are well built: the instrument now asks both halves of the question (does the ink leave the box that paints it; is the label still the size it should be relative to its item), and the expected delta is derived from `--size-sidebar-label-inset` rather than hard-coded. Two reading notes were attached for whoever touches it next. |
+| 13 | 🟢 Info | Robustness | `frontend/src/app/layout/sidebar/sidebar.component.css` → `.sidebar-item__label` | The two-line cap is **exactly** two line boxes — swept 1024 → 3840, the slack between `max-height` and the rendered two-line height is **0.001–0.03px**. It holds at every size, and it holds with nothing to spare: any future change to `--text-label-line-height`'s rounding would clip the second line rather than degrade gracefully. Recorded, not a defect. |
+| 14 | 🟢 Info | Usability | `frontend/src/styles/tokens.css` → `--size-sidebar-label-inset` | At the 1024 × 768 floor an ExtraBold `Einstellungen` has **1.41px** of total clearance per side. It fits and is not clipped, and the owner chose this explicitly over spending another 0.25rem of content width. Recorded so the next person does not read it as an accident. |
+| 15 | 🟢 Info | Documentation decision | `docs/design/screens/home.md` → Layout | Not overwriting the reference-PNG edge-scan table, and instead putting the built app's numbers beside it as a dated deviation, was the right call: that table's value is that it says what the *reference render* contains, and a file that silently becomes a mixture of "what Figma has" and "what we shipped" stops being usable for either question. |
+
+## Disposition
+
+`dev` worked findings **#1–#11 and #15** in the fix run of 2026-08-29
+(12:22–13:09) and left **#12–#14** open on purpose — all three are 🟢 Info and
+none asks for a change. That fix run is what "Sidebar-rail review — pass 2"
+below verifies. Note the numbering caveat in the reconstruction warning above:
+`handoff.md` describes the deliberately-skipped items as "🟡 #12–#14", which
+does not match this list; the most likely explanation is the missing earlier
+2026-08-29 review, whose numbering `measure.mjs` also cites.
+
+---
+
+# Sidebar-rail review — pass 2 (2026-08-29, `reviewer`)
+
+**Result: NEEDS CHANGES ❌** · 🔴 0 · 🟠 3 · 🟡 5 · 🟢 2 — verification of the
+`dev` run that worked pass 1's #1–#11 and #15. **Pass 1's Majors are all
+closed**; three *new* 🟠 are open, one of them a measured deviation from
+`docs/design/screens/home.md` that the widening caused and that nobody had
+looked for.
+
+> **Scope:** the 13 uncommitted files on
+> `refactor/bce-subpackages-and-boundary-security` (~1350 insertions), against
+> `docs/constitution.md` **v1.10.0**, `frontend/CLAUDE.md`,
+> `docs/design/tokens.md`, `docs/design/screens/home.md` and
+> `docs/design/screens-inhouse/`. Two questions on top of "are pass 1's findings
+> closed": did the 26px glyph break anything, and is the popover tile's new
+> `max-height` cap — code that pass 1 only *proposed*, and that has never been
+> reviewed — correct.
+>
+> **The instruments really ran this time, and nothing below is taken from the
+> implementation report.** `./mvnw quarkus:dev` (Quarkus 3.33.3.1, Dev Services
+> PostgreSQL 17.11) on :8080 behind the existing `ng serve --port 4300`, so
+> `node tools/measure.mjs` and `GXP_SMOKE_ADMIN_PW=… node
+> tools/measure-states.mjs` both ran end to end against a live instance.
+> Everything else was measured with four throwaway Playwright probes written to
+> `/tmp` and deleted afterwards — **never into the repo**; `git status
+> --untracked-files=all` reports **0 untracked files**, which also verifies
+> `dev`'s claim that his own probes were not left behind. The Quarkus process
+> this pass started was stopped again; the `ng serve` (pid 5025, running since
+> 12:20) was **not** started by this pass and was left as found.
+
+## Verification performed (independent)
+
+```
+npm test        → Test Files 37 passed (37) · Tests 333 passed (333) · 0 failed
+npm run build   → green. Initial total 476.94 kB / 108.44 kB transfer.
+node tools/measure.mjs (seeded)
+                → 168 route x theme x language x viewport combinations,
+                  0 overflowing, 0 truncated, 0 clamped, 200 x NO-SCROLL OK,
+                  0 findings
+node tools/measure-states.mjs
+                → all cells NO-SCROLL OK, no COLLISION in any banner cell,
+                  4 findings — all of them `SPEC: artwork` (see finding #1)
+```
+
+**The 26px glyph, measured over 32 cells** — 1280 × 832 and 1024 × 768 ×
+light/dark × de/en × active/inactive × one-line/two-line label, with the label
+text injected into a live rail item:
+
+| | 1280 × 832 | 1024 × 768 |
+|---|---|---|
+| item box, every one of the 32 cells | **88 × 88**, Δ 0.00 | **70.41 × 70.41**, Δ 0.00 |
+| rendered glyph box | 26 × 26 | 20.8 × 20.8 |
+| label box (item − 2 × inset) | 86 (Δ −2.00) | 68.81 (Δ −1.59) |
+| glyph top in the item, one line / two | 21.20 / 13.41 | 16.97 / 10.73 |
+| ink bottom above the item's bottom, one / two | 21.80 / 14.00 | 17.45 / 11.22 |
+| pair offset from the item's centre | 0.295 px | 0.24 px |
+
+Every figure `home.md`, `01-prd.md`, `02-design.md` and `handoff.md` record for
+the 26px glyph is reproduced exactly. The arithmetic the 24px was bought with is
+genuinely dead: at an 88px item the content box is 64px and `26 + 4 + 2 × 15.6 =
+61.2 ≤ 64` (`20.8 + 3.2 + 2 × 12.48 = 48.96 ≤ 51.2` at the floor).
+
+**Live geometry, from the grid run:** sidebar `x32 w104`, heading block
+`x176 y88 w390 right566`, card row `x176 y548 w820 right996 bottom744`,
+status-bar clearance **48** horizontal / **20** vertical, popover panel
+**490 × 208** / **392 × 167**, tiles 88 / 70, grid does not scroll internally,
+`heading.y 88` and `cardRow.bottom 744` unmoved.
+
+**The 4px A/B, both `--size-sidebar` values compared in one live render:**
+`.shell__content` 1076 → **1072** (860.81 → **857.63**),
+`.home-content__screen` **820 → 820** (655.97 → 655.97), `--size-heading`
+**390 → 390**, `.home-content__widgets` **224 → 220** (179.25 → **176.06**).
+Confirms finding #11's attribution — and turned up the one element nobody
+listed, which is finding #1 below.
+
+**The popover tile's new cap, treated as fresh code.** With
+`-webkit-line-clamp` neutralised on a five-line label and the `max-height`
+removed, the tile leaves the square raster (88 → **135.56** at 1280, 70.39 →
+**108.39** at 1024) — and so does the **rail item** (88 → **131.97**, 70.41 →
+**105.52**). With the cap in place both stay square in both layout models. With
+the clamp armed (Chromium 151 computes the label's `display` to `flow-root`) the
+cap is inert and changes nothing rendered: across 9 tiles × 2 viewports × 2
+languages, `scrollHeight === clientHeight` in every cell, label heights exactly
+15.59 / 31.19 and 12.47 / 24.94, ink inside its box, tiles 88 / 70.39.
+**Visually confirmed** on the open popover at 1280 × 832 — four two-line labels
+render in full, descenders intact, nothing clipped.
+
+**Screenshots taken and looked at** (`code-review` step 0, which this file's own
+round-3 section records as the check that pays for itself): Home at 1280 × 832
+light/de, Home at 1024 × 768 dark/de, and the open overflow popover. The rail
+reads correctly at both sizes — glyphs visibly at 26px, every label on one line,
+pairs optically centred, `Einstellungen` tight but clear of the pill at the
+floor, which is what the owner accepted.
+
+## Pass-1 findings — verification
+
+| Pass-1 # | Status | How verified in this pass |
+|---|---|---|
+| #1 REQ-014 `x = 172` | ✅ **closed** | `01-prd.md` REQ-014 now reads `x = 176` with a dated owner-decision note that keeps the derivation. Live: card row `x176`. |
+| #2 third `--size-sidebar` consumer | ✅ **closed** | The staleness banner is now named in `tokens.md`, `02-design.md` and `handoff.md`. Bound re-derived: 1076 → 1072 at 1280, 860.8 → 857.6 at 1024, against a bar ≤ 694px — not binding. `measure-states.mjs`: **no COLLISION in any banner cell**. |
+| #3 stale as-built coordinates | ✅ **closed** | All four re-derived and reproduced live: heading `x140.78…452.78`, screen `x140.78…796.75`, widgets `x822.34 w176.06`, content edge `x176`, `--size-widget-col` note now 220. |
+| #4 "all three rounds uncommitted" | ✅ **closed** | `git show --stat 63fcc6d` confirms the 2026-08-28 round in full, and `git show 63fcc6d:…/sidebar.component.html` confirms the three rail glyphs at `--size-icon-sm` with the popover tile at `md`. All three places corrected. |
+| #5 the 24px glyph | ✅ **closed** | Reverted on lines 18/39/90; line 70 (the tile) untouched. Squareness re-measured over 32 cells, Δ 0.00 everywhere — see the table above. |
+| #6 `5.25rem` comments | ✅ **closed** | `sidebar.component.css:213, 241` now read `5.5rem` with the previous value and date. |
+| #7 tile without the cap | ✅ **closed** — and reviewed as new code | Cap present at `sidebar.component.css:265`; measured load-bearing and rendered-inert (above). Its *stated reason* is wrong — see finding #3. |
+| #8 the "longest label" superlative | ⚠️ **mostly closed** | Corrected in `tokens.md:457` and `home.md:259`, and the numbers are real measurements, reproduced exactly: `Einstellungen` 77/77 → 4.5/4.5 @1280 and 63/66 → 2.91/**1.41** @1024; `Hausordnung` 78/79 → 4.0/3.5 and 64/64 → 2.41. **Two sites were missed** — see finding #7. |
+| #9 in-place corrections | ✅ **closed** (spot-checked) | The five annotations are present at `handoff.md:166–174`. Their *values* were re-derived above; the annotations themselves were read, not re-litigated line by line. |
+| #10 "six colourless" | ✅ **closed** | `tokens.md:603` reads "The other **seven**", and the "nine rows" sentence became "ten rows". |
+| #11 4px attribution | ⚠️ **closed but incomplete** | The A/B reproduces every published number exactly. It omits the one element that also moved — finding #1. |
+| #12–#14 (🟢) | **open by design** | Not in the fix run's brief; none asks for a change. Re-confirmed #13 is still exactly two line boxes and #14 still 1.41px at the floor. |
+| #15 (🟢) | ✅ **honoured** | `home.md`'s reference-PNG table is untouched ("Every number above stays as written") and the built app's figures sit beside it as a dated deviation. |
+
+## Findings
+
+| # | Severity | Category | File | Finding | Fix |
+|---|----------|----------|------|---------|-----|
+| 1 | 🟠 Major | Design fidelity / Impact analysis | `frontend/src/app/features/home/hero-artwork/hero-artwork.component.ts:47` (and `:32`) | **The hero artwork silently left its specified box, and it is the one element the widening's impact analysis missed.** `left: 14.03125rem` is a **literal derived from the old content origin** (`396.5 − 172`); the component's own comment at line 32 names the 172. It is the only place in the layout that consumes `--size-sidebar`'s *result* instead of the token, so it translated with the content column instead of staying put. Measured by A/B in one live render: **x 396.5 → 400.5** at 1280 × 832 and **317.19 → 320.38** at 1024 × 768, against `docs/design/screens/home.md:431`'s `775 × 499.5 @ x396.5 / y77.5`. `home.md`'s new deviation table (`:110–127`) lists sidebar width, active pill, heading/card-row x, card-row right edge and the untouched vertical baseline — and omits this. All the right-anchored overlays (status bar, staleness pill, staleness banner) genuinely did not move; this one did. | Owner's call, and it is a one-line choice: **derive it** (`left: calc(24.78125rem - var(--size-sidebar))`, which is the same "derived, not literal" rule `sidebar.component.css` states twice) **or** record the 4px as a deviation in `home.md` → "Hero artwork (2:5)" and in the deviation table beside every other element that moved. Deriving is preferable — it makes the next `--size-sidebar` change free. |
+| 2 | 🟠 Major | Verification / Record | `docs/features/home-screen-prototype/handoff.md` (CURRENT STATE), `docs/features/index.md:8` | **`measure-states.mjs`'s four `SPEC: artwork` findings were reported to `lead` as "the pre-existing SPEC finding", and they are not pre-existing.** `docs/features/guest-frontend-integration/handoff.md:407` records the artwork at `{x:397, y:78, w:775, h:500}` with the content column at **172** — the +4 / +3 delta is exactly this widening. Worse, the durable record does not carry them at all: `handoff.md` does not mention them, and `index.md:8` states "`tools/measure-states.mjs` **clean**". An instrument finding dismissed as pre-existing is how a regression becomes permanent noise that every future review learns to scroll past. | Record the four findings against the widening; correct `index.md`. If #1 is fixed by deriving the offset they disappear on their own — which is the cleanest possible confirmation that the diagnosis was right. |
+| 3 | 🟠 Major | Correctness of a load-bearing rationale | `frontend/src/app/layout/sidebar/sidebar.component.css:90` and `:256–258`; `docs/design/screens-inhouse/menu-overflow.md:191` | **All three say the rail item's height is held by `width: 100%` + `aspect-ratio: 1` alone, and that the tile — "unlike the rail item" — is not. Measured, that is false for both.** With the clamp neutralised and the cap removed the **rail item** goes 88 → **131.97** at 1280 and 70.41 → **105.52** at 1024, the same failure as the tile (88 → 135.56 / 70.39 → 108.39). `aspect-ratio` does not pin a flex item whose content overflows; the `max-height` cap does, for both. The contradiction is *inside the same file*: `sidebar.component.css:132–133` records the rail item going 70.41 → 103.91 without the cap, 130 lines below the comment saying it cannot. The code is correct — the reason written next to it is not, and it is the reason the next person will trust when deciding the rail's cap is redundant. That reintroduces D5 on any engine that ignores `-webkit-line-clamp`, which the same file argues at length must not be assumed away. | Pull all three onto "the item's `aspect-ratio` **plus** the two-line cap, and the same for the tile" — the wording `01-prd.md:351` and `02-design.md:557` already get right. |
+| 4 | 🟡 Minor | Docs vs. code (the 26px drift) | `docs/features/home-screen-prototype/01-prd.md:284` | "Nothing else in the item wants that padding: the glyph is centred and **24px** wide." The word-for-word twin of this sentence in `sidebar.component.css:125` **was** corrected to 26px in this fix run; the REQ-007 copy was not. Exactly the drift class this fix run existed to close, in a requirement document. | 24px → 26px. |
+| 5 | 🟡 Minor | Instrument | `frontend/tools/measure.mjs:312–329, 430–455` | **The border-box switch opens a 2px blind spot the size of the inset it was made for.** `truncated(el, boxEl, borderBox=true)` compares the rail label's ink against the **item's** border box (88 / 70.41), while the box carrying `overflow: hidden` is the **label** (86 / 68.81); the fallback parent-walk starts at `el.parentElement`, so the label's own clipping is never considered. Ink between 86 and 88 is clipped on screen and reported `truncated: false`. `labelBoxes` correctly guards label-vs-item, so the residual is exactly `2 × --size-sidebar-label-inset` — narrow, and precisely the dimension the instrument was rebuilt to be able to see. *(This file's mtime is 10:54, so it predates the fix run and belongs to the earlier uncommitted round; raised because it is part of what the owner is about to commit.)* | Compare the ink against the **label's** border box and keep `labelBoxes` for the label-vs-item half — then both questions are asked and neither is approximated. |
+| 6 | 🟡 Minor | Registry honesty | `docs/features/index.md:8` | "`tools/measure.mjs` 168 cells clean and `tools/measure-states.mjs` clean" — the first drops the run-2 caveat that `handoff.md:51–62` carries carefully, the second is false (see #2). The registry is where anyone starts; it should never read as more settled than the handoff it summarises. | Align both statements with `handoff.md`. |
+| 7 | 🟡 Minor | Superlative correction incomplete | `docs/features/home-screen-prototype/02-design.md:544`, `docs/features/home-screen-prototype/handoff.md:170–172` | Pass-1 #8 was fixed in `tokens.md` and `home.md`, and `handoff.md` claims the superlative "is corrected wherever it was written". Two sites still assert it: `02-design.md:544` ("The reference's own longest label (\"Einstellungen\") measures **~84px**" — measured, it is **77**, and `Hausordnung` is 78/79) and `handoff.md:170–172` ("`Einstellungen` — the longest seeded label"), the latter in a section whose own opening promises in-place correction. Mitigating: the `02-design.md` paragraph is explicitly superseded two lines below it. | Correct both, or soften the "wherever it was written" claim to what was actually done. |
+| 8 | 🟡 Minor | Process / quality bar | `docs/features/home-screen-prototype/06-review.md` (this file, before this pass) | **Neither 2026-08-29 review existed in the repo.** This file recorded only the 2026-08-18 PASS while four UI rounds and at least two NEEDS CHANGES verdicts had landed, and `index.md` still opened with `06_review PASS ✅`. The constitution measures "done" against this artifact, so it was being read against a stale one — and pass 2 could not check pass 1's findings against their source, only against a relay, the diffs and `handoff.md`. **This is reviewer debt, not `dev`'s.** Partially repaired by this pass (both 2026-08-29 passes are now written down); the earlier 2026-08-29 review that `measure.mjs` cites is **not recoverable** and is recorded as a gap. | Write the review result at the end of every review, not only when it is a PASS. |
+| 9 | 🟢 Info | Measurement hygiene | `docs/features/home-screen-prototype/handoff.md:51–62` | **Recording run 2's 48 `PREFERENCE NOT APPLIED` + 7 `CONTRAST OFF SPEC` as instrument flakiness, instead of re-running until green, was the right call.** This pass's own independent grid came back **168 cells / 0 findings** with the token seeded, which corroborates the reading; the failing check is the preference *write* path timing out at 10s on a Pi carrying Quarkus dev mode, `ng serve` and Chromium at once, and geometry, wrapping and no-scroll were identical in all three of `dev`'s runs. The honest thing was done and it should stay done that way. |
+| 10 | 🟢 Info | Scope | — | The fix run touched **11** files (mtimes 12:22–13:09): `sidebar.component.html`, `sidebar.component.css` and nine documents, all traceable to enumerated pass-1 findings. `frontend/src/styles/tokens.css` (10:50) and `frontend/tools/measure.mjs` (10:54) belong to the earlier uncommitted round — the "13 files" figure `dev` self-reported against the five-file limit conflates two runs. **No unrequested work was found**, and the throwaway probes are verifiably gone (`git status --untracked-files=all`: 0 untracked). |
+
+> ⚠️ **Superseding note, added 2026-08-29 by pass 3 (finding #3) — the text
+> above is unchanged and stays as the record.** Finding **#1**'s Fix column
+> recommends `left: calc(24.78125rem - var(--size-sidebar))`. **Do not apply it
+> literally: it is 72px off spec** at 1280 × 832 (artwork at x 468.5 instead
+> of 396.5) and 57.6px at the 1024 × 768 floor — the error is a `rem`
+> quantity, so it scales with the root. It subtracts the sidebar but not the
+> shell's inline padding and row gap (`--space-7` 32 + `--space-8` 40 = 72).
+> The **shipped and verified** expression is
+> `left: calc(24.78125rem - var(--space-7) - var(--size-sidebar) - var(--space-8))`
+> (with `top: calc(4.84375rem - var(--space-6))`), measured at x 396.5 / 317.17
+> and unmoved — Δ 0.000px — under all ten token mutations pass 3 applied.
+> The *substance* of finding #1 stands: deriving instead of keeping a literal
+> was right, and it is what shipped.
+
+## Explicitly cleared (checked this pass, not defects)
+
+- **The two-layout-model claim in `02-design.md` is right.** With
+  `-webkit-line-clamp` set, Chromium 151 computes the label's `display` to
+  `flow-root`; with the clamp removed the same declarations compute to a real
+  legacy `-webkit-box`. Verified in both models. The conclusion that neither
+  `align-content` nor `-webkit-box-pack` can matter under B2 (there is no free
+  space inside the label box to distribute) holds in both.
+- **B2's stated price is real and is the one that was accepted.** A one-line and
+  a two-line item no longer share an icon line; the open popover shows it
+  directly. Recorded in `01-prd.md` → REQ-007 as an owner decision with the
+  alternative (B1) named and rejected — which is the right shape for it.
+- **`--size-sidebar-label-inset` is not an approval-gate breach.** It is a new
+  *token*, not a change to how tokens are realised in code (constitution →
+  Decisions Requiring Your Approval), it sits in the in-house section with
+  provenance, and its row says plainly that nothing corroborates the 1px — it
+  is the owner's choice. That is the honest form.
+- **Constitution constraints, re-checked against the diff:** no
+  dependency-manifest edit; no raw hex or px introduced outside the token layer;
+  no external runtime request; `rem` throughout; **nothing scrolls** (200 ×
+  NO-SCROLL OK, and the popover grid does not scroll internally at either
+  reference viewport); work is on a feature branch, not `main`. No new
+  cross-cutting convention was introduced, so no nested `CLAUDE.md` entry was
+  owed.
+- **No unit test was owed for this change.** `frontend/CLAUDE.md` → Tests puts
+  geometry and wrapping explicitly out of jsdom's reach and names
+  `tools/measure.mjs` as the instrument. 333/333 in 37 files is unchanged, as it
+  should be for a pure-geometry change.
+
+## REQ-ID coverage — sidebar-rail passes
+
+Only three criteria were touched by the four UI rounds; the rest of
+REQ-001…REQ-025 is unchanged since the 2026-08-18 verification above and was not
+re-litigated here.
+
+| REQ-ID | Verified how | Status |
+|---|---|---|
+| REQ-007 (rail label within its item, at most two lines, pair centred, item square) | 32-cell live probe: item 88 × 88 / 70.41 × 70.41 with Δ 0.00 in every cell; label box 86 / 68.81; nothing clamped; `measure.mjs` 168 cells, 0 truncated, 0 clamped | ✅ |
+| REQ-014 (content column geometry) | Live: heading `x176 y88 w390`, card row `x176 w820 right996 bottom744`, widget column present, `flex: 1`, empty, 220px | ✅ against the **rewritten** criterion — and see finding #1, which is the one element inside this screen still measured against the *old* origin |
+| REQ-022 (sidebar box, item square, group gaps) | Live: sidebar `x32 y24 w104 h784`; item width = `--size-sidebar` − 2 × `--space-3` = 88 / 70.41, square | ✅ against the rewritten criterion |
+
+## Verdict against the constitution's quality bar (v1.10.0)
+
+- Builds and all tests green — ✅ 37 files / 333 tests, `ng build` green, both
+  re-run independently.
+- Conventions from nested `CLAUDE.md` files followed — ✅ for
+  `frontend/CLAUDE.md`'s token, layout and testing rules. Finding #1 is the one
+  place the codebase's own *"derived, not tokenised — keeps one source of
+  truth"* convention is not honoured, and that is exactly what broke.
+- No sensitive data in logs — ✅, nothing in scope touches content.
+- `06-review.md` result is PASS with every `REQ-ID` implemented — **not yet.**
+  Every REQ-ID is implemented and independently re-measured, but this pass's
+  result is **NEEDS CHANGES** on three 🟠.
+
+**NEEDS CHANGES ❌.** Zero Critical. The 26px revert and the popover tile's cap
+are both correct and should stay: the item is exactly square with a 26px glyph
+in all 32 cells, and the cap is load-bearing in one layout model and inert in
+the other. What blocks the commit is one measured, unrecorded deviation from the
+design spec (#1), the mis-triage that hid it (#2), and a load-bearing guard
+documented with a reason its own file disproves (#3).
+
+**The working tree is uncommitted and stays that way** — 13 modified files, 0
+untracked, on `refactor/bce-subpackages-and-boundary-security`. The owner
+commits; no agent does.
+
+### Top 3 recommendations
+
+1. **Decide the hero artwork (#1) before committing** — derive `left` from
+   `--size-sidebar` (preferred: it makes the next rail change free and it is the
+   convention this codebase states twice) or record the 4px as a deviation in
+   `home.md`. Either way, correct the "pre-existing" triage in `handoff.md` and
+   the "clean" claim in `index.md` (#2). Deriving it also makes
+   `measure-states.mjs` go quiet on its own, which is the cheapest possible
+   confirmation the diagnosis was right.
+2. **Fix the rationale on the two caps (#3)** — three sentences, no code change.
+   This is the finding most likely to cost something later: it is the argument
+   someone will use to delete the rail's cap.
+3. **Sweep the four remaining text drifts (#4, #6, #7) and keep writing review
+   results down (#8).** They are minutes of work each, and #8 is the reason this
+   pass had to reconstruct its predecessor from a relay instead of reading it.
+
+---
+
+# Sidebar-rail review — pass 3 (2026-08-29, `reviewer`)
+
+**Result: PASS ✅** · 🔴 0 · 🟠 0 · 🟡 4 · 🟢 3 — final verification of the
+`dev` run that worked pass 2's #1–#7. **All three of pass 2's 🟠 Majors are
+closed and independently re-measured.** Everything left is a wrong *number* or
+a wrong *attribution* in a write-up whose underlying change is correct; none of
+it blocks the commit.
+
+> **Scope:** the 15 uncommitted files on
+> `refactor/bce-subpackages-and-boundary-security` (~1912 insertions), against
+> `docs/constitution.md` **v1.10.0**, `frontend/CLAUDE.md`,
+> `docs/design/tokens.md`, `docs/design/screens/home.md` and
+> `docs/design/screens-inhouse/`. Three questions on top of "are pass 2's
+> findings closed": is the hero-artwork **derivation** — never-reviewed code at
+> a place nobody had previously found faulty — correct *and* robust to the
+> tokens it derives from; is the instrument fix right in **both** directions
+> (a false positive noises up every future run, a false negative is the blind
+> spot again); and does the record still say the same thing in all three places
+> after a third documentation pass.
+>
+> **Both instruments ran end to end, and nothing below is taken from the
+> implementation report.** `./mvnw quarkus:dev` (Quarkus 3.33.3.1, Dev Services
+> PostgreSQL 17.11) on :8080 behind the `ng serve --port 4300` that was already
+> running (pid 5025, since 12:20 — **not** started by this pass and left as
+> found). The Quarkus process this pass started was stopped again. Four
+> throwaway Playwright probes were written to `/tmp` and deleted; `git status
+> --untracked-files=all` reports **0 untracked**.
+
+## Verification performed (independent)
+
+```
+npm run build   → green. Initial total 477.05 kB / 108.58 kB transfer.
+npm test        → Test Files 37 passed (37) · Tests 333 passed (333) · 0 failed
+GXP_MEASURE_DEVICE_TOKEN=… node tools/measure.mjs
+                → 168 route x theme x language x viewport combinations,
+                  0 overflowing, 0 truncated, 0 clamped, 0 LABEL BOX,
+                  200 x NO-SCROLL OK, 0 findings
+GXP_SMOKE_ADMIN_PW=… node tools/measure-states.mjs http://localhost:4300
+                → 52 cells NO-SCROLL OK, 9 blocks, no COLLISION,
+                  0 findings — the four `SPEC: artwork` findings are gone
+```
+
+Every figure `dev` reported reproduces exactly, including the two bundle sizes.
+
+**The hero-artwork derivation, treated as fresh code (finding #1's fix).**
+Measured on the live render, and then re-measured with each token the
+expression consumes mutated at runtime:
+
+| | 1280 × 832 | 1024 × 768 |
+|---|---|---|
+| artwork host box | `x 396.5, y 77.5, w 775, h 499.5` | `x 317.17, y 61.98, w 620, h 399.59` |
+| spec (`home.md`:448) and its 0.8× | `396.5 / 77.5 / 775 / 499.5` | `317.2 / 62.0 / 620 / 399.6` |
+| computed `left` / `top` | `220.5px` / `53.5px` | `176.4px` / `42.8px` |
+| `.home-content` origin | `x 176, y 24` | `x 140.78, y 19.19` |
+| `--size-sidebar` → 9rem / 4rem | Δx **0.000** / **0.000** | Δx **0.000** / **0.000** |
+| `--space-7` → 3.5rem | Δx **0.000** | Δx **0.000** |
+| `--space-8` → 0.5rem | Δx **0.000** | Δx **0.000** |
+| `--space-6` → 3rem | Δy **0.000** | Δy **0.000** |
+
+In every one of those ten mutations `.home-content` moved (by 40 / −40 / 24 /
+−32 / 24px at the design size) and **the artwork did not**. That is the whole
+point of the derivation and it holds. The decomposition is correct against the
+source: `.shell` is `padding: var(--space-6) var(--space-7)` with
+`gap: var(--space-8)`, `.sidebar` is `width: var(--size-sidebar)`,
+`.shell__content` is `flex: 1` with no padding, and `.home-content` is
+`width/height: 100%` with no padding — so the containing block's padding-box
+origin *is* `--space-7 + --size-sidebar + --space-8` horizontally and
+`--space-6` vertically. `396.5 − 32 − 104 − 40 = 220.5`, exactly as the
+component's comment says.
+
+**Visual check (`code-review` step 0), done for real.** Home at 1280 × 832
+light/de and 1024 × 768 dark/de: rail glyphs visibly at 26px, all six labels on
+one line, `Einstellungen` tight but clear of the pill at the floor, card row
+bottom-aligned, nothing clipped. Then the artwork layer itself, with a
+stand-in image at the real 1550 × 999 aspect injected into the live host: the
+box renders at `x396.5 … 1171.5 / y77.5 … 577`, **behind** the headline and
+**behind** the card row (`z-index: -1` resolving as documented), and a uniform
+0.8× of the same composition at 1024 × 768. `measure-states.mjs`'s ARTWORK cell
+independently reports the *real* uploaded image at `{x:397, y:78, w:775, h:500}`
+and `{x:317, y:62, w:620, h:400}`.
+
+**The instrument fix, both directions (finding #5's fix).** Measured in the
+live rail, with the label's `overflow-wrap: anywhere` neutralised (the
+regression the check exists to catch is a future change losing it):
+
+| case | ink | label box | item box | old cmp (item border) | new cmp (label border) | actually clipped |
+|---|---|---|---|---|---|---|
+| `Einstellungen..` @1280 | 87 | 86 | 88 | **false** | **true** | yes (`scrollWidth 87 > clientWidth 86`) |
+| `Einstellungen.` @1024 | 70 | 68.81 | 70.41 | **false** | **true** | yes (`70 > 69`) |
+| `Einstellungen.` @1280 | 82 | 86 | 88 | false | **false** | no |
+| `Hausordnung` @1280 | 79 | 86 | 88 | false | **false** | no |
+| `Einstellungenxx` @1280 | 91 | 86 | 88 | true | true | yes |
+
+Both of `dev`'s constructed cases reproduce exactly. **No false positive
+anywhere**: the six shipped labels measure 35 / 23 / 65 / 72 / 29 / 77 px of ink
+in an 86px box at 1280 and 28 / 19 / 52 / 59 / 25 / 63 in 68.81 at 1024, and the
+full grid returns **0 truncated across 168 cells**. The label carries no padding
+and no border (`0px` on all four sides, measured), so `borderWidth()` *is* the
+box that `overflow: hidden` clips against — the right box, not merely a closer
+one. The other half of the question is genuinely asked: forcing a label to
+120px produces `delta 32` / `delta 49.59` against an `expected −2`, i.e. the
+`LABEL BOX` note fires, so Major 1's original defect cannot come back unseen.
+
+**The two cap measurements — both are right, and the explanation for the
+difference is exactly correct.** Re-measured on the rail item and the popover
+tile with the clamp neutralised and each cap removed, at several line counts:
+
+| lines | rail item @1280 | rail item @1024 | tile @1280 | tile @1024 |
+|---|---|---|---|---|
+| 3 | 100.78 | 80.58 | 88.78 | 70.98 |
+| 4 | 116.38 | 93.05 | — | — |
+| 5 | **131.97** | **105.52** | 119.97 | 95.92 |
+| 6 | 147.56 | **117.98** | **135.56** | **108.39** |
+
+Per-line increments are 15.595 (1280) and 12.47 (1024) in both boxes. So pass
+2's rail figures were a **5-line** string; `dev`'s were a string that takes 5
+lines at 1280 and **6** at 1024 — and his tile figures (135.56 / 108.39) are
+that same string at 6 lines in the narrower 65 / 52 px tile label box. All four
+of his numbers come from one string and are mutually consistent; pass 2's
+105.52 is also correct, for its own. **Neither measurement is wrong**, the
+string-length explanation carries, and `sidebar.component.css`:95–98 states it
+honestly. The conclusion — `aspect-ratio` does not pin either box, both need
+the cap — is unaffected.
+
+**Pass-1 🟢 #13 and #14 re-measured and still exactly true.** The two-line cap
+is still exactly two line boxes (label height `31.19` = 2 × 15.595 at 1280,
+`24.95` = 2 × 12.47 at 1024, zero slack); `Einstellungen` active at the floor is
+still 66px of ink in a 68.81px box = **1.405px** of clearance per side.
+
+## Pass-2 findings — verification
+
+| Pass-2 # | Status | How verified in this pass |
+|---|---|---|
+| #1 🟠 hero artwork off spec | ✅ **closed** | Derived from the token layer. Artwork at `396.5 / 77.5` and `317.17 / 61.98`, i.e. the spec box and its 0.8×; **Δ 0.000 under all ten token mutations**; `measure-states.mjs` ARTWORK cell clean at both viewports; visually confirmed behind headline and cards. |
+| #2 🟠 "pre-existing" mis-triage + `index.md` "clean" | ✅ **closed** | `handoff.md` §2 and `index.md:8` both name the four `SPEC: artwork` findings, their origin (the widening) and the correction; `index.md` explicitly retracts its own "clean". Re-run: **0 findings, 52 cells, 9 blocks**. |
+| #3 🟠 cap rationale wrong in three places | ✅ **closed** | `sidebar.component.css:84–105` (rail), `:267–281` (tile) and `menu-overflow.md:191–194` all now say `aspect-ratio`/grid raster **plus** cap, for both boxes. Numbers re-measured (table above) and correct. |
+| #4 🟡 `01-prd.md:284` 24px | ✅ **closed** | Reads `26px` with the `24px` struck through and dated. |
+| #5 🟡 instrument 2px blind spot | ✅ **closed** | Both directions measured (table above); `labelBoxes` verified to still catch a widened label. See finding 2 below for the *justification* of the second call site. |
+| #6 🟡 registry honesty | ✅ **closed** | `index.md:8` carries the run-2 caveat for `measure.mjs` and the corrected `measure-states.mjs` state, matching `handoff.md`. |
+| #7 🟡 superlative correction incomplete | ✅ **closed** | `02-design.md:546–556` and `handoff.md:319` corrected; the missing hero-artwork row is in `home.md`'s deviation table (`:128`) with a full note. Numbers reproduced exactly: `Einstellungen` **77** and `Hausordnung` **79** active at 1280, **66** vs **64** at the floor. |
+| #8 🟡 review results not written down | ✅ **honoured** | Both 2026-08-29 passes are in this file; this one is being written before the turn ends, as the finding asked. |
+| #9 · #10 🟢 | ✅ **honoured** | The run-2 flakiness reading is carried, not laundered; scope is enumerated against the findings, including the honest "seven files — over the five-file limit, covered by the enumerated findings". |
+| Pass-1 🟢 #12–#14 | **open by design, correctly** | None asks for a change; all three re-measured this pass and still exactly true (see above). Leaving them open is the right call — closing them would mean deleting a live fragility note (#13) and an owner decision's price (#14). |
+
+## Findings
+
+| # | Severity | Category | File | Finding | Fix |
+|---|----------|----------|------|---------|-----|
+| 1 | 🟡 Minor | Stated as measured | `docs/features/home-screen-prototype/handoff.md:38` | **"The reviewer's suggested `calc(24.78125rem - var(--size-sidebar))` is 68px out" — it is 72px out, and only at one viewport.** Measured by applying pass 2's formula to the live host: it puts the artwork at **x 468.5** against the correct **396.5** at 1280 × 832 = **72px**, and at **374.78** against **317.17** at 1024 × 768 = **57.61px** (the error is in `rem`, so it scales with the root; quoting it as one absolute number is wrong in a second way). **68** is the distance from the *old, already-wrong* literal (400.5) — the wrong baseline, since the whole point is that the literal was off spec. `dev`'s own justification in the same sentence gives the right answer: "it subtracts the sidebar but not the shell's padding and gap" is `--space-7` 32 + `--space-8` 40 = **72**. The substance is right and re-deriving instead of adopting was correct; only the figure is wrong. | 68 → **72px at 1280 × 832 (57.6px at the 1024 floor — the error is a `rem` quantity)**, and note that it is measured against the spec position, not against the old literal. |
+| 2 | 🟡 Minor | Correctness of a load-bearing rationale | `frontend/tools/measure.mjs:521–528`, `docs/features/home-screen-prototype/handoff.md:92` | **The overflow trigger's call site was *not* "the same bug", and the comment now in the instrument says it was.** Measured: the old call passed `boxEl = null`, so `truncated()` fell to `el.clientWidth` — for a label with `display: flow-root` and zero padding/border that is **86** at 1280 and **69** at 1024, i.e. the label's own padding box, already the right box. Both of the constructed cases the fix was verified with were **already caught** by the old trigger comparison (`Einstellungen..` 87 > 86.5 → `true`; `Einstellungen.` @1024 70 > 69.5 → `true`). What the change actually buys is (a) sub-pixel precision — `borderWidth` 68.81 instead of an integer-rounded `clientWidth` 69 — and (b) the genuine `singleLine: true → false` correction, which is a different, real defect and is separately cited. Harmless in effect, wrong in the record — and it is a code comment, which is what the next person will trust when deciding whether the two call sites must stay in step. | Reword to what was measured: the `labels` site had the item-border-box blind spot; the trigger site was measuring the label's own box already, and was changed for sub-pixel precision and to stop claiming `singleLine`. |
+| 3 | 🟡 Minor | Record integrity | `docs/features/home-screen-prototype/06-review.md:800` (pass-2 finding #1, Fix column) | **This file still recommends, unannotated, a formula now known to be 72px wrong.** Pass 2's Fix column names `left: calc(24.78125rem - var(--size-sidebar))` as the preferred one-line fix. It is kept verbatim as history, which is right — but every other superseded claim in this file carries a dated superseding note, and this one does not. A future reader who applies the recommendation literally moves the artwork 72px off spec, and `measure-states.mjs` would then report it as a regression against a review that recommended it. | Add a one-line dated note beside it: the formula omits `--space-7` and `--space-8`; the shipped, verified expression is `calc(24.78125rem - var(--space-7) - var(--size-sidebar) - var(--space-8))`. |
+| 4 | 🟡 Minor | Attribution | `docs/features/home-screen-prototype/handoff.md:137` | **"Pass 2's 🟡 #12–#14 from the *earlier* review remain open by design" mis-cites the pass, the number-space and the severity, in the newest and most authoritative section of the handoff.** Pass 2 has no #12–#14 at all (it stops at #10); pass 1's #12–#14 are **🟢**, not 🟡; and "Pass 2's … from the earlier review" names two different reviews in one clause. Pass 2 flagged this exact mismatch in its reconstruction warning (`06-review.md:623–632`) as evidence of the lost 2026-08-29 review whose numbering `measure.mjs` cites — and the fix run restated it, adding a wrong attribution on top. Low harm on its own; it matters because the open-findings list is the one sentence a future session will act on. | "Pass 1's 🟢 #12–#14 remain open by design (none asks for a change)", and keep the note that the *earlier, unrecoverable* 2026-08-29 review may have numbered them differently. |
+| 5 | 🟢 Info | Ratchet | `frontend/tools/measure-states.mjs:963–974` | Worth recording, because it is what makes finding #1's fix safe rather than merely correct: the ARTWORK cell already compares the rendered image box against `ARTWORK_SPEC` scaled by `w/1280`, at ±1px, at both reference viewports. If a future change breaks the assumption the derivation rests on — that `.home-content`'s origin is `--space-7 + --size-sidebar + --space-8` — the instrument catches it in the same cell that caught this one. The derivation is guarded, not just commented. |
+| 6 | 🟢 Info | Scope | `frontend/src/app/features/home/hero-artwork/hero-artwork.component.ts:61` | **Deriving `top` as well as `left` is covered, and it should stay.** Only `left` was faulted, but the literal `3.34375rem` was the identical error class (`77.5 − 24`, against `--space-6`) waiting for a padding change. Its value is unchanged — computed `top` is `53.5px`, and the measured `y` is `77.5` / `61.98`, identical before and after — the whole declaration block is now internally consistent, and the extension is declared in both the code comment and the handoff. This is the good shape of "one line past the brief". |
+| 7 | 🟢 Info | Docs | `docs/design/screens/home.md:445–464` ("Hero artwork (2:5)" as-built note) | The as-built note for the artwork still describes it only as "implemented in `rem`, absolutely positioned"; the fact that the offset is now *derived* from `--size-sidebar` and the shell's padding and gap lives 320 lines earlier, in the deviation table. Both are correct and the table's artwork row points forward, but a reader who jumps straight to the artwork section will not learn the thing that changed. |
+
+## Explicitly cleared (checked this pass, not defects)
+
+- **The `left` expression is robust in the way it was meant to be.** Not just
+  "the number is right today": four separate tokens were mutated at runtime, at
+  both reference viewports, and the artwork's position moved by **0.000px**
+  every time while the content column moved under it. Pass 2's finding said
+  deriving "makes the next `--size-sidebar` change free" — measured, it makes
+  the next `--space-7` and `--space-8` change free too.
+- **The instrument does not report a false positive.** 168 cells, 0 truncated,
+  0 clamped, 0 `LABEL BOX`; and the six shipped labels sit 9–51px inside their
+  boxes at 1280 and 6–41px at 1024. The 0.5px tolerance is unchanged from
+  before the fix, so nothing got twitchier.
+- **Nothing else in Home moved.** `heading.x 176`, card row `x176 … right 996
+  bottom 744`, `heading.y 88` — reproduced in the ARTWORK cells and in the grid
+  run's baseline check, with and without an artwork present. REQ-010's "the
+  artwork occupies nothing" still holds: the host is out of flow in both
+  variants and `pointer-events: none`.
+- **Constitution constraints, re-checked against the diff (v1.10.0):** no
+  dependency-manifest edit (`git diff --name-only` names no `package*.json`,
+  no `pom.xml`); every changed declaration is a `calc()` over semantic tokens —
+  no raw hex, no raw px introduced outside `tokens.css`; `rem` throughout; no
+  external runtime request; **nothing scrolls** (200 × NO-SCROLL OK plus 52
+  state cells); work is on `refactor/bce-subpackages-and-boundary-security`,
+  not `main`. `frontend/CLAUDE.md` and `docs/constitution.md` are **byte-
+  identical to `HEAD`** — no nested-`CLAUDE.md` gate was opened and none was
+  owed, because deriving a layout offset from the tokens that compose it is the
+  convention `sidebar.component.css` already states twice, not a new one.
+- **No approval-gated decision was taken over the owner's head.** The one
+  decision in this run — derive the artwork rather than record the 4px — is
+  recorded as the owner's own ruling (*"abgeleitet, bleibt bei 396.5"*,
+  `handoff.md:21`), which is one of the two options pass 2 put to him. Nothing
+  else touches a dependency, infrastructure, the token *mechanism*, a metered
+  design-tool request, or a nested `CLAUDE.md`.
+- **No unit test was owed.** `frontend/CLAUDE.md` → Tests puts geometry out of
+  jsdom's reach and names the instruments; 333/333 in 37 files is unchanged, as
+  it should be for a pure-geometry change, and both instruments were run.
+- **Security.** Nothing in scope touches content, logging, an endpoint or a
+  handler; no secret, no guest data. No `architect` escalation warranted.
+- **Repo left as handed off.** Four throwaway probes in `/tmp`, deleted; the
+  Quarkus process this pass started was stopped; the pre-existing `ng serve`
+  (pid 5025) was left running. `git status --untracked-files=all`: **15
+  modified, 0 untracked** — the same 15 files this pass was asked to review,
+  plus this section.
+
+## REQ-ID coverage — sidebar-rail pass 3
+
+Only the criteria the sidebar-rail rounds and this fix run touched were
+re-litigated; the rest of REQ-001…REQ-025 is unchanged since the 2026-08-18
+verification above.
+
+| REQ-ID | Verified how | Status |
+|---|---|---|
+| REQ-007 (rail label within its item, at most two lines, pair centred, item square) | Item 88 × 88 / 70.41 × 70.41; label box 86 / 68.81 with `LABEL BOX` delta −2 = expected in all six items; `measure.mjs` 168 cells, 0 truncated, 0 clamped; the clip check now measures the box that actually clips, verified in both directions | ✅ |
+| REQ-009 (card titles do not wrap or ellipsize) | 168 cells, 0 truncated; visually confirmed at both viewports | ✅ |
+| REQ-010 / REQ-513 (artwork occupies nothing; authorized fetch) | Host out of flow in both variants, `pointer-events: none`, `z-index: -1` behind the layout; content column identical with and without an image; fetch path untouched | ✅ |
+| REQ-014 (content column geometry) | Live: heading `x176 y88 w390`, card row `x176 w820 right996 bottom744`, widget column `flex: 1`, empty, 220px — and now the one element inside this screen that was measured against the old origin sits back on its spec box | ✅ |
+| REQ-022 (sidebar box, item square, group gaps) | Sidebar `x32 y24 w104 h784`; item = `--size-sidebar` − 2 × `--space-3`, square at both viewports | ✅ |
+| REQ-024 / REQ-123 (nothing scrolls) | 200 × NO-SCROLL OK across the 168-cell grid plus 52 kiosk-state cells, both instruments | ✅ |
+| REQ-025 (scaling contract) | 1024 × 768 is a uniform 0.8× of 1280 × 832 in every box measured this pass, artwork included (`317.17 = 396.5 × 0.8`); nothing newly wrapped | ✅ |
+
+## Verdict against the constitution's quality bar (v1.10.0)
+
+- Builds and all tests green — ✅ `ng build` green (477.05 kB / 108.58 kB),
+  37 files / 333 tests, both re-run independently.
+- Conventions from nested `CLAUDE.md` files followed — ✅. The one place pass 2
+  found the codebase's own "derived, not literal" rule unhonoured is now the
+  place that honours it best.
+- No sensitive data in logs — ✅.
+- `06-review.md` result is PASS with every `REQ-ID` implemented — ✅ both.
+
+**PASS ✅.** Zero Critical, zero Major. All three of pass 2's Majors are closed
+and were re-measured rather than read: the artwork is back on its specified box
+and stays there under every token it derives from, the mis-triage is recorded
+with its origin in both the handoff and the registry, and the two caps'
+rationale is corrected at all three sites with numbers this pass reproduced
+line-count by line-count. The instrument fix is right in both directions — it
+now sees the 2px band it was blind to, and it invents nothing across 168 cells.
+The four 🟡 are all wrong *numbers* or wrong *attributions* attached to changes
+that are themselves correct; none of them can produce a wrong pixel, and each
+is a one-line edit. **The owner can commit.**
+
+**The working tree stays uncommitted until he does** — 15 modified files, 0
+untracked, on `refactor/bce-subpackages-and-boundary-security`. The owner
+commits; no agent does.
+
+### Top 3 recommendations
+
+1. **Commit.** Nothing 🔴 or 🟠 is open against this feature for the first time
+   since the rail work started, and every claim in the write-ups that could
+   move a pixel has now been reproduced by an independent hand.
+2. **Sweep the four 🟡 in one pass, ideally before the commit** — 68 → 72
+   (finding 1), the trigger-call-site rationale in `measure.mjs`'s comment
+   (finding 2), a dated superseding note on pass 2's formula (finding 3), and
+   "Pass 1's 🟢 #12–#14" (finding 4). All four are single-line edits in files
+   already in the diff, and three of them are exactly the drift class the last
+   two passes were spent closing.
+3. **Let pass-1 🟢 #12–#14 stay open, and stop re-litigating them.** They are
+   the two-line cap's zero slack, the 1.41px floor clearance and a note about
+   the instrument; all three were re-measured this pass and are still exactly
+   true, and none asks for a change. They are notes for whoever next touches
+   `--text-label-line-height` or the 1024 floor — which is what 🟢 is for.

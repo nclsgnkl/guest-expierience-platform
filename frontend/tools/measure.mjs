@@ -39,8 +39,13 @@
  *   REQ-007 / REQ-009 — nothing leaves the box that paints it, in either
  *                       language. Since 2026-08-28 a rail label may take two
  *                       lines (REQ-007's revised acceptance): what is checked
- *                       is its ink against the ITEM's content box, plus
- *                       whether the two-line clamp is eating a third line
+ *                       is its ink against the LABEL's OWN border box — the
+ *                       box that carries `overflow: hidden` and therefore
+ *                       clips (corrected 2026-08-29, review pass 2; the
+ *                       item's border box was 2px too generous) — plus
+ *                       whether the two-line clamp is eating a third line,
+ *                       plus the label-box-vs-item-box delta the first two
+ *                       silently assume (2026-08-29)
  *   REQ-104           — sampled dark/light composites vs. 02-design.md §3.4
  *   REQ-011           — logo decodes
  *
@@ -269,23 +274,60 @@ function collect() {
       parseFloat(style.paddingRight);
     return Math.round(w * 100) / 100;
   };
+  /** Border-box width — the box a pill actually PAINTS, padding included.
+      `contentWidth()` is the wrong question for a child that deliberately
+      spans its parent edge to edge. */
+  const borderWidth = (el) =>
+    el ? Math.round(el.getBoundingClientRect().width * 100) / 100 : null;
+  /** Resolves any CSS length (`0.0625rem`, `1px`, a `var()` value read off a
+      computed style) to px, by laying it out. Used to derive an EXPECTED
+      geometry from the token layer instead of hard-coding a number here. */
+  const cssLengthPx = (value) => {
+    const probe = document.createElement('div');
+    probe.style.cssText = `position:absolute;visibility:hidden;height:0;width:${value}`;
+    document.documentElement.appendChild(probe);
+    const w = probe.getBoundingClientRect().width;
+    probe.remove();
+    return Math.round(w * 100) / 100;
+  };
   /** True when the text is wider than the box that paints it, i.e. it is
       ellipsized, clipped — or simply spilling out of the box it belongs to.
 
-      `boxEl` names the element whose content box the text has to fit into.
-      Pass it whenever the text lives in an inline element: an inline `<span>`
-      has `clientWidth === 0` and a rect that IS the ink, so the fallback below
-      compares the ink against itself, and with no clipping ancestor it answers
-      `false` no matter how far the text runs. That is not hypothetical — the
-      sidebar's `.sidebar-item__label` is exactly this shape, and this function
+      `boxEl` names the element whose box the text has to fit into, and
+      `borderBox` says WHICH of its boxes. Pass `boxEl` whenever the text
+      lives in an inline element: an inline `<span>` has `clientWidth === 0`
+      and a rect that IS the ink, so the fallback below compares the ink
+      against itself, and with no clipping ancestor it answers `false` no
+      matter how far the text runs. That is not hypothetical — the sidebar's
+      `.sidebar-item__label` was exactly this shape, and this function
       reported "0 truncated" across 168 cells while the rail's labels were
-      visibly running out of their 84px items on screen (2026-08-28). Nothing
-      clips them: the sidebar has no `overflow` and the label is `nowrap`, so
-      the only element that knows the intended width is the item. */
-  const truncated = (el, boxEl = null) => {
+      visibly running out of their 84px items on screen (2026-08-28).
+
+      `borderBox` exists because the second answer was wrong too (review
+      2026-08-29, Major 1). Between 2026-08-28 and 2026-08-29 the rail label
+      was measured against ITS OWN box, which happened to equal the item's
+      border box — so a label artificially widened past its item reported
+      `truncated: false` with 101px of ink 8.5px outside an 84px item.
+
+      THE BOX IS THE ONE THAT CLIPS, NOT THE ONE THAT PAINTS (corrected
+      2026-08-29, review pass 2, finding #5). The answer to Major 1 was to
+      compare the rail label's ink against the ITEM's border box — 88px at
+      1280x832 — while `overflow: hidden` sits on the LABEL, whose box is
+      86px (the item less `--size-sidebar-label-inset` per side). Ink between
+      86 and 88 was clipped on screen and reported `truncated: false`: a blind
+      spot exactly `2 x --size-sidebar-label-inset` wide, i.e. precisely the
+      dimension this comparison was rebuilt to be able to see. The call site
+      passes the label itself now. `labelBoxes` below asks the other half of
+      the question — that the label is the size it should be relative to its
+      item — so a widened label is still caught, by the check built for it. */
+  const truncated = (el, boxEl = null, borderBox = false) => {
     if (!el) return null;
     const ink = inkWidth(el);
-    const own = boxEl ? contentWidth(boxEl) : el.clientWidth || el.getBoundingClientRect().width;
+    const own = boxEl
+      ? borderBox
+        ? borderWidth(boxEl)
+        : contentWidth(boxEl)
+      : el.clientWidth || el.getBoundingClientRect().width;
     if (ink > own + 0.5) return true;
     const rect = el.getBoundingClientRect();
     for (let p = el.parentElement; p; p = p.parentElement) {
@@ -300,7 +342,7 @@ function collect() {
   /** One record per piece of text worth checking for wrap/truncation.
       `boxEl` — see `truncated()`: the element whose content box bounds the
       text, for text that carries no box of its own. */
-  const text = (el, where, singleLine = true, boxEl = null) =>
+  const text = (el, where, singleLine = true, boxEl = null, borderBox = false) =>
     el
       ? {
           where,
@@ -308,9 +350,11 @@ function collect() {
           lines: lineCount(el),
           inkW: inkWidth(el),
           boxW: boxEl
-            ? contentWidth(boxEl)
+            ? borderBox
+              ? borderWidth(boxEl)
+              : contentWidth(boxEl)
             : Math.round((el.clientWidth || el.getBoundingClientRect().width) * 100) / 100,
-          truncated: truncated(el, boxEl),
+          truncated: truncated(el, boxEl, borderBox),
           singleLine,
         }
       : null;
@@ -385,13 +429,47 @@ function collect() {
     activePill: box(document.querySelector('.sidebar-item--active')),
     gapLogoToFirstNav: gap(logo, navItems[0]),
     gapLastNavToSettings: gap(navItems[navItems.length - 1], settingsItem),
-    /* The label's box is the ITEM's content box — the span has none of its
-       own (see `truncated()`). `singleLine: false` because the rail reserves
-       two lines for every item since 2026-08-28; the clamp below is what says
-       whether a third one is being eaten. */
-    labels: items.map((i, idx) =>
-      text(i.querySelector('.sidebar-item__label'), `sidebar[${idx}]`, false, i),
-    ),
+    /* The box the ink is compared against is THE LABEL'S OWN BORDER BOX —
+       the box that carries `overflow: hidden` and therefore the box that
+       clips (86px at 1280x832, the item's 88 less the 1px inset per side).
+       Not the item's content box, which is 16px narrower than the label the
+       item paints, and — corrected 2026-08-29, review pass 2, finding #5 —
+       not the item's border box either: that was 2px too generous and hid
+       exactly the inset it was measuring. A label that spills out of its
+       ITEM is caught by `labelBoxes` below, which is the check written for
+       that question. `singleLine: false` because a rail label may take two
+       lines since 2026-08-28; `labelsClamped` says whether a third is being
+       eaten. */
+    labels: items.map((i, idx) => {
+      const label = i.querySelector('.sidebar-item__label');
+      return text(label, `sidebar[${idx}]`, false, label, true);
+    }),
+    /* The invariant NOBODY was measuring (review 2026-08-29, Major 1): the
+       label's own width relative to the item's. It is not equality — since
+       2026-08-29 the label is `--size-sidebar-label-inset` narrower per side
+       — so the expected delta is derived from the token rather than assumed,
+       and an UNEXPECTED one is what gets reported. This is what keeps the
+       `truncated` comparison above honest: ink inside an 88px item says
+       nothing if the label silently became 60px or 120px wide. */
+    labelBoxes: items.map((i, idx) => {
+      const label = i.querySelector('.sidebar-item__label');
+      if (!label) return null;
+      const inset = cssLengthPx(
+        getComputedStyle(i).getPropertyValue('--size-sidebar-label-inset').trim() || '0px',
+      );
+      const itemW = borderWidth(i);
+      const labelW = borderWidth(label);
+      const delta = Math.round((labelW - itemW) * 100) / 100;
+      const expected = Math.round(-2 * inset * 100) / 100;
+      return {
+        where: `sidebar[${idx}]`,
+        itemW,
+        labelW,
+        delta,
+        expected,
+        ok: Math.abs(delta - expected) <= 0.5,
+      };
+    }),
     /* `-webkit-line-clamp` hides the overflow without changing the ink width,
        so `truncated()` cannot see it — the same direct question the overflow
        popover's tiles ask. */
@@ -440,7 +518,27 @@ function collect() {
       trigger: overflowTrigger
         ? {
             box: box(overflowTrigger),
-            label: text(overflowTrigger.querySelector('.sidebar-item__label'), 'overflow.trigger'),
+            /* The trigger IS an ordinary `.sidebar-item`, so its label is
+               measured exactly like every other rail label — against the
+               label's own border box, the box that clips (see `labels`
+               above). This site did NOT have the `labels` site's 2px blind
+               spot: it used to pass no box at all, so `truncated()` fell back
+               to `el.clientWidth`, which for this zero-padding, zero-border
+               label is its own box already (86 @1280 / 69 @1024). It was
+               changed alongside `labels` 2026-08-29 (review pass 2, finding
+               #5) for two other reasons: sub-pixel precision — `borderWidth`
+               68.81 rather than an integer-rounded 69 — and to stop claiming
+               `singleLine` (review 2026-08-29, Nit 13: it was the only rail
+               label claiming one line). Attribution corrected 2026-08-29 by
+               review pass 3, finding #2; the two call sites still belong in
+               step. */
+            label: text(
+              overflowTrigger.querySelector('.sidebar-item__label'),
+              'overflow.trigger',
+              false,
+              overflowTrigger.querySelector('.sidebar-item__label'),
+              true,
+            ),
             expanded: overflowTrigger.getAttribute('aria-expanded'),
             hasPopup: overflowTrigger.getAttribute('aria-haspopup'),
             ariaLabel: overflowTrigger.getAttribute('aria-label'),
@@ -890,6 +988,20 @@ for (const [w, h] of viewports) {
           `  text: ${textRecords(m).filter(Boolean).length} strings checked, ${problems.length ? 'PROBLEMS' : 'none wrapping or truncated'}`,
         );
         for (const p of problems) note('TEXT', `${route} ${w}x${h} ${theme}/${language} ${p}`);
+
+        /* The invariant the width comparison above RESTS on: the label is
+           the item's border box less the token inset per side. If that ever
+           stops holding, "ink fits the item" stops meaning "ink fits the
+           label" and this instrument goes blind again (Major 1). */
+        for (const b of m.labelBoxes ?? []) {
+          if (b && !b.ok) {
+            note(
+              'LABEL BOX',
+              `${route} ${w}x${h} ${theme}/${language} ${b.where} label ${b.labelW} vs item ${b.itemW} ` +
+                `= ${b.delta}, expected ${b.expected} (2 x --size-sidebar-label-inset)`,
+            );
+          }
+        }
 
         /* The rail's own two-line envelope: a label that needs a third line is
            being eaten by the clamp, which no width comparison can see. */
