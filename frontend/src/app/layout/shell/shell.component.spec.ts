@@ -178,6 +178,11 @@ describe('ShellComponent', () => {
     expect(pill).toBeTruthy();
     expect(pill!.getAttribute('role')).toBe('status');
     expect(pill!.textContent).toContain(asOf(since));
+    // Owner decision 2026-08-29: the connection screen's own glyph, not a
+    // dot — decorative, so the label stays the accessible content.
+    const glyph = pill!.querySelector('ng-icon');
+    expect(glyph?.getAttribute('name')).toBe('phosphorWifiSlash');
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true');
 
     guestData.connection.set('ONLINE');
     guestData.staleSince.set(null);

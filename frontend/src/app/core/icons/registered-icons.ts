@@ -50,8 +50,11 @@ import { phosphorSparkleFill } from '@ng-icons/phosphor-icons/fill';
  * here.
  *
  * Additions for guest-frontend-integration:
- *   - `phosphorWifiSlash` — the connection screen's glyph
- *     (docs/design/screens-inhouse/connection.md).
+ *   - `phosphorWifiSlash` — the offline glyph of everything specified in
+ *     docs/design/screens-inhouse/connection.md, now in three places: the
+ *     connection screen, the escalated staleness banner (REQ-952) and, since
+ *     the owner's decision of 2026-08-29, the staleness pill, whose
+ *     decorative dot it replaced.
  *   - `phosphorCircle` — the neutral fallback for unknown wire icon names.
  *
  * Additions for sidebar-catalogue-overflow (REQ-904):

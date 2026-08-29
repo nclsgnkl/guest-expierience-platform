@@ -2,7 +2,7 @@
 
 **Tokens:** [../tokens.md](../tokens.md)
 **Source:** none — **designed in-repo, 2026-08-20** (convention approved by the user 2026-08-20, `guest-frontend-integration` D1)
-**Last updated:** 2026-08-28 (the banner's horizontal padding made asymmetric, at unchanged width — owner decision)
+**Last updated:** 2026-08-29 (the staleness pill's mark changed from a decorative dot to the `WifiSlash` glyph, at unchanged height — owner decision)
 
 > ⚠️ **Provenance: designed in-repo — no Figma counterpart.** **A Figma
 > re-import will not produce this file**; if the screen is ever drawn in
@@ -69,18 +69,64 @@ unreachable (`STALE` state). The constitution's wording — "a discreet
 staleness hint" — is the requirement:
 
 - Position: directly **below the status-bar cluster**, right-aligned to it,
-  offset `--space-1` — inside the reserved corner's clearance, verified by
-  measurement at both reference viewports (the recorded clearance to Home's
-  card row is 48px/38px horizontal, 20px/16px vertical — the pill is
-  ≤ 1.75rem tall and must stay inside that envelope; if it cannot, it moves
-  into the status bar's own row rather than pushing content).
+  offset `--space-1` — inside the reserved corner, verified by measurement at
+  both reference viewports. The two recorded clearances there are **48px/38px
+  horizontal** to Home's card row and **20px/16px vertical** from the status
+  bar down to Home's **heading ink**, measured in the heading column
+  (`docs/features/appearance-and-language/02-design.md` §8.2,
+  `../screens/home.md`) — the second one governs the heading column, which is
+  not where the pill is; see the measurement below.
+- Height is whatever the construction produces, not a budget it has to meet:
+  **1.6375rem of scaling box + a 2px hairline border → 1.7619rem at 1280 /
+  1.7922rem at 1024**. The border is `px` by constitution and therefore does
+  not shrink with the root, which is why the rem figure is *larger* at the
+  1024 floor. If the pill ever did collide with something it moves into the
+  status bar's own row rather than pushing content.
 - Shape: pill — `--color-surface-glass` fill, `--border-glass`,
   `border-radius: 999px` (the design sheet's chip radius), padding
   `--space-1` vertical / `--space-3` horizontal, `--blur-glass`.
-- Content: a `0.5rem` dot in `--color-status-offline` (decorative) +
-  `--text-status` (0.875rem / 700) in `--color-text-secondary`:
+- Content: the Phosphor `WifiSlash` glyph at `--size-icon-xs` (1.125rem) in
+  `--color-status-offline` (decorative) + `--text-status` (0.875rem / 700) in
+  `--color-text-secondary`, gap `--space-2`:
   - de: `Stand HH:MM` · en: `As of HH:MM` — from the cache's `storedAt`,
     formatted with the active language's locale (the clock's own convention).
+  - **The glyph replaced a `0.5rem` dot** — owner decision 2026-08-29, which
+    covers the glyph and nothing else. Same glyph as the connection screen
+    above and as the escalated banner below, so all three name **what** is
+    missing — the connection — rather than only marking *that* something is
+    off; a coloured dot said nothing on its own. `--size-icon-xs` and not the
+    banner's `--size-icon-md`: xs is the token for a glyph standing beside a
+    `--text-status` label (the status bar's globe/sun/moon), and at that size
+    the glyph stays inside the label's own line box, so the height does not
+    move.
+  - **The gap tightened from `--space-3` to `--space-2`** — an implementation
+    consequence, **not** part of the owner decision: the status bar's own
+    trigger already pairs an `--size-icon-xs` glyph with a `--text-status`
+    label at exactly `--space-2`, and a 1.125rem glyph needs less air beside
+    the text than a 0.5rem dot did.
+  - **Height is unchanged by the swap**, measured in a real browser at both
+    reference viewports: at 1.125rem the glyph is shorter than the label's own
+    line box (0.875rem × 1.3 = 1.1375rem), so the pill's height stays
+    label-driven — **28.19px at 1280×832 and 22.94px at 1024×768, identical to
+    the dot's to 0.00px**.
+  - **Those heights are not bounded by the 20px/16px figure**, and it would be
+    a false reassurance to say they fit inside it: 28.19px/22.94px fits no
+    20px/16px band, and that band is not the pill's constraint in the first
+    place — it is the status bar's drop to Home's **heading ink**, measured in
+    the heading column. Measured in the same render, the pill does not overlap
+    that column at all: the horizontal separation is **562px at 1280**
+    (heading x172…562, pill x1124…1248) and **447px at 1024** (heading
+    x137.6…449.6, pill x896.4…998.4). The pill hangs over the **widget
+    column**, which the banner section below records as *empty by design in
+    both directions*, and the nearest content underneath is Home's card row at
+    y548…744 / y541…698 — ~644px from the pill's bottom edge to that row's
+    bottom at 1280. So: **it collides with nothing because the region under
+    the anchor is empty**, not because it fits in a 20px band.
+  - The pill is **8px wider at 1280 / 6.4px at 1024** than with the dot (the
+    glyph is wider than 0.5rem, minus the tightened gap). It is right-anchored,
+    so it grows leftwards into the recorded 48px/38px horizontal clearance to
+    Home's card row, which absorbs it — to be re-confirmed on the next full
+    `tools/measure-states.mjs` run against a dev backend.
 - Not interactive, `role="status"` with `aria-live="polite"` set once (it
   appears/disappears; it must not chatter on every minute tick — the
   timestamp is static per stale episode, showing when the data was fetched,

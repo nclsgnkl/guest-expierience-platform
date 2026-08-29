@@ -1,5 +1,64 @@
 # Handoff — guest-payload-consolidation (Part B)
 
+## CURRENT STATE (read this first — 2026-08-29, `lead`, the pill's WLAN glyph)
+
+**Owner ask, uncommitted, on `refactor/bce-subpackages-and-boundary-security`:**
+*"Das no connection banner finde ich jetzt gut. Aber leider ist in der pill das
+wlan symbol nicht mehr da. Das hätte ich dort gerne statt dem Punkt."* The
+banner from the section below is **accepted as-is and was not touched**.
+
+The staleness pill's decorative `0.5rem` dot is now `phosphorWifiSlash` — the
+same glyph the connection screen and the escalated banner already carry, so
+the discreet hint names *what* is missing instead of only marking *that*
+something is. Size `--size-icon-xs` (1.125rem), **not** the banner's
+`--size-icon-md`: xs is `tokens.css`'s own step for a glyph beside a
+`--text-status` label. Colour `--color-status-offline` on the `ng-icon` host
+(the injected `<svg>` is unstylable from component CSS), `aria-hidden` — still
+decorative, the text still carries the information.
+
+**Height did not move at all:** 28.19px @1280 / 22.94px @1024, byte-identical
+to the dot in the same render (reviewer swapped it back to check). The glyph
+sits just inside the label's own line box, so the pill stays label-driven.
+Width grew +8.0px / +6.4px, leftwards from the right anchor into empty space.
+
+**Changed:** `staleness-pill.component.{html,ts,css}` (the `.ts` had **no**
+`imports` array before — `NgIcon` added), `shell.component.spec.ts` (the
+existing STALE test now asserts the glyph + `aria-hidden`),
+`registered-icons.ts` (comment only: three uses now), and
+`docs/design/screens-inhouse/connection.md` → "The staleness pill".
+`ng test` 333/333 (37 files), `ng build` green.
+
+**The `gap` also went `--space-3` → `--space-2`** — an implementation
+consequence, deliberately **not** attributed to the owner in the spec: the
+status bar's own trigger pairs an xs glyph with a `--text-status` label at
+exactly that gap. Flagged to the owner; revertible in one line.
+
+### Two corrections the review forced — read before trusting old numbers
+
+1. The first pass wrote *"the envelope it has to fit is the 20px/16px vertical
+   clearance, which it does."* **False, and now removed.** The pill is 28.19px
+   tall and fits no 20px band — and that band was never the pill's constraint:
+   it is the status bar's drop to Home's **heading ink**, measured in the
+   heading column, from which the pill is **562px (1280) / 447px (1024)** clear
+   horizontally. It hangs over the widget column, empty by design. The record
+   now says *it collides with nothing because the region under the anchor is
+   empty*.
+2. **The spec's `≤ 1.75rem` pill budget was always fiction.** Confirmed
+   pre-existing, not caused by this change: `1.6375rem` of scaling box + a 2px
+   hairline that stays `px` by constitution → **1.7619rem @1280 / 1.7922rem
+   @1024** (larger in rem at the 1024 floor, because the border does not
+   shrink). Rewritten as a descriptive fact, not a budget. If the pill ever
+   does collide, it moves into the status bar's row rather than pushing content.
+
+**Open / not done:** `measure-states.mjs` owns the STALE-pill cell but needs
+the dev backend + manager API (`GXP_SMOKE_ADMIN_PW`); both `dev` and `reviewer`
+measured in throwaway Playwright harnesses against the **real** built bundle
+instead. Re-confirm the +8px width against the recorded 48px/38px horizontal
+clearance on the next full run. Prettier flags `shell.component.spec.ts`
+(`menuItems`, ~line 47) and `connection.md` — **both pre-existing at HEAD**,
+both verified by stash, both deliberately left alone.
+
+
 ## CURRENT STATE (read this first — 2026-08-28, `dev`, the banner's horizontal padding)
 
 **Variante B was built, rejected by the owner, and has been fully rolled
