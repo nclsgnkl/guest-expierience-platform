@@ -36,7 +36,11 @@
  *                       actually rendered, and the DOCUMENT's scroll
  *                       dimensions while the panel is open
  *   REQ-116 … REQ-118 — the Settings screen's boxes
- *   REQ-007 / REQ-009 — nothing wraps or truncates, in either language
+ *   REQ-007 / REQ-009 — nothing leaves the box that paints it, in either
+ *                       language. Since 2026-08-28 a rail label may take two
+ *                       lines (REQ-007's revised acceptance): what is checked
+ *                       is its ink against the ITEM's content box, plus
+ *                       whether the two-line clamp is eating a third line
  *   REQ-104           — sampled dark/light composites vs. 02-design.md §3.4
  *   REQ-011           — logo decodes
  *
@@ -253,14 +257,35 @@ function collect() {
       element only reports its own box, so it cannot see an ellipsis. */
   const inkWidth = (el) =>
     el ? Math.round(range(el).getBoundingClientRect().width * 100) / 100 : null;
+  /** Content width of an element — the width its text actually has to fit
+      into. `clientWidth` includes padding, which is exactly the width the
+      text may NOT use. */
+  const contentWidth = (el) => {
+    if (!el) return null;
+    const style = getComputedStyle(el);
+    const w =
+      (el.clientWidth || el.getBoundingClientRect().width) -
+      parseFloat(style.paddingLeft) -
+      parseFloat(style.paddingRight);
+    return Math.round(w * 100) / 100;
+  };
   /** True when the text is wider than the box that paints it, i.e. it is
-      ellipsized or clipped. Inline elements have `clientWidth === 0` and a
-      rect that is the ink itself, so for those the nearest clipping ancestor
-      is what decides. */
-  const truncated = (el) => {
+      ellipsized, clipped — or simply spilling out of the box it belongs to.
+
+      `boxEl` names the element whose content box the text has to fit into.
+      Pass it whenever the text lives in an inline element: an inline `<span>`
+      has `clientWidth === 0` and a rect that IS the ink, so the fallback below
+      compares the ink against itself, and with no clipping ancestor it answers
+      `false` no matter how far the text runs. That is not hypothetical — the
+      sidebar's `.sidebar-item__label` is exactly this shape, and this function
+      reported "0 truncated" across 168 cells while the rail's labels were
+      visibly running out of their 84px items on screen (2026-08-28). Nothing
+      clips them: the sidebar has no `overflow` and the label is `nowrap`, so
+      the only element that knows the intended width is the item. */
+  const truncated = (el, boxEl = null) => {
     if (!el) return null;
     const ink = inkWidth(el);
-    const own = el.clientWidth || el.getBoundingClientRect().width;
+    const own = boxEl ? contentWidth(boxEl) : el.clientWidth || el.getBoundingClientRect().width;
     if (ink > own + 0.5) return true;
     const rect = el.getBoundingClientRect();
     for (let p = el.parentElement; p; p = p.parentElement) {
@@ -272,16 +297,20 @@ function collect() {
     }
     return false;
   };
-  /** One record per piece of text worth checking for wrap/truncation. */
-  const text = (el, where, singleLine = true) =>
+  /** One record per piece of text worth checking for wrap/truncation.
+      `boxEl` — see `truncated()`: the element whose content box bounds the
+      text, for text that carries no box of its own. */
+  const text = (el, where, singleLine = true, boxEl = null) =>
     el
       ? {
           where,
           text: el.textContent.trim(),
           lines: lineCount(el),
           inkW: inkWidth(el),
-          boxW: Math.round((el.clientWidth || el.getBoundingClientRect().width) * 100) / 100,
-          truncated: truncated(el),
+          boxW: boxEl
+            ? contentWidth(boxEl)
+            : Math.round((el.clientWidth || el.getBoundingClientRect().width) * 100) / 100,
+          truncated: truncated(el, boxEl),
           singleLine,
         }
       : null;
@@ -356,7 +385,22 @@ function collect() {
     activePill: box(document.querySelector('.sidebar-item--active')),
     gapLogoToFirstNav: gap(logo, navItems[0]),
     gapLastNavToSettings: gap(navItems[navItems.length - 1], settingsItem),
-    labels: items.map((i, idx) => text(i.querySelector('.sidebar-item__label'), `sidebar[${idx}]`)),
+    /* The label's box is the ITEM's content box — the span has none of its
+       own (see `truncated()`). `singleLine: false` because the rail reserves
+       two lines for every item since 2026-08-28; the clamp below is what says
+       whether a third one is being eaten. */
+    labels: items.map((i, idx) =>
+      text(i.querySelector('.sidebar-item__label'), `sidebar[${idx}]`, false, i),
+    ),
+    /* `-webkit-line-clamp` hides the overflow without changing the ink width,
+       so `truncated()` cannot see it — the same direct question the overflow
+       popover's tiles ask. */
+    labelsClamped: items.map((i, idx) => {
+      const label = i.querySelector('.sidebar-item__label');
+      return label
+        ? { where: `sidebar[${idx}]`, clamped: label.scrollHeight > label.clientHeight + 0.5 }
+        : null;
+    }),
 
     statusBar: statusBar
       ? {
@@ -846,6 +890,17 @@ for (const [w, h] of viewports) {
           `  text: ${textRecords(m).filter(Boolean).length} strings checked, ${problems.length ? 'PROBLEMS' : 'none wrapping or truncated'}`,
         );
         for (const p of problems) note('TEXT', `${route} ${w}x${h} ${theme}/${language} ${p}`);
+
+        /* The rail's own two-line envelope: a label that needs a third line is
+           being eaten by the clamp, which no width comparison can see. */
+        for (const c of m.labelsClamped ?? []) {
+          if (c?.clamped) {
+            note(
+              'LABEL CLAMPED',
+              `${route} ${w}x${h} ${theme}/${language} ${c.where} needs a third line`,
+            );
+          }
+        }
 
         if (m.logo && (!m.logo.complete || m.logo.naturalWidth === 0)) {
           note('LOGO DID NOT DECODE', JSON.stringify(m.logo));

@@ -158,6 +158,20 @@ Both states use `--color-text-primary` for the label. The icon glyph box is
 value, derived from the surrounding Figma box; see the warning under
 "Components".
 
+> **Deviation, 2026-08-28 (owner decision, recorded not corrected):** the
+> **built rail** renders its glyph at `--size-icon-sm` (1.5rem / 24px), two
+> pixels below this figure. The rail item now reserves **two label lines** for
+> every item so that its height cannot follow its text (the real cause of
+> defect D5 — see `../../features/home-screen-prototype/01-prd.md` → REQ-007),
+> and the arithmetic leaves no room for a 26px glyph: 26 + 4 (`--space-1`) +
+> 2 × 15.6 = 61.2px against the item's 60px content box, measured as an
+> 85.19 × 84 item, i.e. the square broke by 1.19px. Every other number here —
+> the 84px square, `--space-4`/`--space-3` padding, the `--space-1` gap —
+> is unchanged; the glyph is what the two lines were paid for with. **This is
+> not a re-reading of `aspect-[24/24]`**: the ratio still carries no size, and
+> `--size-icon-md` remains the extracted value this file records. The overflow
+> popover's tiles still render `--size-icon-md`.
+
 `[NEEDS CLARIFICATION: no hover, focus, pressed or disabled state exists in the component. Required before implementation — this is a navigation control.]`
 
 `[NEEDS CLARIFICATION: the variant named "Discover" is labelled "Umgebung", and "Info" is labelled "Info" while the PNG says "Infos". Variant names and visible labels should be reconciled.]`

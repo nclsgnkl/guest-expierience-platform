@@ -1,5 +1,102 @@
 # Handoff — guest-payload-consolidation (Part B)
 
+## CURRENT STATE (read this first — 2026-08-28, `dev`, the banner's horizontal padding)
+
+**Variante B was built, rejected by the owner, and has been fully rolled
+back.** *"B gefällt mir nicht, breche das bitte ab. Ich finde das Wort bringt
+Persönlichkeit rein, ohne 'besteht' sieht es sehr technisch aus."* Reverted to
+`HEAD`: `core/i18n/catalog/de.ts` (the word *besteht* is back in **both**
+`stale.banner.body` and `stale.banner.bodyStandby`; English was never
+touched), and `connection.md` / `info.md` restored and re-edited from scratch
+so **no passage describing B survives** — no copy cut, no B geometry.
+
+**What is in the tree instead (Stufe 1, owner-approved shape, uncommitted, on
+`refactor/bce-subpackages-and-boundary-security`):** the banner's horizontal
+padding becomes **asymmetric at an unchanged total** —
+`--space-4 --space-5 --space-4 --space-3`, i.e. 8 px left / 16 px right where
+it was 12/12. `--space-3 + --space-5 = 2 × --space-4` is the only such pair on
+the scale, so the bar's **width, left edge and clearance to Home's headline
+column are unchanged to the pixel** (9.23 px at 1024, 7.0 px at 1280 — the
+floor that was not allowed to move). No copy change, no anchor change; the
+pill is untouched at `HEAD`.
+
+**Changed:** `staleness-banner.component.css`,
+`docs/design/screens-inhouse/connection.md` (padding clause rewritten, three
+measured rows added to the table, the stale "20 banner cells"/"44/44"
+corrected to **28**/**52** — `module-content` had added eight `/info` cells
+without the sentence being touched), `docs/design/screens-inhouse/info.md`
+(one clarification only: its `--space-4` inset is the *vertical* one, and
+every figure on that page is unchanged because the geometry is).
+
+**The measurement that matters, and it corrected the brief.** The pinch is
+**not** primarily the timestamp. The bar is `width: max-content` and the body
+is what sizes it, so the **body's own bottom-right corner** sits at exactly
+the right padding inside the bottom `--radius-2xl` arc — measured
+perpendicular to the arc it was **4.4 px (1024) / 5.1 px (1280)**, tighter
+than the timestamp's 6.4 / 7.8. Stufe 1 lifts the bar's **worst** clearance
+to **6.4 / 7.7 px** (+46 % / +50 %) for free.
+
+| perpendicular to the `--radius-2xl` arc | 1024 before → after | 1280 before → after |
+|---|---|---|
+| body's bottom-right corner (**the worst point**) | 4.4 → **6.4** | 5.1 → **7.7** |
+| timestamp's top-right corner | 6.4 → 12.4 | 7.8 → 15.5 |
+| glyph → left edge (straight there) | 9.4 → 6.4 | 11.5 → 7.7 |
+| bar box / clearance to headline column | `x459 w540` / 9.23 px — **unchanged** | `x569 w679` / 7.0 px — **unchanged** |
+
+**Stufe 2 was built, measured, photographed and then reverted — it is NOT in
+the tree.** (`right: --space-7 → --space-6` on banner **and** pill together,
+plus right padding `--space-6`.) It lands on the predicted numbers: net +8 px
+width, +8 px shift, headline clearance still 9.25 / 7.0, timestamp corner
+12.4 / 15.5. **But it does not improve the bar's worst clearance at all** —
+that is the left glyph at 6.4 / 7.7, identical to Stufe 1, because Stufe 2
+only adds padding on the right. Its price is real: pill and bar sit
+**6.4 px (1024) / 8 px (1280) further right than the status-bar clock**, which
+shares the shell's `--space-7` line. Screenshots and the full table are in the
+session report — **the owner chooses**.
+
+**Verified:** `measure-states.mjs` **52/52 `NO-SCROLL OK`, 0 findings** both
+before and after; title, body and timestamp one line in every cell; `/info`
+clearance untouched. `ng test` **333/333 in 37 files**; `ng build`
+**467.38 kB / 106.44 kB** (baseline 467.13 / 106.41 — the delta is the CSS
+comment). Backend mutations all restored by the instrument.
+
+**Next:** owner picks Stufe 1 (in the tree) or Stufe 2, then `reviewer`.
+
+---
+
+
+## CURRENT STATE (read this first — 2026-08-28, `dev`, the banner's horizontal padding)
+
+**Owner-approved UI fix ("Variante B"), on
+`refactor/bce-subpackages-and-boundary-security`, not committed.** The
+escalated staleness banner's timestamp sat visually pinched into the
+`--radius-2xl` corner. Horizontal padding `--space-4` → **`--space-6`**
+(vertical stays `--space-4`), paid for by dropping the word *besteht* from
+**both** German body variants (`stale.banner.body`, `stale.banner.bodyStandby`
+— the standby cut is symmetry the owner has been told about and may reject).
+English is untouched.
+
+**Changed:** `staleness-banner.component.css`, `core/i18n/catalog/de.ts`,
+`docs/design/screens-inhouse/connection.md` (padding clause, measurement table,
+copy table, the two consequence bullets; the stale "44/44 cells" corrected to
+**52**), `docs/design/screens-inhouse/info.md` (banner row re-measured).
+
+**Measured before → after** (`tools/measure-states.mjs`, 52/52 cells
+`NO-SCROLL OK`, 0 findings both runs): timestamp corner → corner arc
+6.4 → **12.4px** at 1024 and 7.8 → **15.5px** at 1280; clearance to Home's
+headline column 9.2 → **32px** / 7.0 → **37px**; bar `x459 w540` → `x483 w516`
+(1024 de) and `x569 w679` → `x599 w649` (1280 de). Title, body and timestamp
+stay on one line in every cell.
+
+**Also measured, deliberately NOT implemented:** moving the bar right, `right:
+var(--space-7)` → `--space-6` / `--space-5`. It buys 6.4 / 12.8px (1024) and
+8 / 16px (1280) of extra clearance to the headline, and costs the shared
+anchor: the bar's right edge is flush with the status bar's today (Δ0) and
+would sit 8px / 16px past it. Screenshots and numbers are in the session
+report — **the owner chooses**.
+
+---
+
 **Last session:** 2026-08-28, `reviewer` — **round 3**, the verification of fix
 round 2 (see the section at the end of this file). Previous: `dev` — the
 **second fix round**: round 2's findings 1–7; `reviewer` — re-review round 2;

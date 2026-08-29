@@ -80,18 +80,40 @@
 }
 
 .sidebar-item__label {
-  /* Labels never wrap (REQ-007): "Smart Home" needs ~71px against a ~68px
-     label box and split onto two lines, which shifted that item's icon and
-     broke the nav column's rhythm (defect D5). A property-configured label
-     that is too long now overflows predictably instead of reflowing the
-     whole sidebar. */
-  white-space: nowrap;
+  /* TWO LINES ARE RESERVED FOR EVERY ITEM, one-liners included (2026-08-28,
+     owner decision — this replaces `white-space: nowrap`). D5's cause was
+     never the wrap: it was that the item's height followed its text, so the
+     item that wrapped grew and pushed its own icon out of the column's
+     rhythm. A fixed two-line box removes the dependency at its root — the
+     item is 84px square whatever a property calls its sections, every icon
+     in the column sits on the same line, and so does every first text line.
+     `nowrap` fixed the symptom and bought it with a label that ran out of
+     its item, which is the overflow this replaces.
+
+     The box is the item's full content width, so what fits is measurable:
+     ink vs. this box is exactly what `tools/measure.mjs` compares. Anything
+     past two lines is clamped with an ellipsis rather than clipped. */
+  width: 100%;
+  height: calc(2 * var(--text-label-line-height) * 1em);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  text-align: center;
+  /* A menu label is manager-configurable, so its width is not ours to
+     control (frontend/CLAUDE.md -> Layout): an unbroken compound noun —
+     "Einstellungen", "Hausordnung" — breaks inside the word rather than
+     running out of the item. */
+  overflow-wrap: anywhere;
   font-size: var(--text-label);
   font-weight: var(--text-label-weight);
   line-height: var(--text-label-line-height);
 }
 
 .sidebar-item--active .sidebar-item__label {
+  /* `1em` above, not a token multiple, so the reserved height follows
+     whichever of the two label sizes applies without being restated. */
   font-size: var(--text-label-active);
   font-weight: var(--text-label-active-weight);
 }
@@ -166,11 +188,12 @@
   cursor: pointer;
 }
 
-/* The one place the panel diverges from the sidebar, which sets
-   `white-space: nowrap` and lets a long label overflow: in a grid a wrapped
-   label costs nothing, and the longest configured labels need two lines at
-   5.25rem. Two lines, then clamped — never a third row of type that would
-   push the tile out of square. */
+/* The same two-line clamp the sidebar item now carries (2026-08-28): the
+   longest configured labels need two lines at 5.25rem, and a third row of
+   type would push the tile out of square. The tile keeps `--size-icon-md`
+   where the rail item stepped down to `--size-icon-sm`, because a tile
+   spends its height on `--space-2` of padding where the rail item spends
+   `--space-4`. */
 .sidebar-overflow__tile-label {
   font-size: var(--text-label);
   font-weight: var(--text-label-weight);

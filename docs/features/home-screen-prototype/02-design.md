@@ -535,6 +535,17 @@ property-configured label degrades predictably instead of silently reflowing
 the whole nav column. The reference's own longest label ("Einstellungen")
 measures ~84px, i.e. the design is already at the edge of that box.
 
+> **Superseded 2026-08-28 (owner decision) — `nowrap` is gone.** "Degrades
+> predictably" turned out to mean "runs out of the item and keeps going":
+> "Einstellungen" needs 79px against a 68px content box at 1280 and simply
+> painted over the item's edge. The label now reserves **two lines for every
+> item** and is clamped with an ellipsis past that, which is what actually
+> removes this section's problem — the item's height no longer depends on its
+> text at all, so no label can move an icon. See
+> `01-prd.md` → REQ-007 and the D5 note under Defects for the re-diagnosis,
+> and `sidebar.component.css` for the rule. The heading above ("Text must not
+> wrap") is now true of card titles only.
+
 **Card titles.** The title box is **162px** (196 − 2 × 1px glass border − 2 ×
 16px padding; the "164px" this originally read forgot the border) and "Haus &
 Funktionen" needs **167px** — Figma does not re-wrap a fixed text frame, a

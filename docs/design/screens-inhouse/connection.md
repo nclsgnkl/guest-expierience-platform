@@ -2,7 +2,7 @@
 
 **Tokens:** [../tokens.md](../tokens.md)
 **Source:** none — **designed in-repo, 2026-08-20** (convention approved by the user 2026-08-20, `guest-frontend-integration` D1)
-**Last updated:** 2026-08-27 (the escalated staleness banner — `guest-payload-consolidation` REQ-952)
+**Last updated:** 2026-08-28 (the banner's horizontal padding made asymmetric, at unchanged width — owner decision)
 
 > ⚠️ **Provenance: designed in-repo — no Figma counterpart.** **A Figma
 > re-import will not produce this file**; if the screen is ever drawn in
@@ -138,9 +138,26 @@ dialogue the guest cannot dismiss.
   bar never reaches over it). No `rem` clamp: a fixed width plus a line-count
   clause is the contradiction the first build shipped.
 - Surface: `--color-surface-glass`, `--border-glass`, `--radius-2xl`,
-  `--blur-glass`, `--shadow-panel`; padding `--space-4` on all four sides
-  (down from `--space-5` horizontal — chrome a bar does not need is width the
-  copy does), glyph-to-text gap `--space-4`.
+  `--blur-glass`, `--shadow-panel`; padding **`--space-4` vertical, and
+  horizontally `--space-3` left / `--space-5` right**, glyph-to-text gap
+  `--space-4`.
+  **The horizontal asymmetry is deliberate, and it is free** (owner decision
+  2026-08-28, revising the 2026-08-27 cut to `--space-4` on all four sides —
+  *"chrome a bar does not need is width the copy does"*, which remains true
+  and is why the total is not allowed to grow). Both text edges on the right
+  end inside a `--radius-2xl` arc, and the tighter of the two is **not** the
+  timestamp: because the bar is `max-content`, **the body is what sizes it**,
+  so the body's own bottom-right corner sits at exactly the right padding,
+  in the bottom arc. Measured perpendicular to the arc it was **4.4 px
+  (1024) / 5.1 px (1280)** — that is the pinch, and it is the thing that
+  reads as cramped. The glyph on the left is a small wedge crossing the
+  *straight* part of the left edge, so it loses only 0.3–0.5 px to the
+  rounding and padding costs least there. Moving **one scale step** from the
+  left to the right therefore lifts the bar's worst clearance to **6.4 px /
+  7.7 px** while **`--space-3` + `--space-5` = 2 × `--space-4` exactly** —
+  the only such pair on the scale. The bar's width, its left edge, and with
+  it the clearance to Home's headline column are unchanged **to the pixel**;
+  see "Where the bar lands, measured".
 - **Glyph** — Phosphor `WifiSlash` (regular weight), `--size-icon-md` (one step
   down from the panel's `lg`: a bar carries a smaller glyph), in
   **`--color-status-warning`**. Still **decorative** — the text carries the
@@ -185,11 +202,21 @@ requires; both are disabled there, and nothing about the bar depends on either.
 
 ### Where the bar lands, measured
 
-Measured on the built app by `frontend/tools/measure-states.mjs` — **20 banner
+Measured on the built app by `frontend/tools/measure-states.mjs` — **28 banner
 cells**: both hosts × both reference viewports × both themes × both languages
-(16), plus a **37-character unbroken display name** at both viewports × both
-languages (4). `storedAt` aged past the threshold, `/api` blocked at the
-browser. The whole run is **44/44 cells `NO-SCROLL OK`, 0 findings**.
+(16), plus the `/info` route at both viewports × both themes × both languages
+(8, added by `module-content`), plus a **37-character unbroken display name**
+at both viewports × both languages (4). `storedAt` aged past the threshold,
+`/api` blocked at the browser. The whole run is **52/52 cells `NO-SCROLL OK`,
+0 findings**. *(The counts read "20 banner cells" and "44/44" until
+2026-08-28: `module-content` added eight `/info` cells to the instrument
+without these sentences being touched.)*
+
+**Every figure in the table below survived the 2026-08-28 padding revision
+unchanged**, and that is the whole point of it: `--space-3` + `--space-5` is
+the same total as `--space-4` + `--space-4`, so the chrome sum, the bar's
+width, its left edge and its clearance to the headline column are identical
+before and after. Re-measured to confirm rather than assumed.
 
 | | 1024 × 768 | 1280 × 832 |
 |---|---|---|
@@ -201,6 +228,17 @@ browser. The whole run is **44/44 cells `NO-SCROLL OK`, 0 findings**.
 | `.home-content__widgets` — the empty widget column | **x819**…998 (179 px) | **x1024**…1248 (224 px) |
 | Home's card row | y541…698 | y548…744 |
 | body / title / timestamp lines | 1 / 1 / 1 in every cell | 1 / 1 / 1 in every cell |
+| **the bar's worst text-to-arc clearance** — body's bottom-right corner, perpendicular | **4.4 → 6.4 px** | **5.1 → 7.7 px** |
+| timestamp's top-right corner → the same arc | 6.4 → 12.4 px | 7.8 → 15.5 px |
+| glyph → the left edge (straight there; 0.3–0.5 px lost to the arc) | 9.4 → 6.4 px | 11.5 → 7.7 px |
+
+The last three rows are the only thing 2026-08-28 changed, and they are read
+as *before → after*. Note the third: after the revision the bar's tightest
+point is no longer on the right but is the **glyph on the left**, at
+essentially the value the body's corner had before it. That is not a
+regression — a glyph beside a straight edge and a line of text pinched into a
+curve do not read alike — but it is the reason more right-hand padding buys
+nothing further without also widening the left.
 
 > **Correction, 2026-08-27.** Earlier revisions of this table gave the widget
 > column as x475…998 / x594…1248 and named x450 / x562 as

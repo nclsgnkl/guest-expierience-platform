@@ -1,5 +1,45 @@
 # Handoff: Home Screen Prototype
 
+## CURRENT STATE (read this first — 2026-08-28, `dev`, the rail's two-line labels)
+
+**Owner-approved UI fix, on `refactor/bce-subpackages-and-boundary-security`,
+not committed.** The rail's labels overflowed their items; the owner chose
+"variant 1": reserve **two label lines for every item**, keep the item square
+and keep its padding.
+
+**Changed:** `sidebar.component.css` (`.sidebar-item__label`: `white-space:
+nowrap` → fixed two-line box, `-webkit-line-clamp: 2`, `overflow-wrap:
+anywhere`, `text-align: center`), `sidebar.component.html` (the three **rail**
+glyphs step `--size-icon-md` → `--size-icon-sm`; the popover tile keeps `md`),
+`tools/measure.mjs` (`truncated()` could not see an inline span with no
+clipping ancestor — it now takes the box that bounds the text, and the rail
+labels are measured against the item's content box; plus a `LABEL CLAMPED`
+check). Docs: `01-prd.md` REQ-007 + the D5 note, `02-design.md` → "Text must
+not wrap", `docs/design/screens/home.md` (glyph deviation), `menu-overflow.md`.
+
+**Measured (real browser, both reference viewports × both themes × both
+languages, every catalogue label in both languages probed in the live item):**
+before — 208 truncated strings over 168 cells, `Smart Home` 59px ink in a
+54.2px box at 1024, `Einstellungen` 63px; after — **168 cells, 0 overflowing,
+0 truncated**, every item 84×84 (Δ0.00), icon tops identical within a group,
+nothing scrolls. `ng test` 333/333 in 37 files, `ng build` green.
+
+**One label still does not fit two lines:** `Ärztliche Versorgung` (20 chars)
+is clamped with an ellipsis at 1024 (both states) and at 1280 in the **active**
+ExtraBold state — `Versorgung` needs 69px against the 68px box; inactive at
+1280 it fits (66px). Two German compounds break mid-word — `Einstellungen` →
+`Einstellung/en`, `Hausordnung` → `Hausordnun/g` — because they need 79/80px on
+one line. `hyphens: auto` was measured and produces **no** hyphen in this
+Chromium (no German dictionary; an offline kiosk cannot rely on one).
+**Owner's call**, per his own "report rather than rename" instruction.
+
+## What's next
+
+Review this change (`reviewer` / `/review`), then the owner commits. Nothing
+here needs another `dev` step.
+
+---
+
 ## CURRENT STATE (read this first — 2026-08-18, `dev`, round 6 — the approved `CLAUDE.md` clause)
 
 **Phase:** `06_review` — **PASS ✅** · 🔴 0 · 🟠 0 · 🟡 0 · 🟢 4, against

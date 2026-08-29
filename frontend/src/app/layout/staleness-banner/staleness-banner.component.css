@@ -22,7 +22,21 @@
   gap: var(--space-4);
   width: max-content;
   max-width: calc(100% - var(--size-sidebar) - var(--space-8) - 2 * var(--space-7));
-  padding: var(--space-4);
+  /* Asymmetric horizontal padding, and the asymmetry is the point (owner
+     decision 2026-08-28). Both text edges on the RIGHT end inside a
+     --radius-2xl arc: the timestamp at the top-right, and — tighter, because
+     the bar is `max-content` and the body is what sizes it — the body's own
+     bottom-right corner, which measured only 4.4px (1024) / 5.1px (1280) from
+     the arc with --space-4 all round. That is the pinch. The glyph on the
+     left is a small wedge crossing the straight part of the left edge, so it
+     loses almost nothing to the rounding (0.3-0.5px) and padding costs least
+     there. Trading one scale step from the left to the right therefore lifts
+     the bar's WORST clearance from 4.4/5.1px to 6.4/7.7px at a WIDTH THAT
+     DOES NOT MOVE: --space-3 + --space-5 is exactly 2 * --space-4 — the only
+     such pair on the scale — so the bar's left edge, and with it the
+     clearance to Home's headline column that is the binding constraint
+     (connection.md -> "Where the bar lands"), is unchanged to the pixel. */
+  padding: var(--space-4) var(--space-5) var(--space-4) var(--space-3);
   background: var(--color-surface-glass);
   border: var(--border-glass);
   border-radius: var(--radius-2xl);

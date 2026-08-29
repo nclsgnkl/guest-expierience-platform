@@ -140,10 +140,15 @@ Each tile:
 - flex column, `gap: var(--space-1)`, centred — the sidebar item's internals;
 - glyph `--size-icon-md`, the section's own configured icon;
 - label `--text-label`, **wrapping to at most 2 lines** and clamped
-  (`-webkit-line-clamp: 2`). This is the one place the panel diverges from the
-  sidebar, which sets `white-space: nowrap` and lets a long label overflow: in a
-  grid a wrapped label costs nothing, and the longest fixture label
-  ("Anreise & Abreise", "Ärztliche Versorgung") needs two lines at 5.25rem;
+  (`-webkit-line-clamp: 2`) — the longest fixture labels ("Anreise & Abreise",
+  "Ärztliche Versorgung") need two lines at 5.25rem. *(Until 2026-08-28 this
+  was "the one place the panel diverges from the sidebar, which sets
+  `white-space: nowrap` and lets a long label overflow". The rail now carries
+  the same two-line clamp — owner decision, see
+  `../../features/home-screen-prototype/01-prd.md` → REQ-007 — so the panel
+  and the rail agree. The tile keeps `--size-icon-md` where the rail item
+  stepped down to `--size-icon-sm`: the tile spends `--space-2` on padding
+  where the rail item spends `--space-4`, so it has the height to spare.)*;
 - `border-radius: var(--radius-md)`, transparent background;
 - focus ring identical to `.sidebar-item:focus-visible`;
 - **no active variant.** A tile in the panel is by definition not the active

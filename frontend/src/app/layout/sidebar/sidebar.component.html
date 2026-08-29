@@ -15,7 +15,7 @@
           class="sidebar-item__icon"
           [class.icon-gradient-active]="isActive(item)"
           [name]="item.icon"
-          size="var(--size-icon-md)"
+          size="var(--size-icon-sm)"
         />
         <span class="sidebar-item__label">{{ item.label }}</span>
       </button>
@@ -36,7 +36,7 @@
         [cdkMenuTriggerFor]="overflowPanel"
         [cdkMenuPosition]="menuPosition"
       >
-        <ng-icon class="sidebar-item__icon" name="phosphorDotsThree" size="var(--size-icon-md)" />
+        <ng-icon class="sidebar-item__icon" name="phosphorDotsThree" size="var(--size-icon-sm)" />
         <span class="sidebar-item__label">{{ t('nav.more') }}</span>
       </button>
     }
@@ -87,7 +87,7 @@
         class="sidebar-item__icon"
         [class.icon-gradient-active]="isActive(settings())"
         [name]="settings().icon"
-        size="var(--size-icon-md)"
+        size="var(--size-icon-sm)"
       />
       <span class="sidebar-item__label">{{ settings().label }}</span>
     </button>

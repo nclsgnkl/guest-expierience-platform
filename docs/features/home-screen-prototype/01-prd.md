@@ -234,9 +234,18 @@ end to end, so that:
   then the headline reads "Willkommen im Airbnb von Lisa!", all 4 cards show
   the confirmed Figma copy, and each card's `targetSectionId` resolves to a
   real `menuItems`/`settings` id (no dangling reference).
-- REQ-007: **Acceptance strengthened 2026-08-18 (defect D5):** every sidebar
-  label renders on **exactly one line** at every supported viewport size — no
-  label wraps ("Smart Home" wrapped to two lines in the built app). Given the
+- REQ-007: **Acceptance revised 2026-08-28 (owner decision), replacing the
+  2026-08-18 wording:** every sidebar label renders **within its item's
+  content box, on at most two lines**, at every supported viewport size —
+  the item stays 84px square and its icon sits at the same height whatever
+  the label is. The 2026-08-18 wording read "exactly one line — no label
+  wraps", which was written from D5's symptom: "Smart Home" wrapping was
+  visible, but what actually broke the icon column was that the item's height
+  *followed its text*. `white-space: nowrap` satisfied that criterion and
+  paid for it with labels running out of their items — a defect this
+  criterion could not see, because it asked about lines and not about the
+  box. Two reserved lines fix the cause instead: a label longer than two
+  lines is clamped with an ellipsis, and nothing leaves the item. Given the
   Home route is active, when the sidebar renders, then
   exactly the Home item shows the active gradient background and
   `--text-label-active` weight, the other 5 (4 `menuItems` + Settings) show
@@ -371,6 +380,24 @@ coordinates), not inferred from reading the CSS.
 | **D3** | Active sidebar icon glyph renders flat dark navy, no gradient | Never specified. `docs/design/screens/home.md` explicitly decided the glyph does *not* participate in the active state, so the implementation was faithful to the spec and the spec was wrong about the render. User override, 2026-08-18 | **REQ-023** (new) |
 | **D4** | Logo tile shows the browser's broken-image placeholder | **The SVG file is not well-formed XML.** `frontend/src/assets/branding/logo-placeholder.svg` contains `<!-- Placeholder mark -- swappable single-asset slot … -->`; a `--` sequence is illegal *inside* an XML comment. Chromium's SVG parser rejects the document, the `<img>` fires `error`, and the broken-image glyph renders. Verified: the file serves `200 image/svg+xml` (not a 404, not an asset-pipeline problem) and `new Image()` fires `error` on it, while the byte-identical file with the `--` removed loads fine | **REQ-011** (existing, violated) |
 | **D5** | "Smart Home" wraps to two lines in the sidebar; "Haus & Funktionen" wraps to two lines on its card — desynchronising all four cards' title/description baselines | Two independent near-misses, both from taking a spec number literally. Sidebar: `--size-sidebar-item` is 72px (the Figma *component's* box), leaving a 56px label box; the reference render's item is **84px** — the sidebar's inner width — and the label needs ~71px. Card: the title box is 162px (196 − 2 × 1px glass border − 2 × 16px padding — the "164px" first recorded here forgot the border) and "Haus & Funktionen" at `--text-title` measures 167px — it fits in Figma, which does not re-wrap a fixed text frame, and does not fit in a browser | **REQ-007 / REQ-009** (existing; acceptance criteria strengthened — no prior requirement said "must not wrap", which is why nothing caught it) |
+
+> **D5's sidebar half, re-diagnosed 2026-08-28 (owner decision).** The fix
+> that shipped in 2026-08-18 was `white-space: nowrap` on
+> `.sidebar-item__label`, and the diagnosis above stops one step short of the
+> cause: **the wrap was not the defect, the text-dependent item height was.**
+> The item is `aspect-ratio: 1` with `height: auto`, so a second line grew the
+> item past its square and pushed that item's icon out of the column's rhythm.
+> `nowrap` removed the second line and with it the growth — and bought a label
+> that runs out of its 68px box instead, which the owner saw on screen while
+> `measure.mjs` reported "0 truncated" (its `truncated()` could not see an
+> inline span with no clipping ancestor; fixed the same day). Reserving **two
+> lines for every item** removes the dependency at its root: the height is
+> constant, every icon aligns, and every first text line aligns too. The price
+> is `--size-icon-md` → `--size-icon-sm` on the rail's glyphs (26 → 24px at
+> 1280): 26 + 4 gap + 2 × 15.6 = 61.2px against a 60px content box —
+> measured, the item came out 85.19 × 84, so the square broke by 1.19px.
+> Everything else the owner named as fixed (the square, the `--space-4` /
+> `--space-3` padding, the `--space-1` gap) is untouched.
 | **D6** | Horizontal scrollbar below 1280px; no defined behaviour for smaller screens | `html, body { min-width: 1280px }` (REQ-016's guard rail) forces overflow at anything narrower. Verified: at 1024×768 `scrollWidth = 1280` vs `clientWidth = 1024`; at 1280×832 and 1366×768 there is no overflow today | **REQ-024 + REQ-025** (new) |
 | **D7** | *(found while verifying the others, not reported by the user)* The whole content column sits **32px too far right** — card row at `x = 204` where the reference has `x = 172` | `HeroArtworkComponent` renders nothing, but its host element is still a flex item of `.home-content`, and that row has `gap: var(--space-7)` (32px). A zero-width item still gets a gap after it. The empty component costs exactly one gutter | **REQ-010 / REQ-014** (existing, violated) |
 

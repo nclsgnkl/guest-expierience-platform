@@ -510,7 +510,12 @@ design rule:
    both say content keeps rendering behind it on every route. A partial overlap
    is its designed behaviour, not a collision.
 2. The 0.2 px is against the banner's **padding**, not its copy: the body is
-   inset by `--space-4`, so the text clears the panel by ~9 px.
+   inset by `--space-4`, so the text clears the panel by ~9 px. *(That is the
+   **vertical** padding, and it is the only one this arithmetic uses. The
+   banner's horizontal padding became asymmetric on 2026-08-28 —
+   `--space-3` left / `--space-5` right — at an unchanged total, so every
+   figure on this page, the clearance included, is unchanged; re-measured,
+   not assumed. See `connection.md` → "Layout".)*
 3. **The rows are left-aligned, and that is why it does not matter.** Row
    content starts at x157.8 / x196 and the longest expected value ends around
    x278 / x348 — nowhere near the banner's x446–459 / x554–569. The band the bar
