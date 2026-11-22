@@ -457,3 +457,6 @@ FodyWeavers.xsd
 *signing-private-key*
 !/backend/app/src/test/resources/update/test-signing-private-key.pem
 !/backend/app/src/test/resources/update/test-signing-private-key-2.pem
+
+# /design-sync build output — regenerate with .design-sync/build.sh
+ds-bundle/
