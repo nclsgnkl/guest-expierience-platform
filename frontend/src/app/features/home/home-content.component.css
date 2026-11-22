@@ -1,0 +1,52 @@
+/* Host participates in no layout of its own — the <div class="home-content">
+   is the box .shell__content lays out (02-design.md -> "The host element is
+   the layout, not the template root"). Without this, `.home-content`'s
+   `height: 100%` resolves against an auto-height host and the column
+   collapses to content height (defect D2, REQ-014). */
+:host {
+  display: contents;
+}
+
+.home-content {
+  display: flex;
+  flex-direction: row;
+  /* stretch + full height (REQ-014): `align-items: flex-end` bottom-aligned
+     the whole content column, which then sized to its content and made
+     .home-content__screen's own space-between and vertical padding inert —
+     that is what glued the heading onto the cards mid-screen (defect D2).
+     The column now fills the content area and pushes heading to the top,
+     cards to the bottom, leaving the space between them deliberately empty. */
+  align-items: stretch;
+  gap: var(--space-7);
+  height: 100%;
+  width: 100%;
+  /* Containing block AND stacking context for the hero artwork layer
+     (docs/design/screens/home.md -> "Hero artwork (2:5)": absolutely
+     positioned, above the background, below the layout). `position: relative`
+     gives the artwork its coordinate origin; `z-index: 0` makes this element
+     a stacking context, so the artwork's `z-index: -1` paints after this
+     box's own background and before its in-flow children instead of
+     disappearing behind the shell's mesh. */
+  position: relative;
+  z-index: 0;
+}
+
+.home-content__screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* No gap: on a full-height column `space-between` does the distribution,
+     and a leftover gap would make "top-anchored / bottom-anchored" only
+     approximately true. */
+  padding: var(--space-9) 0;
+}
+
+.home-content__cards {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-4);
+}
+
+.home-content__widgets {
+  flex: 1;
+}

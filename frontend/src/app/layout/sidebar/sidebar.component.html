@@ -1,0 +1,95 @@
+<nav class="sidebar" [attr.aria-label]="t('nav.aria')">
+  <div class="sidebar__logo">
+    <img class="sidebar__logo-img" [src]="logoAsset()" alt="" />
+  </div>
+
+  <div class="sidebar__menu-items">
+    @for (item of split().sidebar; track item.id) {
+      <button
+        type="button"
+        class="sidebar-item"
+        [class.sidebar-item--active]="isActive(item)"
+        (click)="navigateTo(item)"
+      >
+        <ng-icon
+          class="sidebar-item__icon"
+          [class.icon-gradient-active]="isActive(item)"
+          [name]="item.icon"
+          size="var(--size-icon-md)"
+        />
+        <span class="sidebar-item__label">{{ item.label }}</span>
+      </button>
+    }
+
+    <!-- Slot 5, and only when the property offers more sections than fit
+         (REQ-916, REQ-931): the trigger is ABSENT from the DOM below the
+         threshold, not hidden, so the sidebar is byte-for-byte the one that
+         shipped. It is the same `.sidebar-item` element as every other slot —
+         same box, same focus ring, same press treatment — and it carries no
+         `aria-label`, because its visible label is already its accessible name
+         (`aria-haspopup`/`aria-expanded` come from the CDK). It never renders
+         active: the active section is always in the sidebar itself. -->
+    @if (split().hasOverflow) {
+      <button
+        type="button"
+        class="sidebar-item"
+        [cdkMenuTriggerFor]="overflowPanel"
+        [cdkMenuPosition]="menuPosition"
+      >
+        <ng-icon class="sidebar-item__icon" name="phosphorDotsThree" size="var(--size-icon-md)" />
+        <span class="sidebar-item__label">{{ t('nav.more') }}</span>
+      </button>
+    }
+  </div>
+
+  <!-- Rendered into the CDK's overlay container on document.body, i.e. outside
+       this component's DOM subtree — but these nodes come from this template,
+       so they carry the _ngcontent-* attribute and this component's stylesheet
+       still applies (the same arrangement status-bar-menu.component.html
+       documents). -->
+  <ng-template #overflowPanel>
+    <div class="sidebar-overflow" cdkMenu [attr.aria-label]="t('nav.more.aria')">
+      <!-- The grid is the scroll container, the panel is the box that is
+           bounded: `overflow-y` here and `max-height` on the panel (REQ-917).
+           Nothing truncates and there is no "and N more" — the panel holds
+           whatever is delivered. Fill is row-major, so the alphabetical order
+           reads left-to-right and the linear keyboard model walks it in
+           exactly that order (REQ-919). -->
+      <div class="sidebar-overflow__grid">
+        @for (item of split().overflow; track item.id) {
+          <button
+            type="button"
+            class="sidebar-overflow__tile"
+            cdkMenuItem
+            [cdkMenuitemTypeaheadLabel]="item.label"
+            (cdkMenuItemTriggered)="choose(item)"
+          >
+            <ng-icon
+              class="sidebar-overflow__tile-icon"
+              [name]="item.icon"
+              size="var(--size-icon-md)"
+            />
+            <span class="sidebar-overflow__tile-label">{{ item.label }}</span>
+          </button>
+        }
+      </div>
+    </div>
+  </ng-template>
+
+  <div class="sidebar__settings">
+    <button
+      type="button"
+      class="sidebar-item"
+      [class.sidebar-item--active]="isActive(settings())"
+      (click)="navigateTo(settings())"
+    >
+      <ng-icon
+        class="sidebar-item__icon"
+        [class.icon-gradient-active]="isActive(settings())"
+        [name]="settings().icon"
+        size="var(--size-icon-md)"
+      />
+      <span class="sidebar-item__label">{{ settings().label }}</span>
+    </button>
+  </div>
+</nav>

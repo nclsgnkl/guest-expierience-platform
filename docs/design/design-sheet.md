@@ -18,10 +18,18 @@ Komponenten, Bewegung und Sprache.
 | | Bedeutung |
 |---|---|
 | ✅ | Gebaut und aus Figma ausgelesen — verbindlich |
-| 📋 | Vorschlag, noch nicht gezeichnet — Absicht, keine Spezifikation |
+| 📋 | **Nicht aus Figma** — entweder noch nicht gezeichnet (Absicht, keine Spezifikation) oder selbst entworfen und gebaut, ohne Figma-Vorlage |
 | ⚠️ | Bewusste Abweichung von v1, siehe Protokoll am Ende |
 
-**Verwandte Dokumente:** [`tokens.md`](tokens.md) · [`screens/home.md`](screens/home.md) · [`extraction-log.md`](extraction-log.md)
+> **Ergänzt 2026-08-18.** 📋 hieß bis dahin ausschließlich *"Vorschlag, noch
+> nicht gezeichnet"*. Seit dem dunklen Thema und der Statusleiste gibt es einen
+> zweiten Fall: **entworfen, gemessen und im Code gebaut — aber nicht in
+> Figma**. Beide teilen die eine Eigenschaft, auf die es ankommt: **ein
+> erneuter Figma-Import bringt diese Werte nicht zurück**, ihr Fehlen in einer
+> frischen Extraktion ist kein Beleg dafür, dass sie falsch sind. Wo der
+> Unterschied zählt, sagt der jeweilige Abschnitt es ausdrücklich.
+
+**Verwandte Dokumente:** [`tokens.md`](tokens.md) · [`dark-theme.md`](dark-theme.md) · [`screens/home.md`](screens/home.md) · [`extraction-log.md`](extraction-log.md)
 
 ---
 
@@ -149,18 +157,58 @@ mehr der Seitenhintergrund, sondern die Glasfüllung.
 
 `#CC49AF` als Endpunkt des Icon-Verlaufs ist keine Variable.
 
-### Status 📋 — noch nicht verwendet
+### Status 📋 — teilweise realisiert
 
-Aus v1 übernommen, bislang nirgends im Design eingesetzt. Wird spätestens
-gebraucht für Smart-Home-Zustände, WLAN-Status und Fehlermeldungen.
+Aus v1 übernommen. Zwei der fünf Werte sind inzwischen als Token realisiert;
+die übrigen drei sind weiterhin nirgends eingesetzt und werden spätestens für
+Smart-Home-Zustände und Fehlermeldungen gebraucht.
 
 ```text
-Success  #46D38A
-Warning  #F8B84E
-Danger   #F26666
-Info     #67B8FF
-Offline  #A79DBA
+Success  #46D38A   📋 noch nicht verwendet
+Warning  #F8B84E   ✅ realisiert 2026-08-27 als --color-status-warning
+Danger   #F26666   📋 noch nicht verwendet — die Rolle für destruktive Aktionen
+Info     #67B8FF   📋 noch nicht verwendet
+Offline  #A79DBA   ✅ realisiert 2026-08-20 als --color-status-offline
 ```
+
+**Warning ist theme-abhängig, Offline nicht.** Der v1-Wert `#F8B84E` **ist** das
+dunkle Thema (unverändert als `--status-warning-dark-raw`); für das helle Thema
+ist derselbe Farbton (37°) auf `#895806` abgedunkelt, weil der Originalwert auf
+den hellen Glasflächen nicht trägt. Beide Werte sind absichtlich
+**textfähig** gemessen (hell 4.64 / 5.17, dunkel 5.63 / 4.86 auf Glas) — ein
+dekoratives Glyph bräuchte das nicht, aber genau diese Abkürzung hat
+`--color-status-offline` seinen dauerhaften Vermerk *"nie als Textfarbe"*
+eingebracht. Es ist eine **Vordergrundrolle** (Text, Glyph, Rahmen), nie eine
+Flächenfarbe. Erste Verwendung: das `WifiSlash`-Glyph des eskalierten
+Staleness-Banners ([`screens-inhouse/connection.md`](screens-inhouse/connection.md)).
+**Warning ist nicht Danger** — für destruktive Aktionen steht `#F26666` daneben
+und darf nicht durch Warning ersetzt werden. Herleitung und gemessene Werte:
+[`tokens.md`](tokens.md) → *In-house tokens*.
+
+### Dark Mode 📋 — vollständig entworfen, **nicht in Figma**
+
+Alle Farben oben sind das **helle** Thema. Seit 2026-08-18 existiert ein
+komplettes dunkles Gegenstück: **[`dark-theme.md`](dark-theme.md)** — sechzehn
+Mesh-Primärwerte, zwei neue Ink-Werte, drei neue Oberflächen und die
+vollständige Rollentabelle für `[data-theme='dark']`, jede Textrolle mit
+gemessenem WCAG-Kontrast.
+
+📋 steht hier **nicht** für "noch nicht entworfen" — das Thema ist
+entworfen, gemessen und gebaut. Es steht für *nicht aus Figma ausgelesen*:
+Es gibt keinen dunklen Frame, keinen dunklen Variablensatz, keine dunkle
+Komponentenvariante. Ein erneuter Import bringt keinen dieser Werte zurück.
+Wird eine dunkle Variante je in Figma gezeichnet, gewinnt diese — dann wird
+`dark-theme.md` zum Abweichungsprotokoll.
+
+**Werte stehen ausschließlich in `dark-theme.md`**, bewusst weder hier noch in
+`tokens.md`: `tokens.md` ist der Figma-Bestand, dieses Dokument ist Prosa über
+das System — eine 30-zeilige Token-Tabelle mit Kontrastmessungen würde beides
+verfälschen. Kurzfassung der Haltung: **gleiche Struktur, nicht gleiche
+Helligkeit.** Dieselben Rollen, dieselbe Glasoptik (die Oberflächen bleiben
+transluzent und weiterhin `blur(8px)`), dieselbe Geometrie — nur die Farbe
+wandert in ein Nachtband. Bemerkenswert: **im dunklen Thema liegt keine
+Textrolle unter 4,5 : 1, im hellen zwei** (`Text_Secondary` auf Glas 3,99 und
+auf der Sidebar 3,48).
 
 ---
 
@@ -210,8 +258,24 @@ auf „Auto"; diese Werte sind die verbindlichen. Siehe `tokens.md`.
 | | |
 |---|---|
 | Gewicht | `regular` — in **allen** Zuständen, auch aktiv |
-| Glyph-Box | 12 px (1:1) |
+| Glyph-Box | ⚠️ keine feste Größe — siehe Korrektur unten |
 | Gefüllte Icon-Kachel | 56 px, Radius 30, Icon-Verlauf, 90 % Deckkraft |
+
+> ⚠️ **Korrektur 2026-08-18: „Glyph-Box 12 px" war ein Lesefehler.** Der Wert
+> stammte aus Figmas `aspect-[24/24]`, halbiert auf CSS-px. `aspect-[a/b]`
+> beschreibt ein **Seitenverhältnis** (24:24 = 1:1) und enthält keine Größe.
+> Die tatsächlichen Glyph-Größen werden aus den umgebenden Figma-Boxen
+> abgeleitet und stehen in `tokens.md` → Sizing (`--size-icon-lg` 36 px,
+> `--size-icon-md` 26 px, `--size-icon-sm` 24 px) — bei Widerspruch gilt
+> `tokens.md` (siehe `docs/constitution.md`). Deckt sich mit der Icon-Skala
+> weiter unten in diesem Dokument (Large 36 / Default 28 / Small 22).
+
+> ⚠️ **Korrektur 2026-08-18: `regular` gilt nicht mehr „in allen Fällen".**
+> Zwei Glyphen weichen ab, beide auf Nutzerentscheidung und gegen den Render
+> geprüft: das Icon des **aktiven** Sidebar-Eintrags und das **Sparkle** im
+> Heading-Block tragen den Marken-Verlauf (Pink → Violett), das Sparkle
+> zusätzlich im Gewicht `fill`. Details in `screens/home.md` und
+> `docs/features/home-screen-prototype/01-prd.md` → REQ-023.
 
 ⚠️ v1 sah aktive Icons in Primary Pink vor. Gebaut wurde stattdessen: das Icon
 bleibt unverändert, der aktive Zustand entsteht aus Hintergrundverlauf und
@@ -325,6 +389,56 @@ auf den 1280er-Maßstab umgerechnet.
 | **Smart Home Tile** | Min-Höhe 90, Aktiv-Fill `rgba(244, 90, 168, 0.16)` |
 | **Chip** | Höhe 28, Radius 999, aktiv `#2C1F4A` auf weiß |
 
+### Selbst entworfen, ohne Figma-Vorlage 📋 — Statusleiste und Einstellungen
+
+Gebaut am 2026-08-18 durch `docs/features/appearance-and-language/`, aber
+**nicht in Figma gezeichnet** — deshalb 📋 und nicht ✅, obwohl beide auf
+jedem Screen laufen. Die Statusleiste wurde aus dem KI-Konzeptbild
+[`assets/home-concept-ai.png`](assets/home-concept-ai.png) abgelesen, das
+Komposition und grobe Proportion liefert, aber **keine token-genauen Werte**;
+für den Einstellungen-Screen existiert überhaupt keine Vorlage.
+
+| Komponente | Eckdaten |
+|---|---|
+| **Statusleiste** | Overlay oben rechts (kein Fließelement, damit die vermessene Homescreen-Geometrie sich nicht verschiebt): Sprachwähler (Globus + Kürzel + Caret), Darstellungswähler (Sonne/Mond, ohne Textlabel), Haarlinie, Uhr |
+| **Dropdown** | Glas-Panel, Radius 24, Zeilen mind. 44 hoch, gewählte Zeile mit `Menü aktiv`-Verlauf und `Check`-Glyphe |
+| **Einstellungen-Screen** | Seitentitel H1 32/ExtraBold, zwei Glas-Panels (*Sprache*, *Darstellung*), pro Einstellung alle Optionen sichtbar statt eingeklappt |
+
+Zwei bewusste Abweichungen von diesem Dokument, beide protokolliert: der
+Darstellungswähler trägt **kein Textlabel** (sonst springt die Breite der
+Leiste beim Sprachwechsel), und die Uhr nutzt **Bold 700 statt Caption
+Medium 500** — nur 400, 700 und 800 sind selbst gehostet, und 500 hieße eine
+vierte `woff2`-Datei für eine einzige Zeile. Neue Tokens dieser beiden Screens
+stehen in `tokens.md` → "In-house tokens", nicht in den Figma-Tabellen.
+
+Vollständige Spezifikation:
+`docs/features/appearance-and-language/02-design.md` §8 (Statusleiste) und
+§9 (Einstellungen).
+
+**Ergänzt 2026-08-20** (`guest-frontend-integration`, Konvention D1 vom
+Nutzer genehmigt): In-Repo entworfene *Screens* erhalten eigene Spezifikationen
+unter [`screens-inhouse/`](screens-inhouse/) — bewusst **nicht** unter
+`screens/`, das ausschließlich den Figma-Bestand dokumentiert. Jede Datei
+trägt ein Provenienz-Banner; ein Figma-Re-Import bringt nichts davon zurück.
+
+> **Abgeglichen 2026-08-28.** Diese Tabelle ist der **Index der In-Repo-Designs**
+> und lag zwei Einträge zurück: `menu-overflow.md` (2026-08-27) und `info.md`
+> (2026-08-28) waren nie aufgenommen worden, obwohl beide Dateien existieren.
+> Nachgetragen — eine reine Dokumentations-Abgleichung, keine Design-Änderung.
+> Zwei Zeilen tragen dabei eine Einschränkung, die 📋 allein nicht ausdrückt:
+> der **Menü-Überlauf ist Chrome, kein Screen** (keine Route, keine URL), und
+> **Info ist entworfen, aber noch nicht gebaut** — anders als die vier übrigen
+> Einträge, die alle laufen. Wer das 📋 dieser Tabelle als „selbst entworfen
+> **und gebaut**“ liest, läge bei Info falsch.
+
+| Screen | Kurzfassung | Spezifikation |
+|---|---|---|
+| **Pairing** 📋 | Markenneutral (vor der Session gibt es kein Branding): ein Glas-Panel, Kopplungs-Code als Held in `--text-display`, Status-Zeile mit Punkt, keinerlei Bedienelemente — der Ablauf ist kiosk-seitig unbeaufsichtigt | [`screens-inhouse/pairing.md`](screens-inhouse/pairing.md) |
+| **Standby** 📋 | Leeres Zimmer (`VACANT`): Mesh, zentrierter Block aus Logo + server-aufgelösten Standby-Texten, Statusleiste bleibt funktional, keine Navigation (Datensparsamkeit bis in die UI) | [`screens-inhouse/standby.md`](screens-inhouse/standby.md) |
+| **Connection lost** 📋 | Gepaart, Server unerreichbar, kein Cache: ein Glas-Panel, `WifiSlash` in `--color-status-offline` (erste Verwendung der Status-Palette, dekorativ), selbstheilend ohne Button; spezifiziert dort auch die **Stale-Pille** (Chrome) | [`screens-inhouse/connection.md`](screens-inhouse/connection.md) |
+| **Menü-Überlauf** 📋 — *Chrome, kein Screen* | Ab mehr als fünf freigeschalteten Sektionen wird der fünfte Sidebar-Slot zum Auslöser (`DotsThree`, Label `nav.more`) und der Rest des Katalogs liegt in einem Popover — alphabetisch sortiert, ohne Obergrenze, ohne Route und ohne URL. Entworfen 2026-08-27 (`sidebar-catalogue-overflow`, D6), **gebaut** | [`screens-inhouse/menu-overflow.md`](screens-inhouse/menu-overflow.md) |
+| **Info** 📋 — *entworfen, **noch nicht gebaut*** | Erster **Modul**-Screen überhaupt und damit die Vorlage für die rund zwanzig folgenden: Titel = das Katalog-Label der Sektion, ein Glas-Panel, zwei gestapelte Label/Wert-Zeilen (Check-out aus `{stay.checkOut\|…}`, fiktiver WLAN-Code). Keine neuen Tokens, keine neuen Icons, kein fokussierbares Element im Inhaltsbereich. Entworfen 2026-08-28; **implementiert wird er erst, wenn `module-content` (Part C) die Werte auf die Leitung legt** | [`screens-inhouse/info.md`](screens-inhouse/info.md) |
+
 ---
 
 ## Homescreen
@@ -375,10 +489,20 @@ mindestens 44 × 44.
 
 ---
 
-## Motion 📋
+## Motion 📋 — erste Verwendung 2026-08-27
 
-Bislang nirgends umgesetzt — dieses Dokument ist die einzige Quelle. Relevant,
-sobald Untermenüs und Popups dazukommen.
+Dieses Dokument ist die einzige Quelle. Umgesetzt ist bisher: der ruhige Puls
+des Pairing-Status-Punkts und, seit 2026-08-27, der **Page-Transition-Token
+(350 ms, easeOutExpo) als Einblendung des eskalierten Staleness-Banners**, plus
+ein langsamer Puls auf dessen Glyph — beides hinter `prefers-reduced-motion`
+(`screens-inhouse/connection.md`). Der Rest der Tabelle wird relevant, sobald
+Untermenüs und Popups dazukommen.
+
+**Nie auf Fließtext.** Ein Lauftext (Marquee) wurde 2026-08-27 geprüft und
+verworfen: er widerspricht *"Animationen ruhig und hochwertig"*, bräuchte eine
+Pause-Möglichkeit nach WCAG 2.2.2, die ein Kiosk nicht anbietet, und
+verschwindet unter `prefers-reduced-motion` genau dort, wo eine Alternative
+gebraucht würde.
 
 | Anlass | Dauer |
 |---|---|

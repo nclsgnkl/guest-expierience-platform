@@ -1,0 +1,48 @@
+/* docs/design/screens-inhouse/connection.md — brandless-tolerant: token
+   roles only, correct whether or not branding was applied earlier. */
+:host {
+  display: contents;
+}
+
+.connection {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.connection__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  width: min(26rem, 80vw);
+  padding: var(--space-6) var(--space-7);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: var(--radius-2xl);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  box-shadow: var(--shadow-panel);
+}
+
+.connection__glyph {
+  color: var(--color-status-offline); /* decorative — 3:1 not required */
+}
+
+.connection__title {
+  margin: 0;
+  font-size: var(--text-h1);
+  font-weight: var(--text-h1-weight);
+  line-height: var(--text-h1-line-height);
+  color: var(--color-text-primary);
+}
+
+.connection__body {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-line-height);
+  color: var(--color-text-secondary);
+}

@@ -1,0 +1,26 @@
+.section-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 100%;
+  width: 100%;
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
+.section-placeholder__title {
+  font-size: var(--text-display);
+  font-weight: var(--text-display-weight);
+  line-height: var(--text-display-line-height);
+  margin: 0;
+}
+
+.section-placeholder__note {
+  font-size: var(--text-body-lg);
+  font-weight: var(--text-body-lg-weight);
+  line-height: var(--text-body-lg-line-height);
+  color: var(--color-text-secondary);
+  margin: 0;
+}

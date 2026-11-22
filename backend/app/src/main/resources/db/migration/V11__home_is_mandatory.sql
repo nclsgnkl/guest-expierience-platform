@@ -1,0 +1,22 @@
+-- guest-payload-consolidation (REQ-948; 02-design.md §4, §7). No DDL.
+--
+-- 'home' is no longer manageable: MenuControl.MANDATORY_KEYS makes it resolve
+-- enabled at sort index 0 whatever any config row says, and refuses to store a
+-- row that would disable or re-order it. This statement repairs the instances
+-- where a manager already did one of those before the guard existed — the
+-- residue of the live defect where a disabled 'home' left the guest device
+-- polling a 404 it could not recover from.
+--
+-- Setting both columns to NULL, not to a value: V2 made each config field
+-- nullable with "absent = inherit per-field", and the catalogue's own
+-- default_sort_index for 'home' is already 0. So this RESTORES inheritance
+-- rather than inventing a value, and the row stays consistent with what the
+-- manager UI would write today.
+--
+-- Icon and label overrides on 'home' SURVIVE untouched. Only enablement and
+-- ordering are taken away, which is exactly the scope of the guard. A row
+-- carrying nothing but those two fields is now inert; it is left in place
+-- rather than deleted, because deleting rows a manager created is not this
+-- migration's business.
+UPDATE menu_item_config SET enabled = NULL, sort_index = NULL
+ WHERE menu_item_key = 'home';

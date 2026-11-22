@@ -1,0 +1,23 @@
+<div class="heading-block">
+  <div class="heading-block__subtitle-row">
+    <!-- Filled weight + the shared gradient paint server: the reference render
+         (docs/design/assets/home-no-artwork.png) shows a solid pink->violet
+         sparkle, not the outline glyph in flat --color-text-primary that the
+         written spec described. Same ruling as the active nav glyph (REQ-023),
+         and the same mechanism -- .icon-gradient-active lives in global.css
+         because @ng-icons injects its <svg> outside the template. -->
+    <ng-icon
+      class="icon-gradient-active"
+      name="phosphorSparkleFill"
+      size="var(--size-icon-sm)"
+    />
+    <span class="heading-block__subtitle">{{ home().heroSubtitle }}</span>
+  </div>
+
+  <!-- Rendered verbatim: the server resolved every template (REQ-511). -->
+  <h1 class="heading-block__headline">{{ home().headline }}</h1>
+
+  <div class="heading-block__spacer" aria-hidden="true"></div>
+
+  <p class="heading-block__paragraph">{{ home().paragraph }}</p>
+</div>

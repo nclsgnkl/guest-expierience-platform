@@ -1,0 +1,11 @@
+<div class="section-placeholder">
+  @if (section(); as item) {
+    <h1 class="section-placeholder__title">{{ item.label }}</h1>
+    <p class="section-placeholder__note">{{ t('section.comingSoon') }}</p>
+  } @else {
+    <!-- A route the delivered menu does not claim (REQ-912). It renders in the
+         same title slot and carries no note: there is nothing coming, and a
+         silent redirect to Home would hide a real configuration error. -->
+    <h1 class="section-placeholder__title">{{ t('section.unavailable') }}</h1>
+  }
+</div>

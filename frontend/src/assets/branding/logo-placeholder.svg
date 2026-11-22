@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+  <!-- Placeholder mark: a swappable single-asset slot (REQ-011). Not a
+       final brand mark; a simple abstract shape stands in until one
+       exists. NOTE: an XML comment may not contain a double hyphen, so
+       never write one here. It makes the file invalid XML, the browser
+       refuses to parse it, and the tile renders as a broken image. -->
+  <path
+    d="M12 2 L21 9.5 V22 H15 V15 H9 V22 H3 V9.5 Z"
+    fill="#ffffff"
+  />
+</svg>

@@ -1,0 +1,25 @@
+@if (home(); as home) {
+  <div class="home-content">
+    <!-- Out-of-flow artwork layer, not a flex item: it is absolutely
+         positioned behind the layout per docs/design/screens/home.md ->
+         "Hero artwork (2:5)". Kept first in source order so it reads as the
+         background it is. -->
+    <app-hero-artwork [artworkAssetId]="home.artworkAssetId" />
+
+    <div class="home-content__screen">
+      <app-heading-block />
+
+      <div class="home-content__cards">
+        @for (card of home.cards; track card.id) {
+          <app-action-card [card]="card" />
+        }
+      </div>
+    </div>
+
+    <!-- Reserved widget-column space (REQ-014): no content built yet, but the
+         space is present (empty, flex: 1) so the layout's proportions match
+         the designed composition -- see 02-design.md -> "Home content layout
+         & the widget-column reservation". -->
+    <div class="home-content__widgets" aria-hidden="true"></div>
+  </div>
+}

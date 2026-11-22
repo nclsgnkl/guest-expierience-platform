@@ -1,0 +1,117 @@
+/* 2026-08-18 fix: with Angular's default (Emulated) view encapsulation, the
+   template's root <button> is a CHILD of the <app-action-card> host, not a
+   replacement for it — so <app-action-card> is the actual flex item inside
+   .home-content__cards, not .action-card. With no styling of its own, the
+   host defaulted to `display: inline` (blockified by the flex context) and
+   `flex-shrink: 1` (the browser's initial value for any flex item), so it
+   could still shrink regardless of .action-card's own width/min-width.
+   Combined with .shell__content's `min-width: 0` (which deliberately allows
+   the row below it to shrink under a narrow viewport), this let the four
+   cards shrink unevenly — each by however much its own text's min-content
+   width allowed, which is why card 2 (then titled "Haus & Funktionen",
+   renamed to "Smart Home" in 2026-08-18's copy fix) stayed wide -- its longer
+   title wrapped to two lines -- while shorter-text cards visibly narrowed.
+   `display: contents` removes the host's own box entirely, so .action-card
+   becomes the real flex item and its flex-shrink below actually applies. */
+:host {
+  display: contents;
+}
+
+.action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  width: var(--size-panel);
+  min-width: var(--size-panel);
+  min-height: var(--size-panel);
+  padding: var(--space-6) var(--space-5);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: var(--blur-glass);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.action-card__icon-block {
+  flex: 1;
+  display: flex;
+  padding: var(--space-3) var(--space-1);
+}
+
+.action-card__icon-tile {
+  width: var(--size-icon-tile);
+  height: var(--size-icon-tile);
+  border-radius: var(--radius-xl);
+  background: var(--gradient-icon);
+  opacity: 0.9;
+  color: var(--color-text-on-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-card__text-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  /* Description row pinned to the bottom of the text block, so even a title
+     that changes height can never again desynchronise the four cards'
+     description and arrow baselines (defect D5, REQ-009). */
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.action-card__header {
+  /* Titles never wrap (REQ-009): the title box is 162px (--size-panel 196
+     minus 2x --border-glass 1px minus 2x --space-5 16px) and the original
+     "Haus & Funktionen" needed 167px of advance width at --text-title — it
+     fits in Figma, which does not re-wrap a fixed text frame, and did not fit
+     in a browser, which first pushed that card's text out of line with the
+     other three and then, once nowrap landed, ellipsized it. Resolved
+     2026-08-18 by renaming the copy to "Smart Home" (config, not CSS); the
+     box is unchanged. Truncation stays as the fallback: card copy is
+     property-authored config, so an over-long title fails visibly rather than
+     silently reflowing the row (02-design.md -> "Text must not wrap"). */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--text-title);
+  font-weight: var(--text-title-weight);
+  line-height: var(--text-title-line-height);
+  color: var(--color-text-primary);
+}
+
+.action-card__description-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.action-card__description {
+  flex: 1;
+  font-size: var(--text-body);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-line-height);
+  color: var(--color-text-secondary);
+}
+
+.action-card__arrow {
+  flex-shrink: 0;
+  color: var(--color-text-primary);
+}
+
+.action-card:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+.action-card:active {
+  transform: scale(0.98);
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}

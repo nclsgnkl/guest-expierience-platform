@@ -1,0 +1,132 @@
+/* The pill's anchor, grown into a BAR (docs/design/screens-inhouse/
+   connection.md -> "The escalated staleness banner"): `display: contents` so
+   the host contributes no flex item (frontend/CLAUDE.md -> Layout), and the
+   bar is an absolute overlay in the host's padding box — it takes no flow
+   space, so it cannot grow the document on any route. */
+:host {
+  display: contents;
+}
+
+/* Width follows the copy, not a clamp: `max-content` is exactly "as wide as
+   the body needs on one line", and the max-width stops it at the content
+   area's left edge so it can never reach over the sidebar, which stays
+   navigable. The containing block is the shell's padding box, so the bound
+   subtracts the sidebar and both paddings; on the standby host, which has no
+   sidebar, the same expression simply resolves wider than the bar needs. */
+.staleness-banner {
+  position: absolute;
+  top: calc(var(--space-6) + var(--size-touch-min) + var(--space-1));
+  right: var(--space-7);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: max-content;
+  max-width: calc(100% - var(--size-sidebar) - var(--space-8) - 2 * var(--space-7));
+  /* Asymmetric horizontal padding, and the asymmetry is the point (owner
+     decision 2026-08-28). Both text edges on the RIGHT end inside a
+     --radius-2xl arc: the timestamp at the top-right, and — tighter, because
+     the bar is `max-content` and the body is what sizes it — the body's own
+     bottom-right corner, which measured only 4.4px (1024) / 5.1px (1280) from
+     the arc with --space-4 all round. That is the pinch. The glyph on the
+     left is a small wedge crossing the straight part of the left edge, so it
+     loses almost nothing to the rounding (0.3-0.5px) and padding costs least
+     there. Trading one scale step from the left to the right therefore lifts
+     the bar's WORST clearance from 4.4/5.1px to 6.4/7.7px at a WIDTH THAT
+     DOES NOT MOVE: --space-3 + --space-5 is exactly 2 * --space-4 — the only
+     such pair on the scale — so the bar's left edge, and with it the
+     clearance to Home's headline column that is the binding constraint
+     (connection.md -> "Where the bar lands"), is unchanged to the pixel. */
+  padding: var(--space-4) var(--space-5) var(--space-4) var(--space-3);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: var(--radius-2xl);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  box-shadow: var(--shadow-panel);
+  /* The entrance, so the pill -> bar swap is an event and not a silent
+     substitution (design-sheet.md -> Motion: Page Transition 350 ms,
+     easeOutExpo; "ruhig und hochwertig", no bounce). It animates the element's
+     own arrival only — the live region's text is set once, at creation, and
+     nothing here changes it, so `role="status"` never announces mid-motion. */
+  animation: staleness-banner-in 350ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.staleness-banner__glyph {
+  flex: none;
+  /* The severity, carried by the colour rather than by a second glyph
+     (docs/design/tokens.md -> In-house tokens). */
+  color: var(--color-status-warning);
+  /* A slow pulse, on the GLYPH ONLY: text must stay re-readable, and a bar
+     that can stand for hours in a guest room may not move its own copy. */
+  animation: staleness-glyph-pulse 4s ease-in-out infinite;
+}
+
+.staleness-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Title left, timestamp right, on the bar's own top row. */
+.staleness-banner__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.staleness-banner__title {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--text-title-weight);
+  line-height: var(--text-title-line-height);
+  color: var(--color-text-primary);
+}
+
+.staleness-banner__body {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-line-height);
+  color: var(--color-text-secondary);
+}
+
+.staleness-banner__as-of {
+  margin: 0;
+  flex: none;
+  font-size: var(--text-status);
+  font-weight: var(--text-status-weight);
+  line-height: var(--text-status-line-height);
+  color: var(--color-text-secondary);
+}
+
+/* Calm: a short rise and a fade, no bounce, no scale. */
+@keyframes staleness-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--space-3)));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The pairing dot's heartbeat, slowed down: this one lives for hours. */
+@keyframes staleness-glyph-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .staleness-banner,
+  .staleness-banner__glyph {
+    animation: none;
+  }
+}

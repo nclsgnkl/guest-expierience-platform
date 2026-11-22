@@ -1,0 +1,25 @@
+@if (visible()) {
+  <div class="staleness-banner" role="status" aria-live="polite">
+    <!-- Deliberately the connection screen's own glyph, not a warning sign:
+         the glyph names WHAT is wrong (the connection), the warning colour
+         says THAT it matters. Still decorative — the text carries the
+         information. -->
+    <ng-icon
+      class="staleness-banner__glyph"
+      name="phosphorWifiSlash"
+      size="var(--size-icon-md)"
+      aria-hidden="true"
+    />
+    <div class="staleness-banner__text">
+      <!-- The bar's own top row: the title, and the timestamp right-aligned
+           before the bar's edge. It rides here rather than under the body so
+           the bar stays two lines tall — a flat bar clears Home's hero
+           headline instead of sharing its band. -->
+      <div class="staleness-banner__row">
+        <p class="staleness-banner__title">{{ t('stale.banner.title') }}</p>
+        <p class="staleness-banner__as-of">{{ asOf() }}</p>
+      </div>
+      <p class="staleness-banner__body">{{ t(bodyKey()) }}</p>
+    </div>
+  </div>
+}

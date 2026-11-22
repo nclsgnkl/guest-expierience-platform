@@ -1,0 +1,422 @@
+/* Design tokens — two layers, per docs/design/tokens.md -> Implementation.
+   Layer 1 (primitives): raw values, runtime-overridable per property
+   (branding axis). Layer 2 (semantic): roles components actually reference;
+   overridden per theme (data-theme axis). The two axes never collide.
+   Constitution principle 5: components reference semantic tokens only. */
+
+/* ---------------------------------------------------------------------- */
+/* Layer 1: primitives                                                    */
+/* ---------------------------------------------------------------------- */
+
+:root {
+  /* Brand — per-property branding overrides these at runtime (REQ-003) */
+  --brand-primary: #f45aa8;
+  --brand-primary-deep: #cc49af;
+  --brand-secondary: #8a5cf6;
+
+  /* Ink. --ink-050/--ink-300 are the dark theme's text primitives, designed
+     in-house 2026-08-18 (docs/design/dark-theme.md) -- near-white with the
+     same violet cast the light ink has against black, so both themes share
+     one warmth relationship. Added as primitives, never as an override of
+     --ink-900/--ink-600: the theme axis touches semantic roles only
+     (REQ-102). */
+  --ink-900: #2c1f4a;
+  /* --ink-600 is a deliberate deviation from Figma, which draws it #6e6486.
+     That value put --color-text-secondary below WCAG AA on every light
+     surface it is used on (06-review.md finding #3: 4.01 on the card, 3.80
+     on the Settings panel). Darkened 2026-08-19 by scaling #6e6486 in
+     linear-light space (x0.65), which preserves the hue -- the same
+     purple-grey, deeper -- so the ink ramp still reads as one family. See
+     docs/design/tokens.md, which records both values. */
+  --ink-600: #5a516e;
+  --ink-300: #c6bcd8;
+  --ink-050: #f7f2fb;
+  --ink-on-dark: #ffffff;
+
+  /* Mesh gradient background — 16 colour points, row by row from the top
+     left (docs/design/tokens.md -> "Background implementation"). Fixed
+     default palette; per-property tinting is prepared, not built: nothing
+     derives from --brand-primary yet. */
+  --mesh-1: #f5668c;
+  --mesh-2: #f4779c;
+  --mesh-3: #fe9b82;
+  --mesh-4: #fdcfad;
+  --mesh-5: #efa2b5;
+  --mesh-6: #e8b2bc;
+  --mesh-7: #f3b5aa;
+  --mesh-8: #fdd6be;
+  --mesh-9: #d5b3d0;
+  --mesh-10: #c693a7;
+  --mesh-11: #a27684;
+  --mesh-12: #f4b9bf;
+  --mesh-13: #b69ed1;
+  --mesh-14: #af99d2;
+  --mesh-15: #bea3d6;
+  --mesh-16: #e4bfdd;
+
+  /* Dark mesh -- the same 16 grid positions, the same hue at each one and the
+     same spatial movement as --mesh-1..16, moved into a night band
+     (docs/design/dark-theme.md; designed in-house 2026-08-18, no Figma
+     counterpart). Two deliberate deviations from a naive HSL scale-down:
+     the warm top row is pulled toward rose so peach reads as ember rather
+     than brown, and saturation stays high (26-55%) at low lightness so the
+     result is warm, not grey-purple. --night-6 is the base, mirroring light
+     mode's choice of --mesh-6 for the same reason. */
+  --night-1: #4f172a;
+  --night-2: #4d1925;
+  --night-3: #4b211b;
+  --night-4: #4e2f1d;
+  --night-5: #451c30;
+  --night-6: #3e1d28;
+  --night-7: #431e21;
+  --night-8: #472b1f;
+  --night-9: #361c34;
+  --night-10: #321b28;
+  --night-11: #2a1920;
+  --night-12: #3a1d22;
+  --night-13: #2d1c3f;
+  --night-14: #291c40;
+  --night-15: #2f1d3e;
+  --night-16: #3d1f3d;
+
+  /* Surfaces (raw, not yet promoted to Figma variables). The dark trio keeps
+     light mode's 2:3 menu:glass alpha ratio exactly (0.09/0.14 ~= 0.4/0.6),
+     so the sidebar stays the quieter surface by the same margin, and tints
+     cool-white rather than warm-white so the film lightens the night mesh
+     instead of muddying it (docs/design/dark-theme.md). */
+  --surface-glass-raw: rgb(255 246 240 / 0.6);
+  --surface-glass-border-raw: rgb(255 255 255 / 0.4);
+  --surface-menu-raw: rgb(255 246 240 / 0.4);
+  --surface-glass-dark-raw: rgb(246 240 255 / 0.14);
+  --surface-glass-border-dark-raw: rgb(255 255 255 / 0.14);
+  --surface-menu-dark-raw: rgb(246 240 255 / 0.09);
+
+  /* Status palette (design-sheet.md 📋, first value realised 2026-08-20 —
+     docs/design/tokens.md -> In-house tokens). Warning follows it 2026-08-27
+     (guest-payload-consolidation REQ-952): derived from the same v1 palette's
+     Warning #F8B84E (hue 37°) rather than placed beside it as a second
+     decision. The dark value IS #F8B84E, essentially unchanged; the light one
+     is that hue darkened to a working lightness. Dark raw values are new
+     primitives, never overrides (frontend/CLAUDE.md -> Appearance & language). */
+  --status-offline-raw: #a79dba;
+  --status-warning-raw: #895806;
+  --status-warning-dark-raw: #f9b84e;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Layer 2: semantic roles — the only thing components reference          */
+/* ---------------------------------------------------------------------- */
+
+:root {
+  /* Color */
+  --color-text-primary: var(--ink-900);
+  --color-text-secondary: var(--ink-600);
+  --color-text-on-dark: var(--ink-on-dark);
+  --color-surface-glass: var(--surface-glass-raw);
+  --color-surface-glass-border: var(--surface-glass-border-raw);
+  --color-surface-menu: var(--surface-menu-raw);
+  /* Hairline separators. A role, not a primitive: the status bar's divider
+     has to survive the theme flip, and mixing the ink role's own primitive
+     with `transparent` keeps it tied to the palette's warmth instead of
+     being a fourth grey nobody can rebrand. `color-mix()` is a platform
+     feature and adds no dependency (02-design.md §3.3/§3.5 -- its first use
+     in this codebase, alongside the dark active-glyph stops). */
+  --color-divider: color-mix(in srgb, var(--ink-900) 25%, transparent);
+
+  /* Offline/status indicator — DECORATIVE ONLY, never a text colour (it
+     measures ~2.2:1 on the light surfaces): the pairing screen's status dot,
+     the connection screen's WifiSlash glyph, the staleness pill's dot.
+     Theme-stable by design (docs/design/tokens.md -> In-house tokens,
+     guest-frontend-integration D1, 2026-08-20) — deliberately NOT remapped
+     by [data-theme='dark']. */
+  --color-status-offline: var(--status-offline-raw);
+
+  /* Warning status — a FOREGROUND role: text, glyph or border. NEVER a
+     surface fill: #895806 as a background would fail any dark text placed on
+     it, and a tinted warning surface, if it is ever needed, is a second
+     token. Unlike --color-status-offline it IS text-capable, deliberately and
+     from the start — measured on glass at 4.64 over --mesh-6 and 5.17 over
+     --mesh-8 (light), 5.63 over --night-6 and 4.86 over --night-8 (dark), all
+     above 4.5:1 — so the role can later move onto a title or a border with no
+     re-measurement. That is the lesson of the offline role's permanent "never
+     a text colour" caveat above.
+     WARNING IS NOT ERROR. design-sheet.md -> Status keeps Danger #F26666
+     beside it for destructive actions; nobody may repurpose warning for a
+     delete dialog.
+     First use: the escalated staleness banner's WifiSlash glyph (REQ-952) —
+     the glyph names WHAT is wrong, the colour says THAT it matters. */
+  --color-status-warning: var(--status-warning-raw);
+
+  /* Mesh background roles (REQ-103). The 16 gradient layers and the base
+     colour behind them are semantic roles, not primitives, so the theme axis
+     can map them to --night-* -- it may only override roles. Reading the
+     primitives directly (as shell.component.css did until 2026-08-18) would
+     also break the moment per-property mesh tinting is built: tinting writes
+     primitives inline on :root, and an inline style beats a
+     [data-theme='dark'] rule at any specificity, so a branded property would
+     silently get its light mesh in dark mode. */
+  --color-mesh-1: var(--mesh-1);
+  --color-mesh-2: var(--mesh-2);
+  --color-mesh-3: var(--mesh-3);
+  --color-mesh-4: var(--mesh-4);
+  --color-mesh-5: var(--mesh-5);
+  --color-mesh-6: var(--mesh-6);
+  --color-mesh-7: var(--mesh-7);
+  --color-mesh-8: var(--mesh-8);
+  --color-mesh-9: var(--mesh-9);
+  --color-mesh-10: var(--mesh-10);
+  --color-mesh-11: var(--mesh-11);
+  --color-mesh-12: var(--mesh-12);
+  --color-mesh-13: var(--mesh-13);
+  --color-mesh-14: var(--mesh-14);
+  --color-mesh-15: var(--mesh-15);
+  --color-mesh-16: var(--mesh-16);
+  --color-mesh-base: var(--mesh-6);
+
+  /* Gradients */
+  --gradient-icon: linear-gradient(
+    223.139deg,
+    var(--brand-primary) 55.732%,
+    var(--brand-primary-deep) 88.083%
+  );
+  /* Active nav glyph (REQ-023). Measured from the reference render, not
+     extracted from Figma — see docs/design/tokens.md -> Gradients. The end
+     stop is the EXISTING --brand-secondary (the measured #8b5cf6 is within
+     1/255 per channel of it), deliberately not a new primitive: the runtime
+     branding hook rewrites --brand-secondary, and a near-duplicate would
+     leave this glyph as the one element a rebranded property could not
+     recolour. --gradient-icon-active is the canonical specification of what
+     the two stop roles compose into; the sidebar glyph itself is painted by
+     an SVG <linearGradient> paint server (a CSS gradient cannot be an SVG
+     fill), whose stops read the two roles below.
+
+     So --gradient-icon-active is referenced by no rule and nothing binds it
+     to that paint server: if the angle or stop order in
+     app/layout/shell/shell.component.html changes, change it here too
+     (round-3 review finding #12). Kept because it is where the gradient is
+     specified for the design docs and for any future non-SVG use. */
+  --color-icon-active-start: var(--brand-primary);
+  --color-icon-active-end: var(--brand-secondary);
+  --gradient-icon-active: linear-gradient(
+    139deg,
+    var(--color-icon-active-start),
+    var(--color-icon-active-end)
+  );
+  --gradient-menu-active: linear-gradient(
+    -74.707deg,
+    rgb(255 243 250 / 0.9) 7.717%,
+    rgb(255 243 250 / 0.5) 92.116%
+  );
+
+  /* Typography */
+  --font-family-base: 'Plus Jakarta Sans', sans-serif;
+
+  --text-display: 3rem;
+  --text-display-weight: 800;
+  --text-display-line-height: 1.1;
+
+  --text-title: 1.125rem;
+  --text-title-weight: 800;
+  --text-title-line-height: 1.3;
+
+  --text-body-lg: 1.125rem;
+  --text-body-lg-weight: 400;
+  --text-body-lg-line-height: 1.5;
+
+  --text-body: 0.875rem;
+  --text-body-weight: 400;
+  --text-body-line-height: 1.5;
+
+  --text-label-active: 0.75rem;
+  --text-label-active-weight: 800;
+  --text-label-line-height: 1.3;
+
+  --text-label: 0.75rem;
+  --text-label-weight: 700;
+
+  /* Status bar (02-design.md §8.3). Designed in-house 2026-08-18, no Figma
+     counterpart -- the concept render is an AI mock-up, not an extract.
+     --text-clock is 700, deliberately NOT design-sheet.md's "Caption 13px
+     Medium 500" for times and meta info: only 400, 700 and 800 are
+     self-hosted (global.css), and 500 would mean shipping a fourth woff2 for
+     one string. Do not "fix" this by adding a font file. */
+  --text-status: 0.875rem;
+  --text-status-weight: 700;
+  --text-status-line-height: 1.3;
+
+  --text-clock: 1.125rem;
+  --text-clock-weight: 700;
+  --text-clock-line-height: 1.3;
+
+  /* Screen title, one step below --text-display: design-sheet.md's 📋 H1
+     (32px / ExtraBold). First used by the Settings screen (REQ-116), which
+     has no Figma design either -- see 02-design.md §9. */
+  --text-h1: 2rem;
+  --text-h1-weight: 800;
+  --text-h1-line-height: 1.1;
+
+  /* Spacing (4px scale) */
+  --space-1: 0.25rem;
+  --space-2: 0.375rem;
+  --space-3: 0.5rem;
+  --space-4: 0.75rem;
+  --space-5: 1rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+  --space-8: 2.5rem;
+  --space-9: 4rem;
+
+  /* Radii */
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 1.875rem;
+  --radius-2xl: 2rem;
+
+  /* Borders, shadows, blur */
+  --border-glass: 1px solid var(--color-surface-glass-border);
+  --shadow-panel: 0 10px 40px 0 rgb(44 31 74 / 0.1);
+  --blur-glass: blur(8px);
+
+  /* Sizing */
+  /* The minimum touch target on a wall-mounted screen: 44px at the design
+     size (design-sheet.md -> Touchscreen-Regeln). At the 1024x768 floor the
+     viewport-proportional root shrinks it to 35px along with everything
+     else; inflating this one token to compensate would break its
+     relationship with the type and spacing around it (02-design.md §9.1). */
+  --size-touch-min: 2.75rem;
+  --size-icon-tile: 3.5rem;
+
+  /* Icon glyph sizes. 2026-08-18: replaced a single --size-icon-glyph
+     (0.75rem/12px) that was applied to every icon regardless of context and
+     rendered all of them far too small. Root cause was a spec error, not an
+     implementation one: docs/design/tokens.md read Figma's `aspect-[24/24]`
+     as a 24px dimension, but that is an aspect RATIO (24:24 = 1:1) and
+     carries no size. Real sizes derived from the surrounding Figma boxes:
+       lg — tile 112px minus 2x20px padding = 72px Figma = 36px CSS
+       md — sidebar item 146px minus 56px padding, gap and label ~= 52px = 26px CSS
+       sm — Action column w-[48px] / Sparkle frame 45px = ~24px CSS
+     Independently corroborated by design-sheet.md's own icon scale
+     (Large 36 / Default 28 / Small 22). */
+  --size-icon-lg: 2.25rem;
+  --size-icon-md: 1.625rem;
+  --size-icon-sm: 1.5rem;
+  /* Status-bar glyphs (02-design.md §8.3): xs is the globe/sun/moon beside a
+     0.875rem label, caret is the disclosure chevron, which is subordinate to
+     the glyph it follows and is sized to read as one. */
+  --size-icon-xs: 1.125rem;
+  --size-icon-caret: 0.75rem;
+  /* 6.5rem, NOT the 6.25rem Figma records (docs/design/tokens.md -> Sizing).
+     Owner decision 2026-08-29: at 6.25rem an ExtraBold "Einstellungen" had
+     0.61px of clearance per side at the 1024x768 floor, so no visible inset
+     was possible at all -- 1px broke the word back onto two lines. +0.25rem
+     buys the inset and doubles the clearance; the owner weighed and rejected
+     +0.5rem (full 2px inset) as too expensive for the content area. The
+     content area pays 4px of width at 1280x832; measured consequences are in
+     docs/design/tokens.md and docs/features/home-screen-prototype/02-design.md. */
+  --size-sidebar: 6.5rem;
+  /* The rail label spans its item edge to edge, minus this per side, so the
+     ink is not flush against the pill's border (owner decision 2026-08-29 --
+     1px at the 1280x832 design size). Only sidebar.component.css reads it. */
+  --size-sidebar-label-inset: 0.0625rem;
+  /* Referenced by nothing, deliberately: this is the Figma MenuIcons
+     component's own 146px/72px box, kept for traceability to the design file.
+     What the sidebar actually renders is derived from --size-sidebar and
+     --space-3 (88px square since 2026-08-29) -- see sidebar.component.css and
+     docs/design/tokens.md -> Sizing (round-3 review finding #12). */
+  --size-sidebar-item: 4.5rem;
+  --size-panel: 12.25rem;
+  /* The heading block's fixed width (docs/design/screens/home.md -> Heading
+     block; REQ-014). 2026-08-18 correction: this was 48.75rem/780px, which
+     is the RAW Figma value on the 2x canvas and was the only number in that
+     section never halved (sidebar 199 -> 100, logo tile 112 -> 56, glass
+     panel 392 -> 196, widget column 443 -> 220, display type 96 -> 48).
+     780 raw = 390 CSS, and 390px reproduces the reference render's line
+     breaks exactly: the headline wraps to two lines, as it does in
+     docs/design/assets/home-no-artwork.png. Same error family as the
+     aspect-[24/24] glyph-size bug above -- a Figma value mis-derived in the
+     spec, not an implementation mistake. */
+  --size-heading: 24.375rem;
+}
+
+/* Theme axis (docs/design/tokens.md -> Implementation): a `data-theme`
+   attribute on <html> overrides semantic roles only, never primitives
+   (REQ-102) -- primitives are the per-property branding axis and are written
+   inline on :root at runtime, which beats any stylesheet rule. The app always
+   writes a resolved `light` or `dark`, so nothing renders in the
+   attribute-absent state (REQ-105); :root's values are the light theme and
+   `light` is named for completeness. The dark palette is designed in-house,
+   has no Figma counterpart, and is documented in docs/design/dark-theme.md --
+   not in docs/design/tokens.md, which records what exists in Figma
+   (REQ-101). */
+[data-theme='light'] {
+  /* Same as :root -- no override needed today. */
+}
+
+[data-theme='dark'] {
+  /* Text. Secondary is deliberately NOT as quiet as light mode's, which
+     fails WCAG AA on both surfaces it appears on (3.99 on glass, 3.48 on the
+     sidebar); dark's weakest text role measures 5.42 (REQ-104). */
+  --color-text-primary: var(--ink-050);
+  --color-text-secondary: var(--ink-300);
+  /* --color-text-on-dark is unchanged: it means "on a saturated brand fill",
+     which is saturated in both themes. */
+
+  /* Surfaces: still translucent, still blurred -- the glassmorphism is a
+     property of the design, not of the light palette (REQ-104). */
+  --color-surface-glass: var(--surface-glass-dark-raw);
+  --color-surface-glass-border: var(--surface-glass-border-dark-raw);
+  --color-surface-menu: var(--surface-menu-dark-raw);
+
+  /* A hairline on a dark surface is a light one. 22%, not 25%: white on dark
+     carries further, the same reason the glass border drops from 0.4 to
+     0.14 (02-design.md §3.3). */
+  --color-divider: color-mix(in srgb, var(--ink-050) 22%, transparent);
+
+  /* The warning role is the one status colour the theme axis does move: the
+     v1 palette's own #F8B84E is the DARK value, and the light theme takes the
+     darkened derivation (see the primitives). --color-status-offline stays
+     theme-stable beside it, unchanged. */
+  --color-status-warning: var(--status-warning-dark-raw);
+
+  /* Same colour, same -74.707deg axis, same 9:5 stop ratio as light, scaled
+     to 20% alpha. */
+  --gradient-menu-active: linear-gradient(
+    -74.707deg,
+    rgb(255 243 250 / 0.18) 7.717%,
+    rgb(255 243 250 / 0.1) 92.116%
+  );
+
+  /* The active nav glyph (REQ-023). The light brand stops measure 2.23 and
+     1.60 against the dark pill -- the violet half all but disappears. The
+     stops stay DERIVED from the property's own brand primitives (a
+     rebranded property must still recolour its own glyph, which is the whole
+     point of REQ-023) and are lifted for the darker backdrop instead of being
+     replaced by literals. oklab, not sRGB: mixing toward white in sRGB
+     desaturates unevenly across hues and would push the pink and the violet
+     apart by different amounts. */
+  --color-icon-active-start: color-mix(in oklab, var(--brand-primary) 65%, white);
+  --color-icon-active-end: color-mix(in oklab, var(--brand-secondary) 65%, white);
+
+  /* A shadow on a dark surface must be far darker and stronger to exist. */
+  --shadow-panel: 0 10px 40px 0 rgb(6 3 14 / 0.5);
+
+  /* The mesh, position for position (REQ-103). Same grid, same hues, same
+     movement -- only the lightness band changes. */
+  --color-mesh-1: var(--night-1);
+  --color-mesh-2: var(--night-2);
+  --color-mesh-3: var(--night-3);
+  --color-mesh-4: var(--night-4);
+  --color-mesh-5: var(--night-5);
+  --color-mesh-6: var(--night-6);
+  --color-mesh-7: var(--night-7);
+  --color-mesh-8: var(--night-8);
+  --color-mesh-9: var(--night-9);
+  --color-mesh-10: var(--night-10);
+  --color-mesh-11: var(--night-11);
+  --color-mesh-12: var(--night-12);
+  --color-mesh-13: var(--night-13);
+  --color-mesh-14: var(--night-14);
+  --color-mesh-15: var(--night-15);
+  --color-mesh-16: var(--night-16);
+  --color-mesh-base: var(--night-6);
+}

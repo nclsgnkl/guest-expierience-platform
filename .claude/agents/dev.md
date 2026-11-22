@@ -31,6 +31,21 @@ metered and nearly exhausted by design. Implement against `docs/design/**`.
 If it lacks a detail you need, stop and ask the user (they can often answer
 directly, or re-run `/design-import`); never spend a request to find out.
 
+**Verify UI work by measuring it, not by looking at it.** For any change backed
+by `docs/design/**`, render it in a real browser and report numbers: element
+geometry against the spec, wrapping/truncation, and that nothing scrolls (see
+`docs/constitution.md`). Use the repo's committed instrument where one exists
+(`frontend/tools/measure.mjs`). "Composition matches" has already been reported
+once while three Major visual defects were open — an impression is not evidence.
+
+**The design spec can be wrong.** Implementing a bad value faithfully still
+ships a bug, and it is the failure this project has hit most often: a size read
+off `aspect-[24/24]` (a *ratio*, carrying no size) shrank every icon to a third,
+and a raw 2x value used without halving made a box twice its intended size. If a
+spec number contradicts what you measure in the reference render, stop and report
+it as a probable spec error — do not quietly implement it, and do not quietly
+"fix" it either.
+
 ## Context Handoff
 
 **On start:** read `handoff.md` (feature dir) if it exists. Resume from the documented state instead of re-analyzing from scratch.

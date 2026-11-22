@@ -23,9 +23,17 @@ Checks (all must hold for PASS):
 - **Design fidelity** — the Design satisfies every requirement; no contradictions between PRD and Design
 - **Constitution compliance** — nothing in PRD/Design/TODO violates `docs/constitution.md`
 - **No unresolved markers** — no `[NEEDS CLARIFICATION]` left in any artifact
+- **Reverse defect trace (correction rounds only)** — when this gate runs on a
+  round that exists *because* defects were found, trace every known defect back
+  to the `REQ-ID` it violates. A requirement covered by a task is **not**
+  evidence the requirement is met: on 2026-08-18 three shipped defects violated
+  `REQ-ID`s already marked ✅ in this very matrix. The coverage table proves a
+  task exists, nothing more — say so rather than letting ✅ read as "done".
 
 Output:
-- A coverage table: `REQ-ID | Design section | TODO task(s) | Status`
+- A coverage table: `REQ-ID | Design section | TODO task(s) | Status` — where
+  `Status` means "a task covers this", not "this works"
+- On a correction round: a defect table `Defect | REQ-ID violated | Root cause`
 - List of gaps (if any), each with the artifact and the fix needed
 - **Result: PASS** → proceed to `05_implement`
 - **Result: GAPS** → stop; return to the owning phase (PRD/Design/TODO) to resolve, then re-run this gate

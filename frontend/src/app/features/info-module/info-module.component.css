@@ -1,0 +1,58 @@
+/* The panel is what `.section-host` lays out, not the host
+   (frontend/CLAUDE.md -> Layout). */
+:host {
+  display: contents;
+}
+
+/* Width is derived, not a new token: exactly three action cards plus their two
+   gaps, so the screen lines up with Home's grid instead of introducing an
+   arbitrary measurement — the same derivation `.settings__panel` uses. The
+   glass recipe is the existing one, so dark mode needs nothing extra.
+   ONE panel holding every row, not one panel per row: the rows are one topic
+   (info.md -> Layout). */
+.info-module {
+  margin: 0;
+  width: calc(3 * var(--size-panel) + 2 * var(--space-4));
+  padding: var(--space-6);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: var(--blur-glass);
+
+  display: flex;
+  flex-direction: column;
+  /* No divider between rows — `--color-divider`'s documented role is the
+     status bar's hairline, and two rows do not need one. A module with many
+     rows probably will; that is the token for it when that day comes. */
+  gap: var(--space-6);
+}
+
+.info-module__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Label is wayfinding, value is what the guest is scanning for — so the value
+   is the heavier of the two (info.md -> The row). */
+.info-module__label {
+  font-size: var(--text-body);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-line-height);
+  color: var(--color-text-secondary);
+}
+
+.info-module__value {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--text-title-weight);
+  line-height: var(--text-title-line-height);
+  color: var(--color-text-primary);
+  /* A value is property-authored and its length is not ours to assume: an
+     unbroken 60-character password must wrap inside the panel rather than pass
+     through its right edge (frontend/CLAUDE.md -> Layout). No `text-transform`,
+     no `letter-spacing`, no `font-variant` — a password renders
+     character-for-character exactly as it was authored. */
+  overflow-wrap: anywhere;
+}

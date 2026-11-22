@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-02T02:01:10Z",
+  "lastAttemptAt": "2026-09-02T02:00:04Z",
+  "lastRequestedAt": "2026-09-01T10:00:00Z",
+  "attemptedVersion": "1.0.1",
+  "outcome": "pull-failed",
+  "rolledBack": false,
+  "currentImage": "gxp-backend:1.0.0-SNAPSHOT",
+  "currentVersion": "1.0.0-SNAPSHOT",
+  "previousImage": null,
+  "backupFile": "pre-update-1.0.1-20260902T020004Z.dump",
+  "message": null
+}

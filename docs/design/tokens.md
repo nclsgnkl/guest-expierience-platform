@@ -11,7 +11,7 @@
 
 **Source:** Figma `AirBnB-Screen`, file key `JGH2ZQOXCoL0KNLM4uXtCN`,
 frame `1:2891` "Welcome Screen" (2560 × 1664)
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-29
 
 > **Scope.** This file records what **exists** in Figma. The wider design system
 > — motion, status colours, voice and tone, and components not yet drawn — lives
@@ -57,10 +57,20 @@ dimensions — scales proportionally. Fixed px would require revisiting every
 token instead.
 
 ```css
-html { font-size: 16px; }          /* 11–13" tablet — the design baseline */
-/* later, per device class: */
-/* html { font-size: 20px; }       →  entire UI scales 1.25× */
+/* As built, 2026-08-18 (user-approved; docs/constitution.md v1.2.0): */
+html { font-size: min(1.25vw, 1.9231vh); }
+/* = 16px at the 1280 × 832 design size, 12.8px at the 1024 × 768 floor,
+   larger above — deliberately uncapped, so a bigger display renders a
+   proportionally bigger UI. 1280/16 = 80 → 1.25vw; 832/16 = 52 → 1.9231vh;
+   the smaller of the two binds, so both axes always fit. */
 ```
+
+**Amended 2026-08-18.** The root is no longer the constant `16px` above — it is
+viewport-proportional, which is what the paragraph above always anticipated.
+Tokens are still authored *as though* the root were 16px; only their rendered
+physical size changes. Accepted trade: a viewport-derived root overrides the
+browser's font-size preference (acceptable on a fixed-purpose kiosk, and the
+previous constant was equally absolute).
 
 Two deliberate exceptions, which must **not** scale:
 
@@ -76,6 +86,12 @@ baseline root size for reference, and the raw Figma value for traceability.
 
 ## Colors
 
+> **Light theme only.** Every colour in this section is the light palette, as
+> it exists in Figma. The dark palette has no Figma counterpart and lives in
+> [`dark-theme.md`](dark-theme.md) — **no dark value belongs in this file**.
+> `--color-divider`, added in-house for the status bar, is recorded under
+> "In-house tokens" below rather than here.
+
 ### Figma variables
 
 | Token | Figma variable | Value | Role |
@@ -83,11 +99,37 @@ baseline root size for reference, and the raw Figma value for traceability.
 | `--color-brand-primary` | `Brand_Primary-Pink` | `#f45aa8` | Brand pink; icon gradient start, logo, accents |
 | `--color-brand-secondary` | `Brand_Secondary-Purple` | `#8a5cf6` | Brand purple |
 | `--color-text-primary` | `Text_Primary` | `#2c1f4a` | Headings, card titles, menu labels — default text color |
-| `--color-text-secondary` | `Text_Secondary` | `#6e6486` | Card descriptions, supporting copy |
+| `--color-text-secondary` ⚠️ | `Text_Secondary` | `#6e6486` → shipped as `#5a516e` | Card descriptions, supporting copy — **the shipped value deliberately deviates from Figma**, see the note below |
 | `--color-text-on-dark` | `Text_On-Dark` | `#ffffff` | Text on dark/saturated surfaces |
 
 > ✅ **Done 2026-08-17:** was `Test_Primary` (a typo); renamed to `Text_Primary`
 > in Figma. Spec and design file agree.
+
+> ⚠️ **`--color-text-secondary` — deliberate deviation from Figma, 2026-08-19.**
+>
+> Figma's `Text_Secondary` is **`#6e6486`**, and that is what this record says
+> the design file contains — it has not changed there. The **implementation
+> ships `#5a516e`** instead, as `--ink-600` in `frontend/src/styles/tokens.css`.
+>
+> Reason: accessibility. `#6e6486` measures **4.01 : 1** on a glass card,
+> **3.80 : 1** on the Settings panel and **3.60 : 1** on the sidebar in light
+> mode — all below **WCAG AA's 4.5 : 1** for normal-size text, and the
+> large-text exemption does not apply (the copy on this role is `--text-body`,
+> 0.875rem / 14 px at weight 400). `06-review.md` finding #3 on
+> `appearance-and-language`; the user approved darkening the role on
+> 2026-08-19.
+>
+> `#5a516e` is `#6e6486` scaled by **0.65 in linear-light space**, which
+> preserves the hue — the same purple-grey, one step deeper — so the ink ramp
+> still reads as one family rather than gaining a new colour. It measures
+> **5.41 / 5.12 / 4.85** on those same three surfaces, sampled from real pixels
+> with `frontend/tools/measure.mjs`. The **dark theme is untouched**: it maps
+> the role to `--ink-300`, which already passed.
+>
+> This is recorded, not overwritten: if Figma is ever brought in line, the
+> deviation disappears — until then `#6e6486` is what the design file says and
+> `#5a516e` is what ships. Full measurements in
+> `docs/features/appearance-and-language/02-design.md` §3.4.
 
 `--color-brand-secondary` is defined but **not visibly applied** in this frame.
 Its intended use (host-contact buttons) lives in the not-yet-built widget column.
@@ -162,6 +204,59 @@ are genuinely violet, not a warm hue.)
 |-------|-------|------|
 | `--gradient-icon` | `linear-gradient(223.139deg, var(--color-brand-primary) 55.732%, var(--color-brand-primary-deep) 88.083%)` | Filled icon tiles and the logo |
 | `--gradient-menu-active` | `linear-gradient(-74.707deg, rgba(255,243,250,0.9) 7.717%, rgba(255,243,250,0.5) 92.116%)` | Active state of a sidebar item |
+| `--gradient-icon-active` ⚠️ | `linear-gradient(139deg, var(--color-brand-primary), var(--color-brand-secondary))` | Active sidebar item's **icon glyph** (the `MenuIcons` `state = true` glyph). Added 2026-08-18 — **measured from the reference render, not extracted from Figma.** See the provenance note below |
+
+> ⚠️ **`--gradient-icon-active` provenance: measured, not extracted (2026-08-18).**
+>
+> Every other value in this file came out of Figma via `design-import`. This one
+> did not. It was measured **pixel-by-pixel from
+> [`../assets/home-no-artwork.png`](../assets/home-no-artwork.png)** — a linear
+> regression fitted across the active "Home" glyph's stroke pixels — because the
+> Figma component carries no such fill and the render clearly does. Recorded here
+> rather than in a component so the two-layer architecture still holds, but the
+> difference in provenance is real and must not be forgotten:
+>
+> - **If this file is ever re-imported from Figma, this row will not come back.**
+>   Either the gradient gets added to the Figma component, or this row is
+>   carried forward by hand. Do not treat its absence from a fresh extraction as
+>   evidence it was wrong.
+> - The measured axis was **139°** in CSS notation (top-left → bottom-right); the
+>   measured stops were **`#f45aa8` → `#8b5cf6`**.
+> - **The end stop is not a new colour.** `#8b5cf6` is within one 8-bit unit per
+>   channel of `Brand_Secondary-Purple` (`#8a5cf6`), which this file has carried
+>   since the first extraction — a difference far below perceptual threshold and
+>   well inside PNG-render tolerance. It is therefore recorded as
+>   `var(--color-brand-secondary)`, **not** as a new primitive. Introducing a
+>   near-duplicate violet primitive would have left a per-property branding
+>   override (which rewrites `--brand-secondary`) unable to reach the nav icon —
+>   the property would rebrand everywhere except there.
+> - This also resolves the older note above that `--color-brand-secondary` is
+>   "defined but not visibly applied in this frame". It is applied now.
+>
+> **Realisation in code is not a CSS `background`.** A CSS gradient cannot paint
+> an SVG glyph: `fill` takes a paint server, not a `linear-gradient()`. The
+> gradient is therefore realised as an SVG `<linearGradient>` referenced by
+> `fill: url(#…)`, which has two consequences for this token layer:
+>
+> - the `139deg` CSS angle becomes `gradientTransform="rotate(49 0.5 0.5)"` on
+>   the default left→right SVG gradient axis (SVG's default axis equals CSS
+>   `90deg`, so the rotation is `139 − 90`);
+> - an SVG `<stop>` cannot consume a CSS gradient value, so the two stops are
+>   also exposed as their own semantic roles — `--color-icon-active-start`
+>   (= `var(--brand-primary)`) and `--color-icon-active-end`
+>   (= `var(--brand-secondary)`) — and the `--gradient-icon-active` value above
+>   is the canonical *specification* of what those two roles compose into.
+>
+> Full technique, including why the rule cannot live in a component stylesheet,
+> is in `docs/features/home-screen-prototype/02-design.md` → "Gradient-filled
+> icon glyph".
+>
+> **This overrides a design decision recorded elsewhere.**
+> [`screens/home.md`](screens/home.md) → "Assets to export" decided on
+> 2026-08-17 that the icon does *not* participate in the active/inactive
+> distinction (a `fill`-weight active icon was proposed and rejected as too
+> heavy). The user overrode that on 2026-08-18 after seeing the built screen.
+> The old rationale is kept in that file alongside the override, not deleted.
 
 ### Background implementation
 
@@ -233,6 +328,9 @@ layers, so not the default.
 > not reproduce identically across browsers and platforms.
 > `[NEEDS CLARIFICATION: set explicit line-heights. Suggested: 1.1 for --text-display, 1.3 for titles/labels, 1.5 for body.]`
 
+Three further type tokens — `--text-status`, `--text-clock`, `--text-h1` — were
+designed in-house and are **not** in this table: see "In-house tokens" below.
+
 ## Spacing
 
 Halves cleanly onto a **4px scale** — no normalisation needed.
@@ -279,21 +377,247 @@ Radii also halve cleanly.
 
 Normalised first (see the half-pixel note under "Scale"), then converted.
 
+> ⚠️ **Corrected 2026-08-18 — extraction error.** This table previously carried
+> a single `--size-icon-glyph` at `0.75rem` (12px), derived by reading Figma's
+> `aspect-[24/24]` as a 24px dimension. It is an aspect **ratio** (24:24 = 1:1)
+> and carries no size at all. Every icon in the built app rendered at roughly a
+> third of its intended size as a direct result. The real sizes come from the
+> surrounding Figma boxes and differ by context, so one token could never have
+> served all of them — hence the three below. Independently corroborated by
+> `design-sheet.md`'s own icon scale (Large 36 / Default 28 / Small 22).
+>
+> **Watch for this class of error elsewhere in this file:** any value sourced
+> from a Tailwind-style `aspect-[a/b]` in the MCP output describes proportion,
+> not measurement.
+
 | Token | **rem** | px @16 | Figma | Used for |
 |-------|---------|--------|-------|----------|
 | `--size-icon-tile` | `3.5rem` | 56 | 112 | Filled gradient icon tile |
-| `--size-icon-glyph` | `0.75rem` | 12 | 24 | Icon glyph box (1:1) |
-| `--size-sidebar` | `6.25rem` | 100 | 199 → 200 | Sidebar width |
-| `--size-sidebar-item` | `4.5rem` | 72 | 146 → 144 | Sidebar item square |
+| `--size-icon-lg` | `2.25rem` | 36 | 72 | Glyph inside a filled icon tile |
+| `--size-icon-md` | `1.625rem` | 26 | ~52 | Sidebar navigation icon |
+| `--size-icon-sm` | `1.5rem` | 24 | 48 | Inline icons — card arrow, heading sparkle |
+| `--size-sidebar` ⚠️ | `6.25rem` | 100 | 199 → 200 | Sidebar width — **shipped at `6.5rem` since 2026-08-29, see the owner decision below** |
+| `--size-sidebar-item` ⚠️ | `4.5rem` | 72 | 146 → 144 | Sidebar item square — **but see the measured correction below** |
 | `--size-panel` | `12.25rem` | 196 | 392 | Glass panel (square) |
-| `--size-widget-col` | `13.75rem` | 220 | 443 → 440 | Right-hand widget column width |
+| `--size-heading` | `24.375rem` | 390 | 780 | Heading block width — **see the correction below** |
+
+> ⚠️ **`--size-widget-col` removed, 2026-08-18.** It used to sit in this table
+> at `13.75rem` (220 CSS / 443 raw). The widget column is `flex: 1` in Figma and
+> in the implementation, so a fixed width was never referenced by anything and
+> the token was deleted from `frontend/src/styles/tokens.css`. The 220px figure
+> survives only as the value the column happens to measure at the 1280 × 832
+> design size (~~measured: 224px~~ — **measured 220px since 2026-08-29**, see
+> the `--size-sidebar` deviation below: the column is what absorbs the rail's
+> extra 4px, and 224 → 220 is that whole cost) — not as something to set.
+>
+> ⚠️ **`--size-heading` — halving correction, 2026-08-18.** It shipped as
+> `48.75rem` (780px), which is the **raw Figma value**, not the CSS one. Every
+> other size in `docs/design/screens/home.md` → Components is halved on the way
+> in (199 → 100, 112 → 56, 392 → 196, 443 → 220, display type 96 → 48); this one
+> was not, so the heading block rendered twice as wide as designed and its
+> headline stayed on one line where the reference render wraps to two. The CSS
+> value is **390px**. Verified in a browser: at 390px the headline breaks
+> 359 + 375px and the paragraph 347 + 150px, against the reference render's
+> 356 + 369 and 348 + 150.4. Same error family as the `aspect-[24/24]` glyph
+> misread above.
+>
+> ⚠️ **`--size-sidebar-item` — measured correction, 2026-08-18.** The `4.5rem`
+> above is the Figma **component's own** box (`MenuIcons`, 146 raw). In the
+> exported render the item does not keep that width: it and its active-state
+> pill measure **84 × 84 CSS px**, which is exactly `--size-sidebar` (100) minus
+> twice the sidebar's `--space-3` (8) horizontal padding — i.e. the item is
+> stretched to fill the sidebar's inner width by the sidebar's own auto-layout.
+> Measured from [`../assets/home-no-artwork.png`](../assets/home-no-artwork.png)
+> by edge scan: at y = 240 the active pill spans x 40 → 124 inside a sidebar
+> spanning x 32 → 132; vertically the pill spans y 195 → 279.
+>
+> **Implement it as derived, not as a second literal:** the item takes the
+> sidebar's inner width and is square (`width: 100%` inside the sidebar's
+> padding box, `aspect-ratio: 1`). That keeps one source of truth
+> (`--size-sidebar` and `--space-3`) instead of a magic 84. The 72px token stays
+> recorded here for traceability back to the Figma component, but it is not what
+> the screen shows — and taking it literally is what made the "Smart Home" label
+> wrap in the built app (the 72px item leaves a 56px label box; the label needs
+> ~71px, which the real 84px item provides).
+>
+> This is the same class of error as the `aspect-[a/b]` one flagged above: a
+> value read off a *component definition* rather than off its *instance in the
+> frame*.
+
+> ⚠️ **`--size-sidebar` — deviation from Figma, 2026-08-29 (owner decision,
+> recorded not corrected).** The extracted value is `6.25rem` (100 CSS px, 199
+> raw) and that is what this table records. **What ships is `6.5rem`** (104px
+> at the 1280 × 832 design size), so the derived item is **88px** square rather
+> than 84px. This is a design change the owner took deliberately, not a
+> re-reading of the frame; a re-import will bring `6.25rem` back and must not
+> be treated as a correction.
+>
+> **Why.** `Einstellungen` is the label that puts up the tightest cell at the
+> 1024 × 768 floor, and a standard module — it is on screen on every route.
+> *(Corrected 2026-08-29: it is **not** the longest label in the catalogue.
+> Measured at 1280 × 832, `Hausordnung` is wider — 78px inactive / 79px active
+> against `Einstellungen`'s 77/77 — and is therefore that viewport's tightest
+> cell at 4.0 / 3.5px per side against 4.5px. At the 1024 × 768 floor the order
+> reverses: `Hausordnung` 64/64 in the 68.81px box (2.41px per side) against
+> `Einstellungen`'s 63/66 (2.91 inactive, **1.41 active**). The floor is what
+> the decision below turns on, so the decision is unchanged — the superlative
+> was not.)* At `6.25rem` it needed 77px
+> of a 84px item at 1280 × 832 and 66px of a 67.22px item at 1024 × 768 in the
+> **active** ExtraBold state, i.e. **0.61px of clearance per side** at the
+> supported floor. The owner asked for a visible inset of 2px per side; the
+> measurement said that at the shipped width even **1px** put the word back on
+> two lines at 1024. The alternatives, per reference cell, all measured:
+>
+> | inset per side, at `--size-sidebar: 6.25rem` | 1280 inactive | 1280 active | 1024 inactive | 1024 active |
+> |---|---|---|---|---|
+> | 0px (what shipped 2026-08-29 morning) | fits, 3.5px clear | fits, 3.5px clear | fits, 2.11px clear | fits, **0.61px clear** |
+> | 1px | fits | fits | fits | **breaks to two lines** |
+> | 2px (the owner's original wish) | fits | fits | fits | **breaks to two lines** |
+>
+> So 2px was **rejected on measurement**, not on taste: it is carried by three
+> of the four reference cells and fails the fourth. The owner then weighed
+> `+0.5rem` (`6.75rem`, enough for the full 2px) and **rejected it as too
+> expensive for the content area**, and settled on `+0.25rem` with a **1px**
+> inset (`--size-sidebar-label-inset`, next section).
+>
+> **What it costs.** The content area starts 4px further right at 1280 × 832
+> (3.19px at 1024 × 768) and is that much narrower.
+> Measured after the change, both reference viewports × both themes × both
+> languages, `tools/measure.mjs` (168 cells) and `tools/measure-states.mjs`:
+> Home's heading block still starts at y = 88 and the card row still ends at
+> y = 744 (the signed-off baseline, unmoved — the loss is horizontal only);
+> heading block and card row moved 172 → 176 (x) and 992 → 996 (right); the
+> status bar is right-anchored and did not move at all (right edge 1248 / 998),
+> so its clearance to the card row went 52 → **48px** and its vertical
+> clearance to the heading is unchanged at 20px; the staleness pill is
+> right-anchored too and did not move. The overflow popover's tiles derive from
+> the same expression and grew with it — panel 470 × 200 → **490 × 208** at
+> 1280, 376 × 160 → **392 × 167** at 1024, tiles 84 → 88 / 67 → 70, still
+> inside the viewport with the grid not scrolling. **0 overflowing, 0
+> truncated, 0 clamped labels, 200 × NO-SCROLL OK.**
+>
+> **Who actually pays the 4px — nobody visible (measured 2026-08-29,
+> re-measured after the review of the same day).** "The content area is 4px
+> narrower" is true of `.shell__content` and misleading about everything
+> inside it, and the owner weighed `+0.5rem` against exactly that sentence.
+> Both reference viewports, the two `--size-sidebar` values compared in one
+> live render:
+>
+> | at 1280 × 832 | `6.25rem` | `6.5rem` |
+> |---|---|---|
+> | `.shell__content` | 1076 | **1072** |
+> | `.home-content__screen` (heading + card row) | 820 | **820 — unchanged** |
+> | `--size-heading` (the headline column) | 390 | **390 — unchanged** |
+> | `.home-content__widgets` (the empty reserved column) | 224 | **220** |
+>
+> At 1024 × 768 the same comparison reads 860.81 → 857.63, 655.97 → 655.97,
+> and the widget column 179.25 → **176.06**. The card row is sized by its four
+> cards and the heading column by `--size-heading`; the widget column is
+> `flex: 1` and absorbs the whole difference. So the price of `+0.25rem` was
+> 4px of a column that is **empty by design** (see `--size-widget-col` above),
+> and the price of the rejected `+0.5rem` would have been 8px of it — not 8px
+> of anything a guest can see. Recorded because the rejection was made on the
+> other reading; **it is not an argument for reopening the decision**, which
+> the owner took and which shipped.
+>
+> **`--size-sidebar` has a third consumer, and it is not in the list above.**
+> Besides `.sidebar` and the grid of `.sidebar-overflow`, the escalated
+> staleness banner reads it: `staleness-banner.component.css` bounds itself
+> with `max-width: calc(100% - var(--size-sidebar) - var(--space-8) - 2 *
+> var(--space-7))` so the bar can never reach over the rail. Two effects, both
+> measured 2026-08-29 with `tools/measure-states.mjs` against a live backend:
+>
+> - **First order: none today.** The bound resolves to 1076 → **1072px** at
+>   1280 × 832 and 860.8 → **857.59px** at 1024 × 768, against a bar that is at
+>   most **694px** wide (English, standby host, 1280) and 553px at 1024. The
+>   `max-width` is nowhere near binding, so the bar's own box does not move.
+> - **Second order, and this is the one that matters: the bar did not move but
+>   the heading column did.** The bar is right-anchored; Home's headline column
+>   slid 4px (3.19px at 1024) to the right, so the gap the bar's left edge
+>   keeps to the headline's ink shrank by that much. Measured in the worst cell
+>   the instrument can produce — the 37-character unbroken display name, five
+>   headline lines — the bar's left edge clears the headline ink by **5px at
+>   1280 × 832** (bar x 569, ink reaches x 564) and **~6px at 1024 × 768** (bar
+>   x 458.83, ink reaches x 453). With the seeded name it is 7px / ~10px. The
+>   instrument reported **no COLLISION in any banner cell**, so the clearance
+>   is intact — but it is the same margin `docs/features/guest-payload-consolidation/06-review.md`
+>   already called *"four and five pixels of luck"*, now ~4px thinner, and the
+>   headline is manager-authored (`{stay.displayName}`). Recorded as a fact for
+>   whoever next touches either number, not repaired here.
+
+## In-house tokens — no Figma counterpart (2026-08-18, extended 2026-08-20, 2026-08-27 and 2026-08-29)
+
+Seven tokens added by `docs/features/appearance-and-language/` for the status
+bar (`02-design.md` §8.3) and the Settings screen (§9), plus one added by
+`docs/features/guest-frontend-integration/` (2026-08-20, the D1 convention —
+in-repo screen designs live in [`screens-inhouse/`](screens-inhouse/), new
+tokens they need land here), one by `docs/features/guest-payload-consolidation/`
+(2026-08-27, the escalated staleness banner) and one by
+`docs/features/home-screen-prototype/` (2026-08-29, the rail label's inset —
+an owner decision, see `--size-sidebar` above). They are kept **in
+their own section, deliberately not merged into the extracted tables above**,
+for the same reason the dark palette lives in its own file: this document's
+value is that its tables are what Figma contains, and one section that says
+otherwise is a warning, whereas ten rows sprinkled through five tables is a
+broken record.
+
+> ⚠️ **Provenance: designed in-house, not extracted** — same standing as the
+> `--gradient-icon-active` note above, and the same consequences.
+>
+> - **Neither screen exists in Figma.** The status bar was read off
+>   [`assets/home-concept-ai.png`](assets/home-concept-ai.png), which
+>   is an **AI concept mock-up**, not a design file — it supplies composition
+>   and rough proportion, never token-accurate values. The Settings screen has
+>   no render at all; it is the feature's own design (`02-design.md` §9, which
+>   states that gap openly).
+> - **A re-import will not bring these back.** Their absence from a fresh
+>   extraction is not evidence that they are wrong.
+> - **Where an existing system rule covered a value, it was used rather than
+>   invented** — see the corroboration column. The one exception is
+>   `--size-sidebar-label-inset`: nothing in the system says 1px, and its row
+>   says so plainly rather than dressing an owner's choice as a derivation.
+
+| Token | Value | Weight / line height | Used for | Corroborated by |
+|---|---|---|---|---|
+| `--size-touch-min` | `2.75rem` (44px) | — | Minimum touch target: status-bar triggers, dropdown rows, Settings option buttons | `design-sheet.md` → *Touchscreen-Regeln* (44px minimum) |
+| `--size-icon-xs` | `1.125rem` (18px) | — | Status-bar glyphs (globe, sun/moon) beside a `0.875rem` label | Sized against the label, one step below `--size-icon-sm` (24px) |
+| `--size-icon-caret` | `0.75rem` (12px) | — | The disclosure chevron after a status-bar glyph | Subordinate to the glyph it follows, so the pair reads as one control |
+| `--size-sidebar-label-inset` | `0.0625rem` (1px) | — | How far the rail label stops short of its item's edge on each side (`sidebar.component.css`), so the ink is not flush against the active pill's border | Nothing corroborates it — **it is an owner decision of 2026-08-29**, chosen against the measurement in the `--size-sidebar` note above: 2px was wanted, 2px and even 1px broke `Einstellungen` at the old width, and 1px at `--size-sidebar: 6.5rem` is the compromise the owner took. Measured clearance ink-to-label-edge afterwards, `Einstellungen`: 4.5px per side at 1280 × 832 (both weights), 2.91px inactive and **1.41px active** at 1024 × 768 |
+| `--text-status` | `0.875rem` (14px) | 700 / 1.3 | The language trigger's short label | Reuses `--text-body`'s size at label weight |
+| `--text-clock` | `1.125rem` (18px) | 700 / 1.3 | The clock | Reuses `--text-title` / `--text-body-lg`'s size |
+| `--text-h1` | `2rem` (32px) | 800 / 1.1 | Screen title — one step below `--text-display`; first used by Settings | `design-sheet.md` → *Type Scale*, H1 32 / ExtraBold 800 / 1.1 (📋 there, built here) |
+| `--color-divider` | `color-mix(in srgb, var(--ink-900) 25%, transparent)` | — | The hairline between the appearance control and the clock | A role, not a fourth grey: mixed from the ink primitive so it stays rebrandable and survives the theme flip ([`dark-theme.md`](dark-theme.md) §3) |
+| `--color-status-offline` | `#A79DBA` | — | **Decorative status indicators only, never text**: the pairing screen's offline dot, the connection screen's `WifiSlash` glyph, the staleness pill's dot ([`screens-inhouse/`](screens-inhouse/), 2026-08-20) | `design-sheet.md` → *Status* 📋 palette, first value of it realised. Theme-stable (same value in both themes); as a text colour it would fail AA on the light surfaces (~2.2 : 1) — information always rides an adjacent standard text role |
+| `--color-status-warning` | `#895806` (light) · `#f9b84e` (dark) | — | **Foreground warning role — text, glyph or border, never a surface fill**: the escalated staleness banner's `WifiSlash` glyph ([`screens-inhouse/connection.md`](screens-inhouse/connection.md), 2026-08-27, `guest-payload-consolidation` REQ-952) | `design-sheet.md` → *Status* 📋 palette, **second** value realised from it. Derived from its `Warning #F8B84E` (hue 37°): the dark theme **is** that value, essentially unchanged, and the light one is the same hue darkened to a working lightness. Measured on glass — light **4.64** over `--mesh-6` and **5.17** over `--mesh-8`, dark **5.63** over `--night-6` and **4.86** over `--night-8` — all above 4.5 : 1 *deliberately*, though a decorative glyph needs none of it: text-capable from the start is the lesson of `--color-status-offline`'s permanent "never a text colour" caveat one row up. **Warning is not error** — `Danger #F26666` sits beside it in the same palette for destructive actions |
+
+> **`--text-clock` is 700, not `design-sheet.md`'s "Caption 13px Medium 500"**
+> for times and meta info. Only 400, 700 and 800 are self-hosted (`global.css`),
+> so 500 would mean shipping a fourth `woff2` for one string on one screen — a
+> runtime cost the on-premise principle does not justify. **Do not "fix" this
+> by adding a font file.** Logged as a deliberate deviation, not an oversight.
+
+`--color-divider` and `--color-status-warning` are the two the theme axis
+overrides; the divider's dark value and reasoning are in
+[`dark-theme.md`](dark-theme.md) §3, the warning role's in its own row above
+(the v1 palette value *is* the dark theme; the light one is derived from it).
+The other seven are colourless and identical in both themes, and
+`--color-status-offline` is deliberately theme-stable (see its row).
+
+> **The warning role is a FOREGROUND role.** `#895806` as a *background* would
+> fail any dark text placed on it, so a tinted warning surface — if one is ever
+> needed — is a **second** token, not this one reused. It also carries the
+> `[data-theme='dark']` override on the **role**: the dark primitive
+> `--status-warning-dark-raw` is a new value, added, never an override of the
+> light primitive (`frontend/CLAUDE.md` → Appearance & language).
 
 ## Breakpoints
 
-**None — deliberately.** Decided 2026-08-17.
+**None — deliberately.** Decided 2026-08-17. Still none after the 2026-08-18
+revision below: scaling to the new 1024 × 768 floor is a *proportional* change,
+not a second layout, so it introduces no breakpoint.
 
 The MVP targets **large touchscreens only**, sized generously enough to render
-the layout exactly as designed: permanent sidebar, four cards across, 780px
+the layout exactly as designed: permanent sidebar, four cards across, 390px
 heading block. There is no responsive behaviour to specify, because there is no
 second layout.
 
@@ -314,15 +638,48 @@ gets bigger.
 
 ### Minimum supported width
 
-`1280px`. Below it the layout breaks rather than degrades: the sidebar, the
-780px heading block and four 196px cards with gaps consume the full width by
-design.
+~~`1280px`.~~ **Revised 2026-08-18 — now `1024 × 768`, landscape.** (Original
+text: `1280px`; below it the layout breaks rather than degrades, since the
+sidebar, the 390px heading block and the 820px card row (four 196px cards with
+gaps) consume the full width by design.)
 
-**Recommendation:** treat widths below the minimum as **out of scope rather
-than broken** — the app is deployed on known hardware, so this is a guard
-rail for development, not a user-facing state. A simple `min-width` on the
-layout root with page scrolling is enough; no dedicated fallback screen is
-worth building until phone support becomes real.
+The user set a supported floor of **1024 × 768 in landscape** — classic
+iPad-landscape, chosen as a typical tablet size after the user explicitly
+delegated the choice. Between that floor and the 1280 × 832 design size the UI
+**scales**; it does not reflow:
+
+| | |
+|---|---|
+| Design size | 1280 × 832 (root font size 16px — the `rem` baseline above) |
+| Supported floor | **1024 × 768, landscape** (0.8 × the design width) |
+| Between them | The same composition, proportionally smaller. No breakpoints, no rewrapping, no element moving to another row, **no scrollbars** |
+| Above the design size | Proportions kept, everything simply larger — as "Units" already anticipated |
+| Portrait | **Out of scope.** The design is unambiguously landscape; a portrait viewport is treated exactly like a below-floor one |
+| Below the floor | Nothing guaranteed. The `min-width` guard rail stays, moved from `1280px` to `1024px`, and scrolling there is acceptable |
+
+**"No scrollbars" is a project-wide rule, not a Home-screen one** (user, 2026-08-18:
+*"das gilt auch für jeden zukünftigen Screen"*). It is proposed as a
+constitution-level constraint; until that amendment is ratified, treat it as
+binding on any screen planned after this date.
+
+**Resolved 2026-08-18 (was `[NEEDS CLARIFICATION]`).** The user approved the
+recommended mechanism: `html { font-size: min(1.25vw, 1.9231vh) }`, uncapped —
+see "Units" above for the as-built rule and `docs/constitution.md` v1.2.0 for
+the ratified constraint. Implemented and measured on every route at 1024 × 768,
+1280 × 832 and 1440 × 900: no overflow on either axis at any of them.
+
+**Still true, unchanged:** treat sizes below the floor as **out of scope rather
+than broken** — the app is deployed on known hardware, so this is a guard rail
+for development, not a user-facing state. A simple `min-width` on the layout
+root with page scrolling is enough; no dedicated fallback screen is worth
+building until phone support becomes real.
+
+**Legibility consequence, flagged not solved:** at the floor everything is 0.8×,
+so `--text-body` renders at 11.2px and the sidebar labels at 9.6px.
+[`design-sheet.md`](design-sheet.md) already calls 14px/12px "at the lower
+edge" for an 11–13" touchscreen; 11.2/9.6px is below that edge. The floor is a
+*supported* size, not the *target* size (1280 × 832 stays the target), but this
+belongs on the same hardware check that entry already asks for.
 
 ---
 
@@ -370,7 +727,7 @@ shadow DOM.
   --brand-primary-deep: #cc49af;
   --brand-secondary: #8a5cf6;
   --ink-900: #2c1f4a;
-  --ink-600: #6e6486;
+  --ink-600: #5a516e; /* deviates from Figma's #6e6486 — WCAG AA, see above */
 }
 
 /* layer 2: semantic roles — the only thing components reference */
@@ -402,11 +759,38 @@ applyBranding(brand: PropertyBranding) {
   variables would, nesting is native CSS now, and the token layer must be
   runtime-swappable anyway — which SCSS cannot do. One less build step.
   Reversible later via the Angular CLI, per project.
-- **Units in `rem`** against a `16px` root (see "Units").
-- **Dark-mode trigger:** a `data-theme` attribute on `<html>`. It defaults to
-  the system preference (`prefers-color-scheme`) but an explicit user choice in
-  `Einstellungen → Darstellung` must win over it — so the attribute is authored
-  in three states: absent (follow system), `light`, `dark`.
+- **Units in `rem`**, authored against a `16px` root; the root itself is
+  viewport-proportional since 2026-08-18 (see "Units").
+- **Dark-mode trigger:** a `data-theme` attribute on `<html>`, carrying an
+  **always-resolved** value — `light` or `dark`, never absent. An explicit
+  guest choice in `Einstellungen → Darstellung` wins over the property's
+  default.
+
+  > ⚠️ **Corrected 2026-08-19 — user decision #4, approved 2026-08-18.**
+  > This entry previously read: *"It defaults to the system preference
+  > (`prefers-color-scheme`) but an explicit user choice … must win over it —
+  > so the attribute is authored in three states: absent (follow system),
+  > `light`, `dark`."* Two halves of that are now wrong, and the correction is
+  > recorded rather than silently rewritten because the old sentence was the
+  > basis of an earlier plan.
+  >
+  > - **The app never writes the absent state.** The attribute is always a
+  >   resolved `light` or `dark`, so nothing ever renders in the
+  >   attribute-absent state (REQ-105). `:root`'s values *are* the light
+  >   theme; `[data-theme='light']` exists for completeness and overrides
+  >   nothing.
+  > - **The startup value is the backend-delivered default** (`light` for the
+  >   example property) — **not** `prefers-color-scheme`. The property's
+  >   configuration owns the default; the guest's stored choice, when one
+  >   exists, replaces it before the first paint.
+  > - **Three states stay *authorable*, and `system` is one of them.** A
+  >   property may configure a `system` option, and only then is
+  >   `prefers-color-scheme` consulted — as an input to the resolution, not as
+  >   the default. The example property does not configure it, so `system` is
+  >   not in the shipped option list.
+  >
+  > Full model: `docs/features/appearance-and-language/02-design.md` §6
+  > (defaults ⊕ the guest's choice ⊕ persistence).
 - **Line heights (decided 2026-08-17):** implement `1.1` for `--text-display`,
   `1.3` for titles and labels, `1.5` for body text. **These values are
   authoritative and live here, not in Figma** — every Figma text layer is left
@@ -421,20 +805,56 @@ applyBranding(brand: PropertyBranding) {
 
 ### Still blocked on design
 
-- **No dark palette exists.** Dark mode is decided and deferred — only light
-  values are designed. The dark role values in the snippet above are
-  placeholders and must be designed before the feature can ship, including
-  whether the glass surfaces stay translucent over a dark background.
+- ✅ **Resolved 2026-08-18 — ~~No dark palette exists~~.** A dark palette was
+  **designed in-house** (not in Figma) as part of
+  `docs/features/appearance-and-language/` and is documented in
+  **[`dark-theme.md`](dark-theme.md)** — sixteen dark mesh primitives,
+  two new ink primitives, three new surface primitives, and the full
+  `[data-theme='dark']` role table with measured WCAG contrast for every text
+  role.
+
+  Three things follow, and all three are deliberate:
+
+  - **No dark colour value lives in this file, and none ever should.** This
+    document records what exists in **Figma**; the dark palette does not, and
+    a re-import will not produce it. Keeping it out is what stops hand-authored
+    values from becoming indistinguishable from extracted ones. The `⚠️`
+    provenance note under `--gradient-icon-active` above is the one exception
+    this file already carries — a second, twenty-five rows long, would have
+    turned the warning into background noise.
+  - **The sub-question is answered: the glass surfaces do stay translucent.**
+    `--blur-glass` is `blur(8px)` in both themes, the panel keeps ~1.5 : 1
+    contrast against its own backdrop in both, and the dark surfaces are a
+    cool-white lightening film instead of light mode's warm-white one, at a
+    much lower alpha (the value itself is in `dark-theme.md`, not here).
+    Glassmorphism is a property of the design, not of the light palette.
+  - **If a dark variant is ever drawn in Figma, it supersedes
+    `dark-theme.md`** and this entry gains a real extraction — at which point
+    the values belong here like any other.
+
+  Still open in light mode, and **not** a dark-mode problem: `--color-text-secondary`
+  measures 3.99 : 1 on a glass panel and 3.48 : 1 on the sidebar, both below
+  WCAG AA. Recorded in `dark-theme.md` §4; unchanged here because fixing it
+  would alter the signed-off light screen.
 
 ## Open questions
 
-- `[NEEDS CLARIFICATION: responsive behaviour — no breakpoints exist]`
+- `[NEEDS CLARIFICATION: responsive behaviour — no breakpoints exist.` **Partly
+  resolved 2026-08-18:** a supported range (1024 × 768 landscape → 1280 × 832 →
+  larger) and a no-scrollbar rule are now decided; still no breakpoints, because
+  the range is covered by proportional scaling. The scaling *mechanism* remains
+  approval-gated — see "Minimum supported width".`]`
 - `[NEEDS CLARIFICATION: explicit line-heights are missing everywhere]`
 - `[NEEDS CLARIFICATION: promote the five raw surface/gradient colors to Figma variables?]`
-- `[NEEDS CLARIFICATION: no dark-mode palette exists — is one wanted?]`
 
 ### Resolved
 
+- ✅ **A dark-mode palette was wanted, and now exists (2026-08-18).** Answers
+  the former *"no dark-mode palette exists — is one wanted?"*. Yes: designed
+  in-house, documented in **[`dark-theme.md`](dark-theme.md)**, realised in
+  `frontend/src/styles/tokens.css`. **No dark value lives in this file**, and a
+  Figma re-import will not produce any — see "Still blocked on design" above
+  for the full resolution, including that the glass surfaces stay translucent.
 - ✅ Canvas is 2x; logical viewport is 1280 × 832 (2026-08-17)
 - ✅ `Test_Primary` → `Text_Primary`, typo confirmed (2026-08-17)
 - ✅ Spacing keeps the design's literal values, normalised onto a 4px scale (2026-08-17)

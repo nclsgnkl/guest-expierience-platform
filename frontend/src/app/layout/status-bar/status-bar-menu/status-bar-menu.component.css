@@ -1,0 +1,95 @@
+/* The trigger <button> is the flex item inside `.status-bar`, not this host
+   (frontend/CLAUDE.md -> Layout). `display: contents` removes the host's own
+   box; it is safe here because the host carries no role, label or landmark —
+   the roles live on the <button> and on the CDK's panel. */
+:host {
+  display: contents;
+}
+
+.status-bar-menu__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* A wall-mounted touchscreen: never smaller than the minimum target
+     (design-sheet.md -> Touchscreen-Regeln). The bar is exactly this tall,
+     so the trigger fills it. */
+  height: var(--size-touch-min);
+  min-width: var(--size-touch-min);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--text-status);
+  font-weight: var(--text-status-weight);
+  line-height: var(--text-status-line-height);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.status-bar-menu__caret {
+  flex-shrink: 0;
+  /* Subordinate to the glyph it follows, without a second colour role. */
+  opacity: 0.7;
+}
+
+.status-bar-menu__trigger:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+.status-bar-menu__trigger:active {
+  transform: scale(0.98);
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The same glass recipe as every other panel, so the dropdown inherits dark
+   mode with no extra work (02-design.md §8.4). `margin-top` is the gap to the
+   trigger — expressed here, in a token, rather than as a pixel offset in the
+   CDK position config. */
+.status-bar-menu__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-surface-glass);
+  border: var(--border-glass);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: var(--blur-glass);
+  color: var(--color-text-primary);
+}
+
+.status-bar-menu__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--size-touch-min);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--text-status);
+  font-weight: var(--text-status-weight);
+  line-height: var(--text-status-line-height);
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+}
+
+.status-bar-menu__option-label {
+  flex: 1;
+}
+
+.status-bar-menu__option--selected {
+  background: var(--gradient-menu-active);
+}
+
+.status-bar-menu__option:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: -2px;
+}

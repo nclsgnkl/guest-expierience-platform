@@ -1,0 +1,52 @@
+# gxp-updater.service — one run of the host-side updater (update-channel
+# REQ-718, D19). Started by gxp-updater.timer; never enabled on its own.
+[Unit]
+Description=Guest Experience Platform updater (one run)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/gxp/updater.conf
+ExecStart=/usr/local/lib/gxp/gxp-updater.sh
+SyslogIdentifier=gxp-updater
+# Root on purpose (docker is root-equivalent anyway); the surface is kept
+# small instead: /usr, /boot, /etc read-only, a private /tmp, no /home or
+# /root (the compose dir must live elsewhere — install.sh refuses one under
+# /home), no devices, no kernel tunables/modules/cgroups, no setuid
+# escalation, native syscalls only (review A-5; every line proven by the
+# T-20c systemd run). CapabilityBoundingSet is deliberately NOT set: the
+# script needs chown/chmod/reading a 0700 uid-185 directory, and a wrong
+# set fails silently as a stale `updater` state.
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+# A run must end (review R3-2), but it must end by ITS OWN deadlines, never
+# by this one: a SIGKILL from systemd mid-ladder leaves the box on the
+# unhealthy image with the request marked handled (review 06 #1). Every
+# step of gxp-updater.sh is therefore bounded by `timeout`, and this value
+# sits ABOVE the sum of those bounds at the defaults (conf keys in
+# updater.conf; the fixed ones in the script):
+#   compose config                                          300 s
+#   pg_dump          GXP_DUMP_TIMEOUT    600 + 30 kill grace  630 s
+#   docker pull      GXP_PULL_TIMEOUT   1800 + 30 kill grace 1830 s
+#   compose up ×3 (swap, rollback, restore) 3 × 300         900 s
+#   compose stop                                            300 s
+#   restore rung: pg_restore --list 600 + wipe 300 + restore 600  1500 s
+#   health ×3: each 2 × (HEALTH_TIMEOUT 180 + 2 probes × 30 + 5) + HOLD 30
+#                  = 520 s, × 3                             1560 s
+#   volume/image inspect, prune, state writes                ~60 s
+#   sum                                                   ~7080 s ≈ 118 min
+# 3 h leaves ~60 min of margin. An operator raising GXP_PULL_TIMEOUT,
+# GXP_DUMP_TIMEOUT, GXP_RESTORE_TIMEOUT or GXP_HEALTH_TIMEOUT must keep the
+# sum below this value.
+TimeoutStartSec=3h

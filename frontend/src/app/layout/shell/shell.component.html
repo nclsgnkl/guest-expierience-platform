@@ -1,0 +1,45 @@
+<!-- Paint server for the active nav glyph (REQ-023). It lives here, in the
+     Shell's own template, for two reasons: the Shell renders on every route,
+     which is exactly the lifetime the sidebar needs; and template nodes carry
+     Angular's encapsulation attribute, so shell.component.css can style the
+     <stop>s from the token layer (a `stop-color` presentation attribute
+     cannot hold a var()). rotate(49 0.5 0.5) is the 139deg CSS angle: SVG's
+     default gradient axis runs left-to-right, i.e. CSS 90deg, so the rotation
+     about the object bounding box's centre is 139 - 90. -->
+<svg class="shell__defs" aria-hidden="true" focusable="false" width="0" height="0">
+  <defs>
+    <linearGradient id="icon-gradient-active" gradientTransform="rotate(49 0.5 0.5)">
+      <stop class="shell__defs-stop--start" offset="0%" />
+      <stop class="shell__defs-stop--end" offset="100%" />
+    </linearGradient>
+  </defs>
+</svg>
+
+<div class="shell mesh-background">
+  <app-sidebar
+    [menuItems]="property().menuItems"
+    [settings]="property().settings"
+    [logoAsset]="logoAsset()"
+    [activeRoute]="activeRoute()"
+    [locale]="locale()"
+  />
+
+  <main class="shell__content">
+    <router-outlet />
+  </main>
+
+  <!-- App chrome, so a sibling of <main> and not inside it: the status bar is
+       not part of the main landmark. It is an absolute overlay in `.shell`'s
+       top-right padding box and takes no flow space, so adding it moves
+       nothing (REQ-112, 02-design.md §8.1). -->
+  <app-status-bar />
+
+  <!-- The staleness pill (REQ-519): overlay chrome directly below the
+       status-bar cluster, rendered only in the STALE state — see
+       docs/design/screens-inhouse/connection.md -> "The staleness pill". -->
+  <app-staleness-pill />
+
+  <!-- Its escalation after an hour without contact (REQ-952): the same anchor,
+       grown into a BAR. One derived level decides which of the two is up. -->
+  <app-staleness-banner />
+</div>

@@ -1,0 +1,108 @@
+/* The panel that wraps this component lays out `.setting-choice`, not the
+   host (frontend/CLAUDE.md -> Layout). Safe as `contents` because the host
+   carries no role: `role="group"` sits on the div in the template, and
+   `display: contents` would have removed it from the accessibility tree. */
+:host {
+  display: contents;
+}
+
+.setting-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.setting-choice__label {
+  font-size: var(--text-title);
+  font-weight: var(--text-title-weight);
+  line-height: var(--text-title-line-height);
+}
+
+.setting-choice__hint {
+  font-size: var(--text-body);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-line-height);
+  color: var(--color-text-secondary);
+}
+
+.setting-choice__options {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.setting-choice__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* A wall-mounted touchscreen: 44 x 44 at the design size, on both axes
+     (design-sheet.md -> Touchscreen-Regeln; REQ-117). */
+  min-height: var(--size-touch-min);
+  min-width: var(--size-touch-min);
+  padding: 0 var(--space-5);
+  /* Declared on every option, transparent when selected, so choosing one
+     cannot change any option's box by the border's 2px. The other two things
+     that would move it — the weight switch and the check glyph — are
+     reserved further down, so the box really is stable. */
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--text-body);
+  font-weight: var(--text-body-weight);
+  line-height: var(--text-body-line-height);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Three signals, never colour alone: background, weight, and the check glyph
+   in the template (which also carries the accessible name). Two of the three
+   would change the option's width — the heavier weight and the appearing
+   glyph — so both are reserved on every option below. */
+.setting-choice__option--selected {
+  background: var(--gradient-menu-active);
+  border-color: transparent;
+  font-weight: var(--text-title-weight);
+}
+
+/* Reserves the bold width on every option: the `::after` carries the same
+   text at the selected weight, in a second grid row of zero height, so the
+   column is always as wide as the bold string and the weight switch moves
+   nothing. `visibility: hidden` also keeps the duplicate out of the
+   accessibility tree. */
+.setting-choice__option-label {
+  display: inline-grid;
+}
+
+.setting-choice__option-label::after {
+  content: attr(data-label);
+  height: 0;
+  overflow: hidden;
+  font-weight: var(--text-title-weight);
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* The other half of the reservation: the check's box exists on every option,
+   the glyph inside it only on the selected one. */
+.setting-choice__option-check-slot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--size-icon-xs);
+}
+
+.setting-choice__option:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+.setting-choice__option:active {
+  transform: scale(0.98);
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}

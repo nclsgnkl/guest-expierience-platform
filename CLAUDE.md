@@ -5,16 +5,23 @@ plain `claude` session that is not running as any custom agent. Keep it
 short: it only orients Claude, it deliberately does **not** contain the
 routing logic for this project's spec-driven pipeline.
 
-> Fill in `<project name>`, `<stack>` and the placeholders in `docs/` before
-> relying on this setup. Everything below is stack-agnostic on purpose.
-
 ## Project
 
-- **Name:** <project name>
-- **Stack:** <e.g. TypeScript/React frontend, Node/Postgres backend — fill in once decided>
-- **Repo conventions:** put stack-specific rules in nested `CLAUDE.md` files (e.g.
-  `backend/CLAUDE.md`, `frontend/CLAUDE.md`) once the stack exists — Claude Code
-  loads those automatically when working in that directory.
+- **Name:** Guest Experience Platform — an in-property guest info screen
+  (welcome, house info, smart home, surroundings, services), one self-hosted
+  instance per property.
+- **Stack:** Angular 22 + TypeScript (strict), standalone components, **zoneless**
+  change detection, Angular Router, signals for local UI state. Plain CSS with
+  custom properties — no Tailwind, no SCSS, no component library. Unit tests on
+  **Vitest + jsdom**; no end-to-end framework chosen yet. Content comes from
+  static TS/JSON via `PropertyContentService` — no backend, no auth.
+  Frontend lives in `frontend/`.
+- **Runs on premises, offline.** Every property runs its own instance on a local
+  server on an untrusted LAN. No external runtime requests at all — fonts, icons
+  and assets ship inside the build. See `docs/constitution.md` principle 4.
+- **Repo conventions:** stack-specific rules live in nested `CLAUDE.md` files —
+  see `frontend/CLAUDE.md`. Claude Code loads those automatically when working in
+  that directory.
 
 ## How work is organized
 

@@ -1,0 +1,8 @@
+{
+  "projectId": "709bd276-5991-4c38-bf36-16cda993ea8a",
+  "shape": "off-script",
+  "note": "Angular app, no React component library — see .design-sync/NOTES.md. The /design-sync converter does not apply; .design-sync/build.sh produces the bundle.",
+  "build": ".design-sync/build.sh",
+  "localDir": "./ds-bundle",
+  "readmeHeader": ".design-sync/conventions.md"
+}

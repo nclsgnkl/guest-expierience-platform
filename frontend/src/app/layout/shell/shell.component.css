@@ -1,0 +1,78 @@
+/* Mesh-gradient background (REQ-004, REQ-020): 16 stacked radial-gradient
+   layers, edge-aligned on a 0% / 33.33% / 66.67% / 100% grid on both axes,
+   colours from the semantic roles --color-mesh-1..16 (tokens.css), which
+   default to the --mesh-* primitives in light and map to --night-* in dark
+   (REQ-103). The roles are what makes the theme axis able to repaint this at
+   all: it may override roles only, and this file may read no primitive.
+   Painted once here so every route
+   — Home and every section placeholder — shows the identical background.
+   See docs/design/tokens.md -> "Background implementation".
+
+   2026-08-18 fix: each layer now declares an explicit `ellipse 44rem 29rem`
+   size. Without it, `circle`'s default size is `farthest-corner` — for a
+   point sitting in a corner that's the full canvas diagonal, so every layer
+   washed out across almost the entire background and the four topmost
+   layers (mesh-1..4, painted last in source order = on top in CSS) hid
+   everything underneath. 44rem/29rem approximate one grid cell's spacing on
+   the design's 1280x832 logical viewport (1280/3 / 832/3 in rem), sized as
+   an ellipse rather than a circle because the grid's horizontal and
+   vertical spacing differ — a uniform circle would either gap vertically or
+   overreach horizontally.
+
+   2026-08-18 second fix (colours read too pale vs. the Figma reference):
+   two causes, both about how much of the canvas actually carries colour.
+   (a) There was no `background-color` at all, so wherever every layer had
+   faded out, the white page canvas showed through and desaturated the whole
+   composition — a mesh needs a floor, not transparency. (b) Each layer
+   ended at `transparent 60%`, i.e. alpha hit zero well before the next
+   grid point, leaving washed-out gaps between the colour centres; extending
+   to `transparent 100%` lets neighbouring blobs overlap so the blend stays
+   saturated. --color-mesh-base is the base, resolving to --mesh-6 (light) /
+   --night-6 (dark): that point sits in the grid's interior (row 2, col 2) and
+   is the closest thing either palette has to its average. */
+.shell {
+  display: flex;
+  flex-direction: row;
+  /* stretch, not center: the sidebar must span the shell's full content box
+     (REQ-022). `center` sized every flex item to its content height, which
+     is the other half of defect D1. */
+  align-items: stretch;
+  gap: var(--space-8);
+  /* Exactly the viewport, not at least it (REQ-024): with `min-height` a
+     child that overflows silently grows the page and produces a scrollbar;
+     with `height` it overflows visibly in development, so the no-scroll rule
+     stays met by construction rather than by `overflow: hidden`. */
+  height: 100dvh;
+  padding: var(--space-6) var(--space-7);
+  /* The containing block for the status-bar overlay (REQ-112). It is the
+     only thing `.shell` contributes to it: the bar positions itself against
+     this box's own padding, so the two numbers stay in one place. */
+  position: relative;
+  /* The 16-layer gradient itself moved to global.css -> .mesh-background
+     (guest-frontend-integration: pairing/standby/connection paint the same
+     mesh outside the shell). The template adds that class beside .shell. */
+}
+
+.shell__content {
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+}
+
+/* Stops for the active-glyph paint server declared in this component's
+   template (REQ-023). Semantic roles only, per constitution principle 5 —
+   and because they resolve custom properties at render time, the runtime
+   branding hook (REQ-003) recolours the glyph without a rebuild. */
+.shell__defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.shell__defs-stop--start {
+  stop-color: var(--color-icon-active-start);
+}
+
+.shell__defs-stop--end {
+  stop-color: var(--color-icon-active-end);
+}

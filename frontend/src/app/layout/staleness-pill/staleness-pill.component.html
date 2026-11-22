@@ -1,0 +1,16 @@
+@if (visible()) {
+  <div class="staleness-pill" role="status" aria-live="polite">
+    <!-- Owner decision 2026-08-29: the WLAN glyph, not the decorative dot it
+         replaces. The same glyph the connection screen and the escalated
+         banner carry, so the discreet hint already names WHAT is missing (the
+         connection) instead of only marking that something is. Still
+         decorative — the text carries the information. -->
+    <ng-icon
+      class="staleness-pill__glyph"
+      name="phosphorWifiSlash"
+      size="var(--size-icon-xs)"
+      aria-hidden="true"
+    />
+    <span class="staleness-pill__label">{{ label() }}</span>
+  </div>
+}

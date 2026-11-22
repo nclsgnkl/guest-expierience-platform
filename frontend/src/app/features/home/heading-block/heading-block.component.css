@@ -1,0 +1,43 @@
+.heading-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: var(--size-heading);
+  color: var(--color-text-primary);
+}
+
+.heading-block__subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.heading-block__subtitle,
+.heading-block__paragraph {
+  font-size: var(--text-body-lg);
+  font-weight: var(--text-body-lg-weight);
+  line-height: var(--text-body-lg-line-height);
+  margin: 0;
+}
+
+.heading-block__headline {
+  font-size: var(--text-display);
+  font-weight: var(--text-display-weight);
+  line-height: var(--text-display-line-height);
+  margin: 0;
+  /* The headline is manager-authored with `{stay.displayName}` interpolated,
+     so a single unbroken token — a long name, a hyphen-free compound — is
+     guest-supplied width. Without this the line ignores the block's width and
+     runs across the screen (measured to x878 at 1024 with a 37-character
+     name, under the staleness bar). `anywhere`, not `break-word`: the column
+     is a fixed `--size-heading`, and only `anywhere` also bounds min-content
+     if that ever stops being true. */
+  overflow-wrap: anywhere;
+}
+
+.heading-block__spacer {
+  /* Empty ~30px-high frame in Figma (docs/design/screens/home.md -> Heading
+     block); not on the documented spacing scale exactly, so the nearest
+     token stands in. */
+  height: var(--space-5);
+}
