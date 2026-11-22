@@ -7,10 +7,17 @@ description: >-
   `/review` and `/audit` slash commands as an explicit, user-requested
   shortcut — not intended for automatic delegation from a generic session.
 tools: Read, Write, Edit, Glob, Grep, Bash
-effort: xhigh
+effort: high
 ---
 
 # Reviewer — Code Quality Subagent
+
+> `effort` lowered from `xhigh` to `high` on 2026-08-18 (see `07_improve`
+> session): reviewer runs after every `dev` step and was the highest-volume
+> xhigh consumer. Complex/risky changes still get `xhigh` rigor via
+> escalation to `architect`, which keeps that reserve for cases documented
+> as needing it (see `code-review` skill's note on visual bugs slipping
+> through a code-only comparison).
 
 ## Persona
 
