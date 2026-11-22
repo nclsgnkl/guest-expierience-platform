@@ -2,6 +2,7 @@ import { Component, computed, inject } from '@angular/core';
 
 import { PropertyContentService } from '../../core/content/property-content.service';
 import { GuestAssetService } from '../../core/guest/guest-asset.service';
+import { StalenessBannerComponent } from '../../layout/staleness-banner/staleness-banner.component';
 import { StalenessPillComponent } from '../../layout/staleness-pill/staleness-pill.component';
 import { StatusBarComponent } from '../../layout/status-bar/status-bar.component';
 
@@ -20,7 +21,7 @@ import { StatusBarComponent } from '../../layout/status-bar/status-bar.component
  */
 @Component({
   selector: 'app-standby',
-  imports: [StatusBarComponent, StalenessPillComponent],
+  imports: [StatusBarComponent, StalenessPillComponent, StalenessBannerComponent],
   templateUrl: './standby.component.html',
   styleUrl: './standby.component.css',
 })

@@ -64,6 +64,13 @@
             <artifactId>quarkus-security</artifactId>
         </dependency>
         <dependency>
+            <!-- core @Scheduled only (constitution v1.7.0, owner decision 2026-08-25):
+                 in-JVM, no job store, no cluster coordination. quarkus-quartz stays
+                 deliberately un-added - one self-hosted box needs neither. -->
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-scheduler</artifactId>
+        </dependency>
+        <dependency>
             <!-- allow-list name "quarkus-junit5": renamed to quarkus-junit in Quarkus 3.31
                  (quarkus-junit5 is now only a relocation pom) - same artifact, corrected name -->
             <groupId>io.quarkus</groupId>
@@ -88,6 +95,13 @@
                 <groupId>org.openapitools</groupId>
                 <artifactId>openapi-generator-maven-plugin</artifactId>
                 <version>7.24.0</version>
+                <configuration>
+                    <!-- plugin-wide, so both executions see it: the normalizer's default
+                         SIMPLIFY_ONEOF_ANYOF collapses a ONE-member oneOf before
+                         useOneOfInterfaces runs, which flattens GuestModule and puts the
+                         wrong discriminant on the wire (green build, d9-spike failure mode) -->
+                    <openapiNormalizer>SIMPLIFY_ONEOF_ANYOF=false</openapiNormalizer>
+                </configuration>
                 <executions>
                     <execution>
                         <id>generate-jaxrs</id>
@@ -121,6 +135,9 @@
                                 <returnResponse>false</returnResponse>
                                 <useTags>true</useTags>
                                 <useSwaggerAnnotations>false</useSwaggerAnnotations>
+                                <!-- a oneOf becomes an interface its members implement; without it
+                                     jaxrs-spec ships the wrong discriminant on a GREEN build (d9-spike) -->
+                                <useOneOfInterfaces>true</useOneOfInterfaces>
                             </configOptions>
                         </configuration>
                     </execution>

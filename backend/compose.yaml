@@ -8,12 +8,22 @@
 # volume. Losing gxp-tls is survivable but expensive: the next start
 # regenerates a NEW CA, and a person must re-install it in every kiosk's
 # trust store (no re-pairing needed — device tokens live in PostgreSQL).
+# The gxp-updates volume is NOT part of the backup (exchange files only).
+#
+# Updates (update-channel, REQ-717/720): the app polls a signed manifest
+# (outbound only, GXP_UPDATE_BASE_URL) and writes desired-update.json into
+# the gxp-updates volume; the host-side updater (backend/updater/, a systemd
+# timer) verifies it again, dumps the database, pulls the image, writes the
+# GXP_IMAGE= line of THIS directory's `.env` and restarts `app` once. The
+# `.env` line is the updater's, not a person's — see README "Updates".
 #
 # Required environment variables (compose refuses to start when unset):
 #   GXP_DB_PASSWORD     — PostgreSQL password
 #   GXP_ADMIN_PASSWORD  — admin password, read on FIRST start only: seeded
 #                         hashed (PBKDF2) into PostgreSQL, boot refuses when
-#                         unset/blank and no hash exists; ignored once a hash
+#                         unset/blank/shorter than 8 chars and no hash exists
+#                         (the >= 8 minimum matches a password change);
+#                         ignored once a hash
 #                         is stored — rotate via PUT /api/manager/password
 #                         (constitution v1.5.x password lifecycle)
 #   GXP_TLS_HOST        — the ONE host name or IP kiosks use to reach this
@@ -25,10 +35,19 @@ name: gxp
 
 services:
   app:
-    image: gxp-backend:1.0.0-SNAPSHOT
+    # The updater (backend/updater/gxp-updater.sh) rewrites GXP_IMAGE= in
+    # `.env` to the verified artifact after each applied update and back to
+    # the previous image on a rollback; unset, the locally built tag runs.
+    image: ${GXP_IMAGE:-gxp-backend:1.0.0-SNAPSHOT}
     build:
       context: ./app
       dockerfile: src/main/docker/Dockerfile.jvm
+    # The box reboots with the building (power cut): both services come back
+    # on their own, so the update timer's catch-up (Persistent=true) finds a
+    # running database. `unless-stopped` respects an explicit `compose stop`
+    # — the updater's own stop/start on the restore rung never fights it
+    # (owner decision 2026-08-26, review 06 #6).
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -36,10 +55,35 @@ services:
       GXP_DB_JDBC_URL: jdbc:postgresql://db:5432/gxp
       GXP_DB_USERNAME: gxp
       GXP_DB_PASSWORD: ${GXP_DB_PASSWORD:?set the database password (GXP_DB_PASSWORD)}
-      GXP_ADMIN_PASSWORD: ${GXP_ADMIN_PASSWORD:?set the initial admin password (GXP_ADMIN_PASSWORD)}
+      # Optional ON PURPOSE, unlike the two beside it: this value is read on the
+      # FIRST start only and ignored forever once an account exists, so a
+      # running instance should be started WITHOUT it (see README, "After the
+      # first start"). Keeping it required would leave the password readable via
+      # `docker inspect` and /proc/<pid>/environ for the life of the box. A missing
+      # value on a FRESH instance still refuses the boot — FirstUserSeeder does
+      # that itself, and its message names the variable and the >= 8 rule.
+      GXP_ADMIN_PASSWORD: ${GXP_ADMIN_PASSWORD:-}
+      # Optional: the first account's username (default "admin"), read on the
+      # FIRST start only, like the password (auth-hardening REQ-608).
+      GXP_ADMIN_USERNAME: ${GXP_ADMIN_USERNAME:-}
+      # Optional (auth-hardening REQ-603, remote-operations A1.4): both default
+      # to OFF / loopback. Set GXP_TRUSTED_PROXY_ENABLED=true and GXP_TRUSTED_PROXY
+      # to the relay's address (CIDR) ONLY when this instance sits behind the
+      # relay; a LAN range here turns the per-address login throttle into a
+      # weapon on that range (see README, "Trusted proxy").
+      GXP_TRUSTED_PROXY_ENABLED: ${GXP_TRUSTED_PROXY_ENABLED:-false}
+      GXP_TRUSTED_PROXY: ${GXP_TRUSTED_PROXY:-127.0.0.1/32}
       GXP_TLS_HOST: ${GXP_TLS_HOST:?set the host/IP kiosks use (GXP_TLS_HOST) - the TLS certificate is issued for it}
+      # Optional (update-channel REQ-701): the https:// base of the update
+      # server (the app GETs <base>/manifest/<channel>.json + .sig, hourly,
+      # outbound only). Empty = the channel is off; the status API says
+      # `configured: false`. Plain http:// is refused outside tests.
+      GXP_UPDATE_BASE_URL: ${GXP_UPDATE_BASE_URL:-}
+      # Optional: the manifest channel name (^[a-z0-9-]{1,32}$), default "stable".
+      GXP_UPDATE_CHANNEL: ${GXP_UPDATE_CHANNEL:-stable}
     volumes:
       - gxp-tls:/tls
+      - gxp-updates:/updates   # app ↔ host updater exchange (two files, no secrets)
     ports:
       - "443:8443"    # HTTPS only — plain HTTP is not served at all
     healthcheck:
@@ -53,6 +97,7 @@ services:
 
   db:
     image: postgres:17.11
+    restart: unless-stopped
     environment:
       POSTGRES_DB: gxp
       POSTGRES_USER: gxp
@@ -68,3 +113,7 @@ services:
 volumes:
   gxp-pgdata:
   gxp-tls:
+  # Exchange files only (desired-update.json written by the app, state.json
+  # by the host updater), no secrets, not part of the backup. The updater
+  # resolves its host path with `docker volume inspect gxp_gxp-updates`.
+  gxp-updates:

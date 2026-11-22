@@ -17,6 +17,7 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * Stays CRUD + invariant 5 (REQ-309, REQ-315, REQ-323): range check, offered
@@ -28,10 +29,7 @@ import io.quarkus.test.junit.QuarkusTest;
 class StayResourceTest {
 
     private static String token() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private static int createRoom(String token, String code) {

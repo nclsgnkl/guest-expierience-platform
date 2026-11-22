@@ -17,13 +17,13 @@
 | Token minted at claim, not at confirm | Claim-time | The raw token must be returned exactly once and never stored. Minting at confirm would force storing it (raw) until the kiosk polls. At claim: poll sees the confirmed request → creates the `Device` row with the hash → returns the raw token → marks the request claimed, one transaction. |
 | Pairing + devices are **one BCE package** (`de.gxp.device`) | One consistency unit, one public `DeviceControl` | The claim is a cross-entity transaction (read `PairingRequest`, write `Device`, mark claimed). Two packages force a Control cycle (pairing→device for claim, device→pairing for confirm) — the same reasoning that made menu+cards one package. Consequence: **two Boundaries in one package** (kiosk-facing + admin-facing) — **approved by the user 2026-08-19** together with the exact `backend/CLAUDE.md` amendment (resolved decision #5 below, amendment written). |
 | Guest read model = coordinating Control | `de.gxp.guest`, `GuestControl` | Exactly what spec §4 already reserves: "the guest read model is a coordinating Control … the one place where cross-feature composition is expected, deliberately read-only" (plus the one stay-anchored preference write, which delegates to `StayControl`). |
-| Resolution logic is **never duplicated** | Owning Controls gain `@PermitAll` guest-read methods | `MenuControl` already implements the ceiling; `TemplateControl` the resolver; `StayControl` the active-stay derivation. `GuestControl` composes them. The `@PermitAll`-on-internal-methods reading follows the `TemplateControl` precedent the domain-config review explicitly called "forward-correct for the guest API's device role". Authorization lives on `GuestControl`'s methods (`@RolesAllowed("device")`) — the only ones a guest HTTP request can reach. |
+| Resolution logic is **never duplicated** | Owning Controls gain `@PermitAll` guest-read methods (**amended 2026-08-24, D2:** the methods stayed, the annotation did not — Controls carry none) | `MenuControl` already implements the ceiling; `TemplateControl` the resolver; `StayControl` the active-stay derivation. `GuestControl` composes them. The `@PermitAll`-on-internal-methods reading follows the `TemplateControl` precedent the domain-config review explicitly called "forward-correct for the guest API's device role". Authorization lives on `GuestControl`'s methods (`@RolesAllowed("device")`) — the only ones a guest HTTP request can reach. |
 | Guest content is localized maps | All offered languages in one payload | System-context cross-cutting rule: a language switch fetches nothing. Templates are resolved per language server-side (checkout in the property timezone, each language's locale), so the kiosk still only ever sees finished text (spec §5). |
 | Vacancy → named `409 room-vacant` | For `screens/home` and the preference write | Decision 9 (data-sparing): no stay-derived value leaves the server for a vacant room. The session still answers `200` (it carries the standby texts and settings config the standby screen needs). The kiosk's preference write is fire-and-forget with silent failure by design (system-context), so a `409` costs nothing client-side. |
 | Guest asset reachability | Serve only assets in the device's resolved view; else `404` | Asset ids are sequential; without the check a device could enumerate every stored image. Logo, property default artwork, own-room artwork — nothing else. Cheap: `GuestControl` already resolves those ids for the session. |
 | Preference write shape | `PUT /api/guest/preferences`, whole record `{language, appearance}`, both nullable | Mirrors `StoredPreferences` and the gateway's whole-record-write contract verbatim, so `guest-frontend-integration` maps 1:1. Stay-anchored (decided 2026-08-19): a new stay starts clean by construction; no explicit check-out cleanup needed. |
 | No scheduler | Opportunistic cleanup | `quarkus-scheduler` is not on the allow-list and a pairing-request table with a handful of rows needs none: each create deletes expired rows first. |
-| Rate limiting | Reuse the `LoginRateLimiter` pattern (in-memory, package-private `PairingRateLimiter`) | Same shape, same 429 + `Retry-After`. Pairing create is the only spammable unauthenticated write. Poll needs none: without the 256-bit secret every answer is `404`. |
+| Rate limiting | **None — withdrawn 2026-08-24 (owner decision, REQ-409).** As built this was a global in-memory `PairingRateLimiter` (5 creates / 60 s), and the global counter was the bug: anyone on the LAN — or one clock-skewed kiosk retrying by itself (`guest-frontend-integration` 06-review 🟡 #3) — could keep a real kiosk from ever getting a code. A paced admission gate replaced it the same day and was removed with it. | Guessing stands on entropy + TTL alone: 32⁸ ≈ 1.1 × 10¹² codes, 10-minute TTL, and a flooder reaches neither `confirm` (admin-only) nor `poll` (256-bit secret). Poll needed no limit for the same reason. **Consequence:** live rows are unbounded in count, bounded in age only — by the TTL and the opportunistic cleanup on create. |
 | `GXP-Token-Expires` | Manager identities only | Device tokens are long-lived and don't slide; `TokenExpiryResponseFilter` skips device identities (it already reads an identity attribute — the device identity simply doesn't carry one). |
 
 ## Pinned parameters
@@ -33,7 +33,7 @@
 | Display code | 8 chars from a 32-char unambiguous alphabet (Crockford-style, no `0/O/1/I`), ~40 bits; unique among live requests |
 | Poll secret | 32 bytes `SecureRandom` → base64url (no padding); stored as SHA-256 hex; presented via header `GXP-Pairing-Secret` on the poll |
 | Pairing TTL | **10 minutes** (spec §6 "short-lived"); expired rows deleted opportunistically on each create |
-| Pairing rate limit | create: max 5 per 60 s (global, in-memory) → `429` + `Retry-After`; a building pairs a handful of devices ever |
+| Pairing rate limit | **none** (removed 2026-08-24) — create is unthrottled; the 10-minute TTL + opportunistic cleanup on create are what bound the table |
 | Device token | 32 bytes `SecureRandom` → base64url; stored SHA-256 hex — identical treatment to manager tokens |
 | Device name default | `Kiosk <room code>` when the manager supplies none at confirm; rename any time |
 | `last_seen_at` throttle | ≥ **60 s** between writes per device (in-memory last-write map) |
@@ -53,6 +53,38 @@ the expiry-header skip (they did for `GXP-Token-Expires`).
 
 ## Architecture — BCE packages
 
+> **Amended 2026-08-25 (owner decision D1, constitution v1.6.0) — read the
+> block below as the FEATURE map, not the package map.** Both packages have
+> since been split into sub-packages. `de.gxp.device` is now
+> `boundary.{PairingResource, DeviceAdminResource}` /
+> `control.{DeviceControl, DeviceRepository, PairingRequestRepository,
+> PairingCodes}` / `entity.{Device, PairingRequest, DeviceMapper}`, and
+> `de.gxp.guest` is `boundary.GuestResource` /
+> `control.{GuestControl, GuestEtagFilter}` — it owns no table, so it has no
+> `.entity` package at all, and is one of the two features named as that
+> exception in the architecture guards (`de.gxp.text` is the other). The
+> two-Boundary exception fits the layout unchanged: both Boundaries sit in
+> `de.gxp.device.boundary` over the single public
+> `de.gxp.device.control.DeviceControl`.
+>
+> **"(all package-private)" on the last device row still holds** for
+> `DeviceRepository`, `PairingRequestRepository` and `PairingCodes` — that is
+> why they moved into `.control` — but **not** for `DeviceMapper`, which went
+> to `.entity` and had to become `public`, as did `Device` and
+> `PairingRequest` and every one of their fields. Java has no sub-package
+> visibility; entity fields were widened one at a time and these two
+> entities happened to need all of theirs, because `DeviceControl` drives the
+> whole pairing and revocation lifecycle across the split.
+>
+> **`TokenIdentityProvider` was the risk in this move and was checked at
+> runtime, not by compilation:** it lives in `de.gxp.auth`, injects
+> `DeviceControl` *during* authentication, and Quarkus discovers it as an SPI
+> provider rather than by ordinary injection. It is now package-private in
+> `de.gxp.auth.control`, and `DeviceAuthTest`, `AuthResourceTest`,
+> `PairingFlowTest` and `PairingCaTest` all pass unchanged — discovery is by
+> implemented interface, not by package. Same result for
+> `BearerAuthMechanism` and `TokenExpiryResponseFilter`.
+
 ```
 de.gxp.device   Device, PairingRequest (Entities) | DeviceControl (the package's ONE public
                 Control: pairing lifecycle, device CRUD/revoke, token verification for auth)
@@ -60,9 +92,10 @@ de.gxp.device   Device, PairingRequest (Entities) | DeviceControl (the package's
                 | DeviceAdminResource (Boundary, tag `manager-devices` — confirm/list/rename/revoke)
                   (two Boundaries over one Control — approved 2026-08-19, CLAUDE.md amended)
                 | DeviceRepository, PairingRequestRepository, DeviceMapper,
-                  PairingRateLimiter, PairingCodes (all package-private)
-de.gxp.guest    GuestResource (Boundary, tag `guest`) | GuestControl (public coordinating
-                read model + the one preference write; @RolesAllowed("device") on every method)
+                  PairingCodes (all package-private)
+de.gxp.guest    GuestResource (Boundary, tag `guest`; @RolesAllowed("device") class-wide since
+                2026-08-24 — D2, see the security bullet below) | GuestControl (public
+                coordinating read model + the one preference write)
                 | GuestEtagFilter (infrastructure adapter — strong ETag / If-None-Match → 304
                   for /api/guest/** JSON; sits beside the package, carries no business logic)
 de.gxp.auth     EXTENDED, not restructured: TokenIdentityProvider resolves manager store first,
@@ -70,7 +103,8 @@ de.gxp.auth     EXTENDED, not restructured: TokenIdentityProvider resolves manag
                 attributes deviceId/roomId). BearerAuthMechanism unchanged.
                 TokenExpiryResponseFilter: skips device identities.
 existing        PropertyControl / RoomControl / MenuControl / StayControl / AssetControl gain
-                package-public @PermitAll guest-read methods (TemplateControl precedent);
+                package-public guest-read methods (marked @PermitAll until 2026-08-24 — D2
+                removed every Control annotation; see the security bullet below);
                 StayControl additionally writePreference(roomId, lang, appearance).
 ```
 
@@ -87,17 +121,27 @@ existing        PropertyControl / RoomControl / MenuControl / StayControl / Asse
   on the `device` table instead, the exact deviation-5 precedent from
   domain-config).
 - Every public Control method carries exactly one security annotation:
-  `DeviceControl` pairing ops `@PermitAll` (unauthenticated by design,
-  rate-limited), manager ops `@RolesAllowed("admin")`,
+  `DeviceControl` pairing ops `@PermitAll` (unauthenticated by design, and
+  since 2026-08-24 unthrottled), manager ops `@RolesAllowed("admin")`,
   `verifyToken` `@PermitAll` (invoked during authentication, pre-identity);
   `GuestControl` all `@RolesAllowed("device")`; new guest-read methods on
   existing Controls `@PermitAll` (not HTTP-mapped — no Boundary routes them).
+  - **Amended 2026-08-24 (owner decision D2, constitution v1.6.0):** the whole
+    bullet moved one layer out. Security annotations now sit on the
+    **Boundary** and Controls carry none — `PairingResource` `@PermitAll`
+    class-wide, `DeviceAdminResource` `@RolesAllowed("admin")` class-wide,
+    `GuestResource` `@RolesAllowed("device")` class-wide — with
+    `quarkus.security.jaxrs.deny-unannotated-endpoints=true` failing an
+    unannotated endpoint closed globally. The roles and the resulting wire
+    behaviour are unchanged; the two `@PermitAll`-on-internal readings above
+    (`verifyToken`, the guest-read methods) simply stop existing, which was the
+    point — `verifyToken` in particular runs BEFORE any identity does.
 - All non-2xx thrown from Controls via `de.gxp.api.ApiErrors`
   (`404 pairing-not-found` — one shared code for unknown/expired/claimed/
   wrong-secret, deliberately; `409 pairing-already-confirmed`,
   `409 room-has-devices`, `409 room-vacant`, `400 value-not-offered`,
-  `404 screen-not-found`, `404 asset-not-found`). The rate limiter's 429
-  stays the accepted `LoginRateLimiter`-style infrastructure response.
+  `404 screen-not-found`, `404 asset-not-found`). **No 429 is produced
+  anywhere** since the rate limiter was withdrawn on 2026-08-24.
 
 ### Pairing flow (sequence)
 
@@ -146,7 +190,8 @@ requires ("revocable from the manager UI").
 `GET /api/guest/session` — `GuestControl.session(deviceIdentity)`:
 
 1. `roomId` from the identity (never from the request — REQ-411).
-2. Compose via `@PermitAll` reads: property snapshot (name, brand, default
+2. Compose via the owning Controls' guest reads (`@PermitAll` until D2 removed
+   every Control annotation on 2026-08-24): property snapshot (name, brand, default
    appearance, logo id, offered options, translations), room (code, name,
    artwork id, overrides), active stay (or vacant), resolved menu
    (`MenuControl` — the ceiling implementation itself, REQ-417), standby
@@ -182,7 +227,8 @@ values validated against the property's offered sets (`400`), vacant →
 
 ### ETag for guest JSON
 
-`GuestEtagFilter` (infrastructure adapter, `de.gxp.guest`): for
+`GuestEtagFilter` (infrastructure adapter, `de.gxp.guest.control` since
+2026-08-25 — package-private there, D1): for
 `/api/guest/**` JSON responses, compute `sha-256` over the serialized
 response bytes → strong `ETag`; on `If-None-Match` equality answer `304`
 with an empty body. Deterministic because generated DTOs serialize with a
@@ -272,7 +318,7 @@ two-Boundary convention (resolved decision #5, `backend/CLAUDE.md` amended).
 
 | Op | Method & path | Auth | Success | Named errors |
 |---|---|---|---|---|
-| `createPairingRequest` | `POST /api/pairing/requests` | none | 201 `PairingRequestCreated{code, pollSecret, expiresAt}` | 429+`Retry-After` |
+| `createPairingRequest` | `POST /api/pairing/requests` | none | 201 `PairingRequestCreated{code, pollSecret, expiresAt}` | none — unthrottled since 2026-08-24, and the contract's 429 was removed the same day (see 06-review addendum) |
 | `pollPairingRequest` | `GET /api/pairing/requests/{code}` (+ header `GXP-Pairing-Secret`) | none | 202 empty (pending) / 200 `PairingCompleted{deviceToken, deviceName, roomCode}` **once** | 404 `pairing-not-found` (unknown = expired = claimed = wrong secret) |
 | `getPairingCa` | `GET /api/pairing/ca` | none | 200 `application/x-pem-file` | — |
 | `confirmPairing` | `POST /api/manager/pairings/{code}/confirm` | bearer admin | 204 | 404, 409 `pairing-already-confirmed`, 400 unknown room |
@@ -330,6 +376,11 @@ DeviceDto { id, name, roomId, roomCode, createdAt, lastSeenAt?, revokedAt? }
   call surface. Bounded: they are read-only projections/resolutions, not
   HTTP-mapped, and the pattern is the review-blessed `TemplateControl` one.
   The annotation audit still enforces exactly-one-annotation.
+  **Amended 2026-08-24 (D2):** this trade-off is retired — those methods now
+  carry no annotation at all, because an internal call is not a trust boundary.
+  What still bounds them is unchanged (read-only, not HTTP-mapped, no Boundary
+  routes them); the exactly-one audit moved to the Boundaries
+  (`BoundaryAnnotationAuditTest`).
 - **ETag = hash of the full response** recomputes the payload on every poll
   (no server-side caching). Honest and correct-by-construction; at a few
   dozen kiosks polling occasionally this is well inside budget. A cache would
@@ -396,11 +447,17 @@ Recorded by `dev` in [handoff.md](handoff.md), judged against PRD/design at
 4. Host-change re-issue regenerates the server **keypair** (new key + cert
    under the unchanged CA) — strictly safer than re-signing the old key;
    the kiosks-keep-trusting property was proven in the compose smoke.
-5. Tests outside `de.gxp.device` seed devices by direct DB insert
+5. Tests outside `de.gxp.device` (any sub-package of it, since 2026-08-25)
+   seed devices by direct DB insert
    (`testsupport/DeviceFixtures`, hash-only); the HTTP lifecycle is proven
-   once in `PairingFlowTest` (protects the global create rate limit).
+   once in `PairingFlowTest`. (This originally protected the global create
+   rate limit; that limit is gone since 2026-08-24, but seeding by insert
+   remains the right call — it is a fixture concern, not a contract test.)
 6. The last-seen-throttle test lives in `de.gxp.device` (package-private
-   reset hook).
+   reset hook) — **since 2026-08-25 in `de.gxp.device.control`**, which is
+   where the reset hook moved with `DeviceControl`; `PairingFlowTest` moved
+   with it for the same reason (`PairingCodes.sha256Hex`). `PairingCaTest`
+   drives HTTP only and stayed at the feature root.
 7. The ceiling-parity test seeds the contradictory state via SQL — the
    manager API correctly refuses to create it; guest resolution must still
    ceiling the item out if the state ever exists.

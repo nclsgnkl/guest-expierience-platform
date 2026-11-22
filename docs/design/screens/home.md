@@ -58,7 +58,7 @@ Single fixed canvas, no responsive behaviour defined.
 │  ┌─ Layout · flex row · gap 68 · padding 65 / 48 ──────────────────┐    │
 │  │ ┌─ Welcome · flex row · gap 80 · items-end ──────────┐          │    │
 │  │ │ ┌ Sidebar ┐  ┌─ Screen · flex col · py 128 ─────┐  │  Widgets │    │
-│  │ │ │  199px  │  │  Heading  (780px wide)           │  │  443px   │    │
+│  │ │ │  199px* │  │  Heading  (780px wide)           │  │  443px   │    │
 │  │ │ │         │  │       ⋮  space-between           │  │  EMPTY   │    │
 │  │ │ │         │  │  Cards row · 4 × 392 · gap 24    │  │          │    │
 │  │ │ └─────────┘  └──────────────────────────────────┘  │          │    │
@@ -66,6 +66,12 @@ Single fixed canvas, no responsive behaviour defined.
 │  └─────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+\* **`199px` raw = 100 CSS px is the extracted value, not the shipped one.**
+The built rail is `6.5rem` / **104 CSS px** — an owner decision of 2026-08-29,
+recorded as a deviation under the layout table below and in
+[`../tokens.md`](../tokens.md) → Sizing. A re-import brings 199 back and that
+is not a correction.
 
 - Outer `Layout` is a flex row, `align: center`, gap `68px`, padding `65px` horizontal / `48px` vertical.
 - `Welcome` group is `align: end` — sidebar and content column are bottom-aligned.
@@ -101,6 +107,55 @@ Single fixed canvas, no responsive behaviour defined.
 > between — and the heading/card pair is inset `--space-9` (64px) from the top
 > and bottom of the content area (24 + 64 = 88; 808 − 64 = 744).
 
+> ⚠️ **The built app is 4px off this table horizontally — deviation of
+> 2026-08-29 (owner decision, recorded not corrected).** Every number above
+> stays as written: it is an edge scan of the reference PNG, and the PNG has
+> not changed. What **ships** has a wider rail — `--size-sidebar` 6.25rem →
+> **6.5rem**, an owner decision taken so the rail label could carry a visible
+> inset without breaking `Einstellungen` at the 1024 × 768 floor. The full
+> reasoning, the rejected alternatives and the measurements are in
+> [`../tokens.md`](../tokens.md) → Sizing. **A re-import will bring 100px back,
+> and that is not a correction.**
+>
+> | Element (1280 × 832) | this table — reference render | built app since 2026-08-29 |
+> |---|---|---|
+> | Sidebar w | 100 | **104** |
+> | Active nav pill | 84 × 84 | **88 × 88** |
+> | Heading block / card row x | 172 | **176** |
+> | Card row right edge | 992 | **996** |
+> | Heading block ink top y | **88** | 88 — unchanged |
+> | Card row bottom edge y | **744** | 744 — unchanged |
+> | Hero artwork x | **396.5** | 396.5 — unchanged *(since 2026-08-29 late; see below)* |
+>
+> ⚠️ **The artwork row was missing from this table until 2026-08-29 (review
+> pass 2, finding #1), and it was not "unchanged" then.** `hero-artwork`'s
+> `left` was a literal computed against the *old* content origin
+> (`396.5 − 172`), so it translated with the content column: measured
+> **x 396.5 → 400.5** at 1280 × 832 and **317.19 → 320.38** at 1024 × 768 — the
+> one element inside Home that the widening moved off its specified box, while
+> every right-anchored overlay genuinely stayed put. On the owner's decision
+> (*"derived, stays at 396.5"*) the offset is now computed from
+> `--size-sidebar` and the shell's own padding and gap, so the artwork sits at
+> its specified `x396.5 / y77.5` again and a future rail change cannot move it.
+> Re-measured with `tools/measure-states.mjs`: image box `{x:397, y:78,
+> w:775, h:500}` at 1280 × 832 and `{x:317, y:62, w:620, h:400}` at
+> 1024 × 768, which is this file's spec box and its 0.8×.
+>
+> **The loss is horizontal only, and the empty widget column pays all of it.**
+> Home's signed-off vertical baseline is untouched and the card row keeps its
+> 820px width. `.shell__content` is 4px narrower at 1280 × 832 (3.19px at
+> 1024 × 768) — but measured against the two `--size-sidebar` values in one
+> live render (2026-08-29, after review), `.home-content__screen` stays **820**
+> and `--size-heading` stays **390**, while `.home-content__widgets` goes
+> **224 → 220** (179.25 → 176.06 at 1024 × 768). The widget column is `flex: 1`
+> and is *empty by design*, so nothing a guest can see gives up a pixel. Worth
+> knowing because the rejected `+0.5rem` was rejected as "too expensive for the
+> content area" — its real price would have been 8px of that empty column. The
+> sidebar's own x (32), y (24) and h (784) do not move — it grows to the right,
+> into the `--space-8` gap's neighbour, not out of the shell's padding. The
+> status bar and the staleness pill are right-anchored and did not move at all;
+> the status bar's clearance to the card row is 52 → **48px**.
+
 ## Components
 
 > ⚠️ **Glyph sizes in this section were corrected 2026-08-18 — read this before
@@ -123,6 +178,11 @@ Single fixed canvas, no responsive behaviour defined.
 
 Width `199px`, full height, fill `--color-surface-menu`, radius `--radius-2xl`,
 padding `16px` horizontal / `48px` vertical, `space-between` in three groups:
+
+> **What ships is 208px raw / 104 CSS px** (`--size-sidebar: 6.5rem`) — an
+> owner decision of 2026-08-29 and a deliberate deviation from this figure, not
+> a re-reading of it. See the layout deviation note above and
+> [`../tokens.md`](../tokens.md) → Sizing.
 
 1. **Logo** — `112px` tile, radius `--radius-lg`, `--gradient-icon`, opacity 90%, glyph `AngularLogo` ⚠️
 2. **MenuItems** — five `MenuIcons` instances
@@ -157,6 +217,87 @@ Both states use `--color-text-primary` for the label. The icon glyph box is
 `--size-icon-md` (1.625rem / **26px** CSS, ~52 raw), the sidebar-navigation
 value, derived from the surrounding Figma box; see the warning under
 "Components".
+
+> **The 2026-08-28 deviation on this glyph is over — the rail renders
+> `--size-icon-md` again since 2026-08-29 (owner decision, taken on a
+> measurement).** Between the two dates the built rail rendered
+> `--size-icon-sm` (1.5rem / 24px), two pixels below this figure, and the
+> justification was arithmetic: the item then reserved **two label lines**
+> for every item, and 26 + 4 (`--space-1`) + 2 × 15.6 = 61.2px did not fit
+> its 60px vertical content box (measured then as an 85.19 × 84 item, i.e.
+> the square broke by 1.19px).
+>
+> **Both terms of that arithmetic are gone.** The item is **88 × 88** since
+> `--size-sidebar` went to 6.5rem (see the deviation below), so the content
+> box is 64px, and the two-line **reservation** the 24px was paid for was
+> replaced the same day by a `max-height` **cap** (variant B2). The owner's
+> instruction was to measure rather than argue, and the measurement is
+> this — real browser, **both reference viewports, active and inactive, with
+> every seeded catalogue label of both languages injected into a live rail
+> item**. (The item probe does not vary the theme, and says so: no size or
+> weight token is theme-varying — `[data-theme]` overrides colour roles only,
+> `frontend/CLAUDE.md` → Appearance & language. The theme × language grid is
+> covered by `tools/measure.mjs`'s 168 cells, last row of the table.)
+>
+> | with `--size-icon-md` (26px) | 1280 × 832 | 1024 × 768 |
+> |---|---|---|
+> | rail item, one-line label | **88 × 88** (Δ0.00) | **70.41 × 70.41** (Δ0.00) |
+> | rail item, two-line label | **88 × 88** (Δ0.00) | **70.41 × 70.41** (Δ0.00) |
+> | label box | 86 × 15.59 / 31.19 — unchanged from 24px | 68.81 × 12.47 / 24.94 — unchanged |
+> | glyph top inside the item | 22.20 → **21.20** (one line), 14.41 → **13.41** (two) | 17.78 → **16.97**, 11.55 → **10.73** |
+> | `tools/measure.mjs` | 168 cells, 0 overflowing, 0 truncated, **0 clamped**, 200 × NO-SCROLL OK | — |
+>
+> Nothing else moved: no new token, no changed spacing, no wider sidebar. So
+> this file's extracted value is what ships again, and there is **no glyph
+> deviation left to record**. Two things worth keeping straight for whoever
+> reads the history: **this was never a re-reading of `aspect-[24/24]`** (the
+> ratio still carries no size), and **the 24px is committed** in `63fcc6d` —
+> going back to 26px is a *new* change on top of it, not a correction of an
+> uncommitted mistake. The overflow popover's tiles rendered
+> `--size-icon-md` throughout and were never part of this.
+
+> **Second deviation, 2026-08-29 (owner decisions, recorded not corrected).**
+> Three things about the built rail differ from this component, all decided by
+> the owner on that day; the values below are the **end-of-day** state, and the
+> morning's intermediate ones (an 84px item, 3.5 / 2.11 / 0.61px of clearance,
+> `align-content: center`) were superseded the same afternoon — they are kept
+> in `../../features/home-screen-prototype/02-design.md` → "Text must not wrap"
+> and in that feature's `handoff.md`, not here.
+>
+> 1. **The label box is the item's full width less a 1px inset per side**, not
+>    the item's content box. This component's own `16px` horizontal padding
+>    (raw; 8px CSS, shipped as `--space-3`) still applies to the item — the
+>    glyph sits inside it — but the label is pulled out to the pill's edges,
+>    because `Einstellungen` — the label that puts up the tightest cell at the
+>    1024 × 768 floor, and a standard module — needs **77px** on one line at
+>    1280 × 832 and broke mid-compound inside the 68px content box.
+>    *(Corrected 2026-08-29 after review: it is **not** the longest label in
+>    the catalogue. `Hausordnung` measures wider at 1280 × 832 — 78px inactive
+>    / 79px active against 77/77 — and is that viewport's tightest cell, 4.0 /
+>    3.5px per side against 4.5px. At the floor the order reverses and
+>    `Einstellungen` is the worst case at **1.41px** active, which is the cell
+>    the decision turns on. The decision is unaffected; the superlative was
+>    wrong.)* The 1px is
+>    `--size-sidebar-label-inset` ([`../tokens.md`](../tokens.md) → In-house
+>    tokens), so the ink is not flush against the active pill's border.
+> 2. **The item is 88 × 88, not 84** — `--size-sidebar` 6.25rem → **6.5rem**.
+>    The owner asked for 2px of inset; at the old width 2px *and* 1px both put
+>    `Einstellungen` back on two lines at 1024 × 768, and `+0.5rem` (which
+>    would have carried the full 2px) was rejected as too expensive for the
+>    content area. Measured clearance ink-to-label-box afterwards: **4.5px**
+>    per side at 1280 in both weights, **2.91px** inactive and **1.41px**
+>    active at 1024 × 768. **This is a deviation from Figma** — a re-import
+>    brings 100px back and that is not a correction; see the layout note above
+>    and [`../tokens.md`](../tokens.md) → Sizing.
+> 3. **The visible icon+label pair is centred in the item** (variant B2): the
+>    label is exactly as tall as its own text and `.sidebar-item`'s own
+>    `justify-content: center` centres the pair, measured 0.30px off centre at
+>    1280 and 0.23px at 1024. The price the owner accepted is that two items
+>    with a different number of lines no longer share an icon line (7.79px
+>    apart at 1280).
+>
+> See `../../features/home-screen-prototype/01-prd.md` → REQ-007 for the
+> decisions and the full numbers.
 
 `[NEEDS CLARIFICATION: no hover, focus, pressed or disabled state exists in the component. Required before implementation — this is a navigation control.]`
 

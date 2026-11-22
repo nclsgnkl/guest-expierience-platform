@@ -1,0 +1,27 @@
+/* `.section-host` is what `.shell__content` lays out, not the host
+   (frontend/CLAUDE.md -> Layout). The placeholder arm renders no wrapper at
+   all, so it keeps its own centred layout byte-for-byte. */
+:host {
+  display: contents;
+}
+
+/* The screen frame every module type shares — the first row of info.md's
+   "What generalises" table, and the same frame `.settings` uses: left-aligned
+   column, `--space-9` top inset clearing the reserved status-bar corner,
+   `--space-6` from the title to the content. Horizontal position comes from
+   `.shell__content`, so there is no horizontal padding here. */
+.section-host {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding-top: var(--space-9);
+  color: var(--color-text-primary);
+}
+
+.section-host__title {
+  margin: 0;
+  font-size: var(--text-h1);
+  font-weight: var(--text-h1-weight);
+  line-height: var(--text-h1-line-height);
+}

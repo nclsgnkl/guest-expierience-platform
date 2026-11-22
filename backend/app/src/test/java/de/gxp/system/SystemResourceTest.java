@@ -8,6 +8,7 @@ import static org.hamcrest.Matchers.not;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * System endpoints over HTTP against the Dev Services database (REQ-211,
@@ -46,10 +47,7 @@ class SystemResourceTest {
 
     @Test
     void infoReturnsSeededNameAndVersionForAdmin() {
-        String token = given().contentType("application/json")
-                .body(java.util.Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        String token = ManagerFixtures.login();
         given()
                 .header("Authorization", "Bearer " + token)
                 .when().get("/api/system/info")

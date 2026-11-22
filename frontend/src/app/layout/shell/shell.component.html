@@ -21,6 +21,7 @@
     [settings]="property().settings"
     [logoAsset]="logoAsset()"
     [activeRoute]="activeRoute()"
+    [locale]="locale()"
   />
 
   <main class="shell__content">
@@ -37,4 +38,8 @@
        status-bar cluster, rendered only in the STALE state — see
        docs/design/screens-inhouse/connection.md -> "The staleness pill". -->
   <app-staleness-pill />
+
+  <!-- Its escalation after an hour without contact (REQ-952): the same anchor,
+       grown into a BAR. One derived level decides which of the two is up. -->
+  <app-staleness-banner />
 </div>

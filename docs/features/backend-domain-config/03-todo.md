@@ -67,6 +67,17 @@
 
 ## Auth (`de.gxp.auth`)
 
+> **Amended 2026-08-25 (D1, constitution v1.6.0):** every file path in this
+> section moved one level down — `de/gxp/auth/X.java` is now
+> `de/gxp/auth/boundary|control|entity/X.java` (`AuthResource` → `boundary`;
+> `AuthControl`, `AdminCredentialRepository`, `AdminPasswordSeeder`,
+> `Pbkdf2PasswordHasher`, `TokenStore` and the three SPI adapters →
+> `control`; `AdminCredential` → `entity`). The "(package-private)" notes on
+> T-07 and T-08 still hold literally: both classes are package-private inside
+> `de.gxp.auth.control`, and `ControlPackageVisibilityTest` now fails the
+> build if either is widened. The same one-level move applies to every other
+> feature section of this TODO.
+
 - [x] **T-07** `Pbkdf2PasswordHasher` (package-private): hash/verify with the
   pinned parameters and self-describing storage format; constant-time
   compare. Unit tests: roundtrip, wrong password, format parse, distinct
@@ -92,13 +103,27 @@
     `backend/app/src/test/java/de/gxp/failclosed/FailClosedTest.java`
   - Validate: `./mvnw verify`; FailClosedTest green with updated assertions
 - [x] **T-10** `AuthControl` + `AuthResource` (one-line Boundary): `login`
-  (`@PermitAll`; `LoginRateLimiter` 5-fail/30-s → 429 + `Retry-After`;
-  generic 401; token issue), `logout` (`@RolesAllowed("admin")`, drops
-  token, 204). Tests: success, wrong password generic 401, lockout window,
-  logout kills token. — _REQ-326, REQ-328, REQ-332, REQ-333, REQ-335_
+  (`@PermitAll`; **no throttling of any kind**; generic 401; token issue),
+  `logout` (`@RolesAllowed("admin")`, drops token, 204). Tests: success,
+  wrong password generic 401, six consecutive wrong passwords arming nothing
+  (no 429, no `Retry-After`) followed by a successful login, logout kills
+  token. — _REQ-326, REQ-328, REQ-332, REQ-333, REQ-335_
   - Files: `de/gxp/auth/AuthResource.java`, `AuthControl.java`,
-    `LoginRateLimiter.java`, `AdminCredential(.java)+Repository`, tests
+    `AdminCredential(.java)+Repository`, tests
   - Validate: `./mvnw verify`; no log statement touches password/token (grep)
+  - **Amended twice on 2026-08-24** (`backend-bce-refactor`, block A).
+    (1) Shipped as `LoginRateLimiter` — a 5-failure / 30 s **global** lockout
+    checked before verification, i.e. an unauthenticated DoS that answered the
+    manager's correct password with 429. (2) Replaced by
+    `LoginConcurrencyGate`, which paced instead of denying but still shed
+    arriving callers for the duration of a flood. (3) **Owner decision, final
+    for now: throttling removed entirely** — `LoginConcurrencyGate`,
+    `LoginConcurrencyGateTest`, `LoginBusyWireShapeTest`,
+    `ApiErrors.tooManyRequests`, the `gxp.auth.gate-*` keys and the login
+    `429` in `api/openapi.yaml` are all gone. The production hardware is not
+    chosen, so no throttle is sized correctly; revisit then. 06-review 🟢 #5
+    (`changePassword` unthrottled) is thereby **withdrawn, not fixed** — it is
+    now the intended behaviour, and it is admin-only anyway.
 - [x] **T-11** `AdminPasswordSeeder` (startup observer): seed-once from
   `GXP_ADMIN_PASSWORD`; unset/blank + no row → boot failure with clear
   message (variable name only, never the value); row present → var ignored.
@@ -213,7 +238,10 @@
   convention mechanical); anonymous 401-with-challenge test against one
   endpoint per manager Resource; grep sweep: no
   password/token/payload logging anywhere in `src/main`, committed config
-  unchanged from the foundation's logging block;
+  unchanged from the foundation's logging block
+  (**amended 2026-08-24, D2:** that audit test is now
+  `BoundaryAnnotationAuditTest` over the `*Resource` classes, joined by the
+  generated-interface guard and `ContractSecuredOperationsDeniedTest`);
   `quarkus.http.limits.max-body-size=12M` added with a comment. —
   _REQ-316, REQ-332, REQ-333, REQ-335_
   - Files: new audit test, `application.properties`

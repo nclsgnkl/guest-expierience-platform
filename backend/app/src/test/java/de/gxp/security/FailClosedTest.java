@@ -32,6 +32,12 @@ class FailClosedTest {
                 .body(equalTo("permitted"));
     }
 
+    /**
+     * The Boundary method is {@code @PermitAll}, so the endpoint check passes
+     * and the denial can only come from {@code deny-unannotated-members} on the
+     * Control — the point of this fixture. Leaving the Boundary unannotated
+     * would make the global endpoint deny an equally good explanation.
+     */
     @Test
     void unannotatedMethodInAnnotatedControlIsDenied() {
         given()

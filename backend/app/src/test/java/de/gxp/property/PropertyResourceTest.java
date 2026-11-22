@@ -14,6 +14,7 @@ import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * Property endpoint (REQ-303, REQ-304, REQ-311, REQ-317..319, REQ-334):
@@ -28,10 +29,7 @@ class PropertyResourceTest {
     EntityManager entityManager;
 
     private static String token() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private static Map<String, Object> currentProperty(String token) {

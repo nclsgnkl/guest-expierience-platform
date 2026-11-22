@@ -7,9 +7,14 @@ import static org.hamcrest.Matchers.hasSize;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
+import de.gxp.infrastructure.testsupport.MenuFixtures;
 
 /**
  * T-21 — invariant 3's affected-scope matrix (REQ-314) under the CEILING
@@ -22,11 +27,23 @@ import io.quarkus.test.junit.QuarkusTest;
 @QuarkusTest
 class MenuDisableGuardTest {
 
+    @Inject
+    EntityManager entityManager;
+
+    /**
+     * This class replaces the property-scope menu config, which is a whole-set
+     * replace and therefore deletes V10's eight {@code enabled = false} opt-out
+     * rows. Restore them so the shared database is handed on in the state the
+     * migration left it — without this, the placeholder catalogue fixtures
+     * arrive ENABLED at whatever class runs next (02-design.md §3.3).
+     */
+    @AfterEach
+    void restoreCatalogueOptOut() {
+        MenuFixtures.restoreCatalogueOptOut(entityManager);
+    }
+
     private static String token() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private static Map<String, Object> card(int sortIndex, String target, String titleDe) {
@@ -76,11 +93,16 @@ class MenuDisableGuardTest {
                     .body("details", hasSize(1))
                     .body("details[0].scope", equalTo("property"))
                     .body("details[0].message", org.hamcrest.Matchers.containsString("Check-Out"));
-            // rejected atomically — the scope still has no config rows
+            // Rejected atomically — the scope carries no row for the key the
+            // PUT tried to write. (Asserted per key, not as an empty scope:
+            // since V10 the property scope legitimately holds the eight
+            // `enabled = false` opt-out rows for the placeholder catalogue
+            // fixtures — D5. Naming the key under test proves the same
+            // atomicity and depends on no fixture key.)
             given().header("Authorization", "Bearer " + token)
                     .when().get("/api/manager/menu-config")
                     .then().statusCode(200)
-                    .body("$", hasSize(0));
+                    .body("findAll { it.menuItemKey == 'info' }", hasSize(0));
         } finally {
             putPropertyCards(token, List.of());
         }
@@ -141,11 +163,13 @@ class MenuDisableGuardTest {
                     .body("details", hasSize(1))
                     .body("details[0].scope", equalTo("room:" + roomId))
                     .body("details[0].reference", equalTo("services"));
-            // rejected atomically — the property scope still has no rows
+            // Rejected atomically — the property scope carries no row for the
+            // key the PUT tried to write (per key, not an empty scope: see the
+            // note in propertyDisableAgainstPropertyCardsIs409ListingTheCards).
             given().header("Authorization", "Bearer " + token)
                     .when().get("/api/manager/menu-config")
                     .then().statusCode(200)
-                    .body("$", hasSize(0));
+                    .body("findAll { it.menuItemKey == 'services' }", hasSize(0));
         } finally {
             deleteRoom(token, roomId); // cascades the room's config
         }

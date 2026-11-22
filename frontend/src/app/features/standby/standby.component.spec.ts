@@ -6,6 +6,7 @@ import {
   phosphorGlobe,
   phosphorMoon,
   phosphorSun,
+  phosphorWifiSlash,
 } from '@ng-icons/phosphor-icons/regular';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -13,6 +14,7 @@ import { PropertyContentService } from '../../core/content/property-content.serv
 import type { ResolvedPropertyConfig } from '../../core/content/property.model';
 import { GuestAssetService } from '../../core/guest/guest-asset.service';
 import { GuestDataService } from '../../core/guest/guest-data.service';
+import { STALE_ESCALATION_MS } from '../../core/guest/staleness.service';
 import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
 import { PreferencesService } from '../../core/preferences/preferences.service';
 import { StandbyComponent } from './standby.component';
@@ -31,13 +33,14 @@ function config(language: string): ResolvedPropertyConfig {
     menuItems: [
       /* Deliberately present in the CONFIG: the menu exists server-side, but
          the standby screen must not render any navigation from it. */
-      { id: 'info', label: `Info-${language}`, icon: 'phosphorInfo', route: '/info' },
+      { id: 'info', label: `Info-${language}`, icon: 'phosphorInfo', route: '/info', module: null },
     ],
     settings: {
       id: 'einstellungen',
       label: `Einstellungen-${language}`,
       icon: 'phosphorGearSix',
       route: '/einstellungen',
+      module: null,
     },
     settingsConfig: {
       languages: [
@@ -60,14 +63,26 @@ function config(language: string): ResolvedPropertyConfig {
 describe('StandbyComponent', () => {
   const language = signal('de');
   const logoUrl = signal<string | null>(null);
+  const connection = signal('ONLINE');
+  const staleSince = signal<number | null>(null);
+  const occupancy = signal<string | null>('VACANT');
 
   beforeEach(() => {
     language.set('de');
     logoUrl.set(null);
+    connection.set('ONLINE');
+    staleSince.set(null);
+    occupancy.set('VACANT');
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
-        provideIcons({ phosphorGlobe, phosphorSun, phosphorMoon, phosphorCaretDown }),
+        provideIcons({
+          phosphorGlobe,
+          phosphorSun,
+          phosphorMoon,
+          phosphorCaretDown,
+          phosphorWifiSlash,
+        }),
         {
           provide: PREFERENCE_GATEWAY,
           useValue: {
@@ -76,10 +91,11 @@ describe('StandbyComponent', () => {
             clear: () => Promise.resolve(),
           },
         },
-        /* The status bar + pill read these; standby itself reads property(). */
+        /* The status bar, pill and banner read these; standby itself reads
+           property(). */
         {
           provide: GuestDataService,
-          useValue: { connection: signal('ONLINE'), staleSince: signal<number | null>(null) },
+          useValue: { connection, staleSince, occupancy },
         },
         {
           provide: PropertyContentService,
@@ -138,5 +154,30 @@ describe('StandbyComponent', () => {
   it('shows the property logo only when it exists and has arrived (alt="")', async () => {
     const fixture = render();
     expect(fixture.nativeElement.querySelector('.standby__logo')).toBeNull();
+  });
+
+  it('escalates to the banner with the STAFF wording — a vacant room has no guest (REQ-952)', async () => {
+    connection.set('STALE');
+    // A minute past the CONFIGURED threshold, not a literal hour: the
+    // development environment shortens it to a minute (see
+    // `staleness.service.ts`), and the minute-aligned ClockService needs the
+    // slack on top.
+    staleSince.set(Date.now() - STALE_ESCALATION_MS - 60_000);
+    const fixture = render();
+    const el: HTMLElement = fixture.nativeElement;
+
+    const banner = el.querySelector('.staleness-banner');
+    expect(banner).toBeTruthy();
+    expect(banner!.getAttribute('role')).toBe('status');
+    expect(banner!.getAttribute('aria-live')).toBe('polite');
+    // The occupied wording cannot be reused here: it directs a guest to their
+    // host, and there is no guest (spec: connection.md -> Content).
+    expect(banner!.textContent).toContain('Verwaltung');
+    expect(banner!.textContent).not.toContain('Gastgeber');
+    // Tri-state: the banner replaces the pill, it does not join it.
+    expect(el.querySelector('.staleness-pill')).toBeNull();
+    // REQ-952's second half: the standby block keeps rendering behind the
+    // banner — the escalation is an overlay, never a cutoff.
+    expect(el.querySelector('.standby__headline')?.textContent).toContain('Villa Test');
   });
 });

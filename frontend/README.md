@@ -48,6 +48,17 @@ node tools/measure.mjs http://localhost:4200          # the standard route grid
 GXP_SMOKE_ADMIN_PW=… node tools/measure-states.mjs    # pairing/standby/connection + pill
 ```
 
+Prefix the grid with `GXP_MEASURE_DEVICE_TOKEN=gxp-dev-device-token` to make its
+preference-write guard live. Without the variable no **device token** is written
+to `localStorage`, so that guard short-circuits and confirms nothing — the run
+says so once, as an `INSTRUMENT` finding. The app itself renders identically
+either way; what differs is the *measurements*, and only when a slow preference
+write races the reload: measured on this box with a 2 s delay on
+`PUT /api/guest/preferences`, an unseeded run mislabelled an entire axis
+(14 × `PREFERENCE NOT APPLIED`, plus 8 contrast findings inherited from it) where
+the seeded run reported none. That race is exactly what the guard exists to
+catch, so run the grid seeded whenever its numbers are going to be quoted.
+
 Both report and assert nothing (`docs/constitution.md` v1.3.0: playwright is
 verification tooling only). `measure-states.mjs` drives backend state via the
 manager API (dev instance only) and restores it.

@@ -10,12 +10,14 @@ import {
   phosphorHouse,
   phosphorInfo,
   phosphorSun,
+  phosphorWifiSlash,
 } from '@ng-icons/phosphor-icons/regular';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ShellComponent } from './shell.component';
 import type { PropertyConfig } from '../../core/content/property.model';
 import { GuestDataService } from '../../core/guest/guest-data.service';
+import { STALE_ESCALATION_MS } from '../../core/guest/staleness.service';
 import { PREFERENCE_GATEWAY } from '../../core/preferences/preference-gateway';
 
 @Component({ selector: 'app-test-home', template: '<p>home content</p>' })
@@ -41,14 +43,15 @@ const TEST_CONFIG: PropertyConfig = {
   logoAssetId: null,
   branding: null,
   menuItems: [
-    { id: 'home', label: { de: 'Testlabel Home' }, icon: 'phosphorHouse', route: '' },
-    { id: 'info', label: { de: 'Testlabel Info' }, icon: 'phosphorInfo', route: '/info' },
+    { id: 'home', label: { de: 'Testlabel Home' }, icon: 'phosphorHouse', route: '', module: null },
+    { id: 'info', label: { de: 'Testlabel Info' }, icon: 'phosphorInfo', route: '/info', module: null },
   ],
   settings: {
     id: 'einstellungen',
     label: { de: 'Testlabel Settings' },
     icon: 'phosphorGearSix',
     route: '/einstellungen',
+    module: null,
   },
   settingsConfig: {
     languages: [{ code: 'de', shortLabel: 'DE', label: 'Deutsch', locale: 'de-DE' }],
@@ -76,13 +79,14 @@ describe('ShellComponent', () => {
         },
         /* The shell reads content through the REAL PropertyContentService,
            which since REQ-510 reads GuestDataService — doubled with a held
-           config plus the two staleness-pill signals. */
+           config plus the signals the staleness chrome derives from. */
         {
           provide: GuestDataService,
           useValue: {
             config: signal<PropertyConfig | null>(TEST_CONFIG),
             connection: signal('ONLINE'),
             staleSince: signal<number | null>(null),
+            occupancy: signal<string | null>('OCCUPIED'),
           },
         },
         provideZonelessChangeDetection(),
@@ -97,6 +101,7 @@ describe('ShellComponent', () => {
           phosphorGlobe,
           phosphorSun,
           phosphorCaretDown,
+          phosphorWifiSlash,
         }),
       ],
     });
@@ -159,22 +164,76 @@ describe('ShellComponent', () => {
     const element: HTMLElement = harness.routeNativeElement!;
     expect(element.querySelector('.staleness-pill')).toBeNull();
 
-    const guestData = TestBed.inject(GuestDataService) as unknown as {
-      connection: ReturnType<typeof signal<string>>;
-      staleSince: ReturnType<typeof signal<number | null>>;
-    };
+    const guestData = staleness();
+    // Half the CONFIGURED threshold ago, relative to the real clock. A literal
+    // ("five minutes") would decide the other case under the development
+    // environment, whose threshold is one minute — and that is the environment
+    // these tests build under.
+    const since = Date.now() - STALE_ESCALATION_MS / 2;
     guestData.connection.set('STALE');
-    guestData.staleSince.set(Date.parse('2026-08-20T14:05:00'));
+    guestData.staleSince.set(since);
     await harness.fixture.whenStable();
 
     const pill = element.querySelector('.staleness-pill');
     expect(pill).toBeTruthy();
     expect(pill!.getAttribute('role')).toBe('status');
-    expect(pill!.textContent).toContain('14:05');
+    expect(pill!.textContent).toContain(asOf(since));
+    // Owner decision 2026-08-29: the connection screen's own glyph, not a
+    // dot — decorative, so the label stays the accessible content.
+    const glyph = pill!.querySelector('ng-icon');
+    expect(glyph?.getAttribute('name')).toBe('phosphorWifiSlash');
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true');
 
     guestData.connection.set('ONLINE');
     guestData.staleSince.set(null);
     await harness.fixture.whenStable();
     expect(element.querySelector('.staleness-pill')).toBeNull();
   });
+
+  it('past the threshold the pill is replaced by the banner, with the GUEST wording (REQ-952)', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/', ShellComponent);
+    const element: HTMLElement = harness.routeNativeElement!;
+
+    const guestData = staleness();
+    // A minute PAST the configured threshold: the real ClockService is
+    // minute-aligned, so its `now()` can trail `Date.now()` by up to 59 s and
+    // a value exactly at the threshold would be a coin flip.
+    const since = Date.now() - STALE_ESCALATION_MS - 60_000;
+    guestData.connection.set('STALE');
+    guestData.staleSince.set(since);
+    await harness.fixture.whenStable();
+
+    const banner = element.querySelector('.staleness-banner');
+    expect(banner).toBeTruthy();
+    expect(banner!.getAttribute('role')).toBe('status');
+    expect(banner!.getAttribute('aria-live')).toBe('polite');
+    // Occupied: the guest is directed to their host, and the pill's own
+    // timestamp line survives the escalation.
+    expect(banner!.textContent).toContain('Gastgeber');
+    expect(banner!.textContent).not.toContain('Verwaltung');
+    expect(banner!.textContent).toContain(asOf(since));
+    // Tri-state: one derived level, so the two are never up together.
+    expect(element.querySelector('.staleness-pill')).toBeNull();
+    // REQ-952's second half, the one D13 argued hardest for: a hard cutoff was
+    // explicitly rejected, so the routed content must keep rendering behind
+    // the banner — the guest still needs the door code and the WiFi password.
+    expect(element.textContent).toContain('home content');
+  });
+
+  /** The staleness signals of the `GuestDataService` double. */
+  function staleness() {
+    return TestBed.inject(GuestDataService) as unknown as {
+      connection: ReturnType<typeof signal<string>>;
+      staleSince: ReturnType<typeof signal<number | null>>;
+      occupancy: ReturnType<typeof signal<string | null>>;
+    };
+  }
+
+  /** What the chrome renders for a `storedAt`, in the config's own locale. */
+  function asOf(since: number): string {
+    return new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(
+      new Date(since),
+    );
+  }
 });

@@ -9,7 +9,7 @@ import {
 import { ConnectionComponent } from './features/connection/connection.component';
 import { HomeContentComponent } from './features/home/home-content.component';
 import { PairingComponent } from './features/pairing/pairing.component';
-import { SectionPlaceholderComponent } from './features/section-placeholder/section-placeholder.component';
+import { SectionHostComponent } from './features/section-host/section-host.component';
 import { SettingsComponent } from './features/settings/settings.component';
 import { StandbyComponent } from './features/standby/standby.component';
 import { ShellComponent } from './layout/shell/shell.component';
@@ -40,19 +40,30 @@ export const routes: Routes = [
     canActivate: [shellGuard],
     children: [
       { path: '', component: HomeContentComponent },
-      { path: 'info', component: SectionPlaceholderComponent, data: { sectionId: 'info' } },
-      { path: 'umgebung', component: SectionPlaceholderComponent, data: { sectionId: 'umgebung' } },
-      {
-        path: 'smart-home',
-        component: SectionPlaceholderComponent,
-        data: { sectionId: 'smart-home' },
-      },
-      { path: 'services', component: SectionPlaceholderComponent, data: { sectionId: 'services' } },
-      /* The one section with a real screen (REQ-116). It carries no
-         `sectionId`: `SettingsComponent` reads no route data, and the other
-         four routes keep the placeholder, which is therefore still needed and
-         is not deleted. */
+      /* The one section with a real screen (REQ-116). It is declared BEFORE
+         `:sectionKey` and the order is load-bearing: a parameterised path
+         would otherwise swallow `/einstellungen` and the real Settings screen
+         would be replaced by the placeholder (REQ-914). */
       { path: 'einstellungen', component: SettingsComponent },
+      /* Every other catalogue route, whatever the property has enabled
+         (REQ-912; sidebar-catalogue-overflow 02-design.md §4.1, D4). The four
+         hard-coded section children and their `data: { sectionId }` are gone:
+         the catalogue is a database table now, so a route table that
+         enumerates it would need editing every time a property enables a
+         section. `SectionHostComponent` resolves the section from the URL
+         instead, by `route`, and renders either the section's registered
+         module or `SectionPlaceholderComponent` (module-content REQ-974).
+         There is deliberately NO `{ path: 'info' }`: that would start
+         re-enumerating the catalogue this table stopped enumerating. The
+         `einstellungen` entry above is app chrome, not a catalogue row. */
+      { path: ':sectionKey', component: SectionHostComponent },
+      /* The shell's LAST CHILD, not a top-level route. `''` matches every URL
+         as a prefix, so anything that is not /pairing, /standby or /connection
+         (declared first, matched first) descends into these children;
+         `:sectionKey` catches one segment and this catches everything deeper.
+         A top-level `**` would be unreachable, and would render outside the
+         shell if it ever were reached. */
+      { path: '**', component: SectionHostComponent },
     ],
   },
 ];

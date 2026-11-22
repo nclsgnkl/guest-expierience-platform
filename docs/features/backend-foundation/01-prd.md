@@ -112,7 +112,7 @@ built on a contract that is only aspirational.
 | REQ-207 | The Maven build generates JAX-RS **interfaces + DTOs** from `api/openapi.yaml` into non-committed generated sources; Resources implement the generated interfaces, so contract drift is a **compile failure**. | Must |
 | REQ-208 | The same build generates the **TypeScript client** into `packages/api-client/`; the output is committed, deterministic (re-running generation with an unchanged contract produces no diff), never hand-edited, and requires no new npm dependency in any app. | Must |
 | REQ-209 | The chain is **proven**: a change to `api/openapi.yaml` demonstrably propagates into both the Java interface (build breaks until implemented) and the TS client (diff in `packages/api-client/`) in one commit; the workflow is documented. | Must |
-| REQ-210 | One reference feature package (`system`) follows spec §4 **strictly**: Boundary methods are one delegating line; `@Transactional` on the Control; the Control is the package's only public type and speaks generated DTOs; Entity, Repository (Panache repository), Mapper are package-private; the mapper is hand-written. | Must |
+| REQ-210 | One reference feature package (`system`) follows spec §4 **strictly**: Boundary methods are one delegating line; `@Transactional` on the Control; the Control is the package's only public type and speaks generated DTOs; Entity, Repository (Panache repository), Mapper are package-private; the mapper is hand-written. **Amended 2026-08-25 (owner decision D1, constitution v1.6.0):** `de.gxp.system` is now split into the three sub-packages `boundary` / `control` / `entity` and is the first package migrated to that layout — `boundary.SystemResource`, `control.SystemControl` + package-private `control.InstanceInfoRepository`, `entity.InstanceInfo` + `entity.InstanceInfoMapper`. Two clauses of the original therefore no longer hold literally and are replaced, not deleted: (a) *"the Control is the package's only public type"* becomes **the Control is the only type another feature may reference** — `InstanceInfo` and `InstanceInfoMapper` are `public` solely because Java has no sub-package visibility; (b) *"Entity, Repository, Mapper are package-private"* becomes **the Repository stays package-private** (that is why it moved into `.control` rather than beside the Entity), while Entity and Mapper are widened. What compiler-enforced package-private visibility used to guarantee is now guaranteed by two dependency-free architecture tests, `FeatureInternalsImportTest` and `EntityExposureTest` (`de.gxp.architecture`), which the constitution makes part of the definition of done. **Extended 2026-08-25:** a third guard, `ControlPackageVisibilityTest`, closes the remaining gap by failing on any public type inside a `.control` package that is not the feature's `*Control` — so "the Repository stays package-private" is enforced rather than reviewed. Everything else in the requirement is unchanged. | Must |
 | REQ-211 | A trivial endpoint `GET /api/system/info` returns instance metadata of which at least one field is read **from PostgreSQL through the full BCE stack** (Flyway-seeded row → Entity → Repository → Mapper → DTO). | Must |
 | REQ-212 | Health and readiness endpoints exist as hand-written, contract-declared endpoints (no new dependency): `GET /api/system/health` answers statically when the process serves HTTP; `GET /api/system/ready` verifies database connectivity and returns 503 when it is absent. | Must |
 | REQ-213 | The security posture **fails closed**: `quarkus-security` with deny-unannotated configuration active; the system endpoints are explicitly `@PermitAll` on the Control; tests prove that (a) an unannotated method in an annotated Control is denied and (b) a `@RolesAllowed` method rejects anonymous callers. | Must |
@@ -153,6 +153,45 @@ built on a contract that is only aspirational.
   `return`/delegation statement; `@Transactional` appears only on the Control;
   `javap`-level visibility: only the Control is `public` besides the Boundary
   (the Boundary is the JAX-RS adapter and carries no logic).
+  **Amended 2026-08-25 (D1):** the visibility check is no longer a `javap`
+  sweep for "only the Control is public" — the sub-package split forces Entity
+  and Mapper public. It is replaced by two mechanical checks that are stricter
+  than the original in the direction that matters: nothing outside
+  `de.gxp.system` may name a `de.gxp.system.entity.*` or
+  `de.gxp.system.control.*` type other than `SystemControl`
+  (`FeatureInternalsImportTest`, source scan, wildcard imports forbidden so it
+  cannot be side-stepped), and no public signature outside a `.entity` package
+  may mention an entity type, including inside generics and arrays
+  (`EntityExposureTest`, bytecode scan — this is what catches a leak via
+  `var`, which no import scan can see). `InstanceInfoRepository` stays
+  package-private and is still checked as such by review.
+  **Extended 2026-08-25, when the migration completed:** a third mechanical
+  check replaces that last review clause —
+  `ControlPackageVisibilityTest` fails the build if ANY type inside a
+  `.control` package other than the feature's own `*Control` is `public`, so
+  `InstanceInfoRepository`'s visibility is now enforced, not reviewed. All
+  three guards run over EVERY feature package, derived from what is on disk
+  rather than from a list, and all three were re-proven by injected violation
+  at that scope.
+  **Widened to `.boundary` 2026-08-25 (review of the migration):** the guards
+  covered `.entity` and `.control` only, so a public non-`*Resource` type in
+  `de.gxp.<feature>.boundary` was namable from any other feature — a review
+  put `public class StayView extends Stay` in `de.gxp.stay.boundary`, read
+  `view.displayName` from `MenuControl`, and all three guards stayed green.
+  Three changes close it, each independently failing that exact mutation:
+  `FeatureInternalsImportTest` now scans the `.boundary.` prefix as well, with
+  **no** `*Control`-style exception (a `*Resource` is public because the
+  framework instantiates it, not because anyone may name it);
+  `ControlPackageVisibilityTest` gained a second sweep — in a `.boundary`
+  package only a `*Resource` may be public, which is
+  `backend/CLAUDE.md`'s "the `*Resource` JAX-RS adapters, and nothing else"
+  made mechanical; and `EntityExposureTest` now also walks the SUPERTYPES of
+  every public type (`getGenericSuperclass()` / `getGenericInterfaces()`), so
+  an entity inherited rather than declared — `extends Stay`, or
+  `implements PanacheRepository<Room>` — counts as exposing it.
+  One named exemption exists and is checked for staleness every run:
+  `BoundaryAnnotationAuditTest` may name the ten Boundaries, because it pins
+  them as literal FQN strings on purpose.
 - **REQ-211:** `GET /api/system/info` returns 200 with a name field whose
   value matches the Flyway-seeded row (asserted by test, not by fixture
   duplication in application code).

@@ -1,0 +1,151 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 832,
+      "title": "Home · Light"
+    },
+    {
+      "file": "HomeDark.dc.html",
+      "x": 1400,
+      "y": 0,
+      "w": 1280,
+      "h": 832,
+      "title": "Home · Dark"
+    },
+    {
+      "file": "SettingsLight.dc.html",
+      "x": 0,
+      "y": 1032,
+      "w": 1280,
+      "h": 832,
+      "title": "Einstellungen · Light"
+    },
+    {
+      "file": "SettingsDark.dc.html",
+      "x": 1400,
+      "y": 1032,
+      "w": 1280,
+      "h": 832,
+      "title": "Einstellungen · Dark"
+    },
+    {
+      "file": "InfoModuleLight.dc.html",
+      "x": 0,
+      "y": 2064,
+      "w": 1280,
+      "h": 832,
+      "title": "Info-Modul · Light"
+    },
+    {
+      "file": "InfoModuleDark.dc.html",
+      "x": 1400,
+      "y": 2064,
+      "w": 1280,
+      "h": 832,
+      "title": "Info-Modul · Dark"
+    },
+    {
+      "file": "PlaceholderLight.dc.html",
+      "x": 0,
+      "y": 3096,
+      "w": 1280,
+      "h": 832,
+      "title": "Section-Platzhalter · Light"
+    },
+    {
+      "file": "PlaceholderDark.dc.html",
+      "x": 1400,
+      "y": 3096,
+      "w": 1280,
+      "h": 832,
+      "title": "Section-Platzhalter · Dark"
+    },
+    {
+      "file": "MenuOverflowLight.dc.html",
+      "x": 0,
+      "y": 4128,
+      "w": 1280,
+      "h": 832,
+      "title": "Menü-Overflow · Light"
+    },
+    {
+      "file": "MenuOverflowDark.dc.html",
+      "x": 1400,
+      "y": 4128,
+      "w": 1280,
+      "h": 832,
+      "title": "Menü-Overflow · Dark"
+    },
+    {
+      "file": "StandbyLight.dc.html",
+      "x": 0,
+      "y": 5160,
+      "w": 1280,
+      "h": 832,
+      "title": "Standby · Light"
+    },
+    {
+      "file": "StandbyDark.dc.html",
+      "x": 1400,
+      "y": 5160,
+      "w": 1280,
+      "h": 832,
+      "title": "Standby · Dark"
+    },
+    {
+      "file": "ConnectionLight.dc.html",
+      "x": 0,
+      "y": 6192,
+      "w": 1280,
+      "h": 832,
+      "title": "Verbindung · Light"
+    },
+    {
+      "file": "ConnectionDark.dc.html",
+      "x": 1400,
+      "y": 6192,
+      "w": 1280,
+      "h": 832,
+      "title": "Verbindung · Dark"
+    },
+    {
+      "file": "PairingLight.dc.html",
+      "x": 0,
+      "y": 7224,
+      "w": 1280,
+      "h": 832,
+      "title": "Kopplung · Light"
+    },
+    {
+      "file": "PairingDark.dc.html",
+      "x": 1400,
+      "y": 7224,
+      "w": 1280,
+      "h": 832,
+      "title": "Kopplung · Dark"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "about",
+      "x": 0,
+      "y": -260,
+      "w": 1600,
+      "text": "Guest Experience Platform — alle bestehenden Screens, Stand 02.09.2026\n\n1:1 aus der laufenden App übernommen: Markup und CSS stammen aus dem echten Build, nicht aus einem Nachbau. 14 der 16 Artboards sind pixelgleich mit einem Screenshot der echten App (geprüft bei 1280×832, Uhrzeit ausgenommen).\n\nGröße = Designgröße 1280×832. Alle Werte in rem lösen hier exakt so auf wie auf dem Kiosk."
+    },
+    {
+      "id": "unreachable-dark",
+      "x": 2880,
+      "y": 6192,
+      "w": 460,
+      "text": "⚠ Diese beiden Dark-Varianten gibt es in der App heute NICHT.\n\nVerbindung und Kopplung erscheinen genau dann, wenn keine Inhalte geladen sind — und das Theme kommt aus eben diesen Inhalten (bzw. den serverseitig gespeicherten Einstellungen). Ohne sie fällt die App auf 'light' zurück.\n\nPraktisch heißt das: Wer nachts im Dark Mode ist und die Verbindung verliert, bekommt einen weißen Vollbild-Screen an der Schlafzimmerwand.\n\nDie beiden Artboards zeigen, wie es mit Theme aussähe — als Vorlage für die Entscheidung, nicht als Ist-Zustand."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

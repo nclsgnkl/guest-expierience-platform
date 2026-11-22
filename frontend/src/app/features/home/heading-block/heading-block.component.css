@@ -25,6 +25,14 @@
   font-weight: var(--text-display-weight);
   line-height: var(--text-display-line-height);
   margin: 0;
+  /* The headline is manager-authored with `{stay.displayName}` interpolated,
+     so a single unbroken token — a long name, a hyphen-free compound — is
+     guest-supplied width. Without this the line ignores the block's width and
+     runs across the screen (measured to x878 at 1024 with a 37-character
+     name, under the staleness bar). `anywhere`, not `break-word`: the column
+     is a fixed `--size-heading`, and only `anywhere` also bounds min-content
+     if that ever stops being true. */
+  overflow-wrap: anywhere;
 }
 
 .heading-block__spacer {

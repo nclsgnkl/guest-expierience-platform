@@ -17,11 +17,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import de.gxp.testsupport.DeviceFixtures;
+import de.gxp.infrastructure.testsupport.DeviceFixtures;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-23 (REQ-422): guest asset delivery — own-room artwork served with the
@@ -65,10 +66,7 @@ class GuestAssetTest {
 
     @BeforeEach
     void seed() {
-        adminToken = given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        adminToken = ManagerFixtures.login();
         roomId = ((Number) entityManager
                 .createNativeQuery("select id from room where code = '1'")
                 .getSingleResult()).longValue();
@@ -152,8 +150,8 @@ class GuestAssetTest {
     }
 
     @Test
-    void homeScreenArtworkFallsBackRoomToProperty() {
-        // with a room artwork set, the home screen serves the room's id
+    void homeArtworkFallsBackRoomToProperty() {
+        // with a room artwork set, the content's home half serves the room's id
         // (needs an active stay — create and remove one around the check)
         int stayId = given().header("Authorization", "Bearer " + adminToken)
                 .contentType("application/json")
@@ -165,9 +163,9 @@ class GuestAssetTest {
                 .then().statusCode(201).extract().path("id");
         try {
             given().header("Authorization", "Bearer " + deviceToken)
-                    .when().get("/api/guest/screens/home")
+                    .when().get("/api/guest/content")
                     .then().statusCode(200)
-                    .body("artworkAssetId", equalTo(ownArtworkId));
+                    .body("home.artworkAssetId", equalTo(ownArtworkId));
             // remove the room override → falls back to the property default (none set → null)
             given().header("Authorization", "Bearer " + adminToken)
                     .contentType("application/json")
@@ -175,9 +173,9 @@ class GuestAssetTest {
                     .when().put("/api/manager/rooms/" + roomId)
                     .then().statusCode(200);
             given().header("Authorization", "Bearer " + deviceToken)
-                    .when().get("/api/guest/screens/home")
+                    .when().get("/api/guest/content")
                     .then().statusCode(200)
-                    .body("artworkAssetId", org.hamcrest.Matchers.nullValue());
+                    .body("home.artworkAssetId", org.hamcrest.Matchers.nullValue());
         } finally {
             given().header("Authorization", "Bearer " + adminToken)
                     .when().delete("/api/manager/stays/" + stayId)

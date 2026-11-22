@@ -22,7 +22,7 @@
  *
  * Covers:
  *   REQ-024 / REQ-123 — nothing scrolls, over the full appearance x language
- *                       grid: 6 routes x 2 themes x 2 languages x 3 viewports
+ *                       grid: 14 routes x 2 themes x 2 languages x 3 viewports
  *   REQ-022           — sidebar box, nav item, group gaps
  *   REQ-014           — heading block, card row, widget column (must not move
  *                       when the status bar is added: it overlays, it does not
@@ -31,8 +31,21 @@
  *                       non-collision with Home's heading and card row
  *   REQ-115           — the open dropdown's overlay box (rendered into the CDK
  *                       overlay container on document.body, NOT inside .shell)
+ *   REQ-918 / REQ-935 — the open overflow popover: its panel box, every tile
+ *                       box against --size-touch-min, the glyph each tile
+ *                       actually rendered, and the DOCUMENT's scroll
+ *                       dimensions while the panel is open
  *   REQ-116 … REQ-118 — the Settings screen's boxes
- *   REQ-007 / REQ-009 — nothing wraps or truncates, in either language
+ *   REQ-007 / REQ-009 — nothing leaves the box that paints it, in either
+ *                       language. Since 2026-08-28 a rail label may take two
+ *                       lines (REQ-007's revised acceptance): what is checked
+ *                       is its ink against the LABEL's OWN border box — the
+ *                       box that carries `overflow: hidden` and therefore
+ *                       clips (corrected 2026-08-29, review pass 2; the
+ *                       item's border box was 2px too generous) — plus
+ *                       whether the two-line clamp is eating a third line,
+ *                       plus the label-box-vs-item-box delta the first two
+ *                       silently assume (2026-08-29)
  *   REQ-104           — sampled dark/light composites vs. 02-design.md §3.4
  *   REQ-011           — logo decodes
  *
@@ -43,12 +56,64 @@
  */
 import { chromium } from 'playwright';
 
-const ROUTES = ['/', '/info', '/umgebung', '/smart-home', '/services', '/einstellungen'];
+/**
+ * Every route the `%dev` catalogue can name (sidebar-catalogue-overflow
+ * REQ-935). **This list must track that catalogue**: it is hard-coded rather
+ * than derived from the DOM because deriving it is a bigger change to a review
+ * instrument than the problem warrants, and a route the list forgets is simply
+ * a route this run does not measure. The eight after `/services` are the
+ * disposable placeholder fixtures — when they are removed
+ * (`V10__catalogue_expansion.sql` reversed plus a `registered-icons.ts` edit),
+ * this line goes back to six.
+ */
+const ROUTES = [
+  '/',
+  '/info',
+  '/umgebung',
+  '/smart-home',
+  '/services',
+  '/einstellungen',
+  '/wlan',
+  '/anreise',
+  '/hausordnung',
+  '/muell',
+  '/aerztliches',
+  '/parken',
+  '/gastronomie',
+  '/aktivitaeten',
+];
 const VIEWPORTS = [
   [1024, 768],
   [1280, 832],
   [1440, 900],
 ];
+/**
+ * Playwright's 30 s default is a *cold-compile* timeout here, not a health
+ * check: against a freshly started `ng serve` the first hit on a lazy route
+ * pays for its compile — `/aktivitaeten` alone has been measured at 13 s —
+ * and one expiry inside `applyPreferences` took all 168 cells of a grid run
+ * down with it (Part A review 12, Part B round 1 finding 6, round 3 finding
+ * 4: three recorded occurrences of the same class). Raised so that a slow
+ * compile stays a wait: the *measurement cells* are never caught, because a
+ * `try/catch` there would turn a real layout failure into a skipped cell and
+ * trade "slow" for "no numbers", the failure this instrument exists to
+ * prevent. 60 s is the value `applyPreferences` already concedes for the same
+ * cold compile, one line below the `goto` that kept the default. Explicit
+ * per-call timeouts (the 5 s dropdown waits, the 10 s preference-write poll)
+ * still win, so the deliberately short waits stay short.
+ *
+ * This window is *not* the containment, and must not be re-raised as if it
+ * were: the line that actually expired in every recorded occurrence is
+ * `waitForSelector('.setting-choice')`, whose own explicit 60 s already beats
+ * this default. Containment is `preferencesApplied()` below. Both are needed
+ * — the window buys the `goto` and the clicks their compile time, the guard
+ * keeps an expiry from costing the run.
+ */
+const COLD_COMPILE_TIMEOUT_MS = 60000;
+/** How long the server-side preference write gets to land, and how often the
+    confirmation below re-reads `GET /api/guest/content` while it waits. */
+const PREFERENCE_CONFIRM_TIMEOUT_MS = 10000;
+const PREFERENCE_POLL_INTERVAL_MS = 500;
 const THEMES = ['light', 'dark'];
 const LANGUAGES = ['de', 'en'];
 
@@ -84,6 +149,21 @@ const DESIGN_CONTRAST = {
   'sidebar vs. its backdrop': { light: 1.33, dark: 1.29 },
   'active nav pill vs. sidebar': { light: 1.41, dark: 1.69 },
 };
+
+/**
+ * `CONTENT_FALLBACK_ICON` is `phosphorCircle` (`core/icons/registered-icons.ts`),
+ * which is what an UNREGISTERED wire icon name renders as. REQ-904 says no
+ * catalogue tile may fall back to it, and the only way to see that in a browser
+ * is to compare the glyph the DOM actually holds — `[name]` is a property
+ * binding, so the name is not reflected as an attribute.
+ *
+ * The WHOLE `d`, and the path count with it. A prefix is not enough:
+ * `phosphorClock` is a clock face, so its first path is the identical
+ * 104-radius circle and a 25-character prefix flags it as a fallback (measured
+ * 2026-08-27 — it produced eight false findings before this was tightened).
+ */
+const FALLBACK_GLYPH_PATH =
+  'M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Z';
 
 /** Home's signed-off geometry from `home-screen-prototype` (06-review.md).
     The status bar overlays rather than pushes, so these must not have moved. */
@@ -182,14 +262,72 @@ function collect() {
       element only reports its own box, so it cannot see an ellipsis. */
   const inkWidth = (el) =>
     el ? Math.round(range(el).getBoundingClientRect().width * 100) / 100 : null;
+  /** Content width of an element — the width its text actually has to fit
+      into. `clientWidth` includes padding, which is exactly the width the
+      text may NOT use. */
+  const contentWidth = (el) => {
+    if (!el) return null;
+    const style = getComputedStyle(el);
+    const w =
+      (el.clientWidth || el.getBoundingClientRect().width) -
+      parseFloat(style.paddingLeft) -
+      parseFloat(style.paddingRight);
+    return Math.round(w * 100) / 100;
+  };
+  /** Border-box width — the box a pill actually PAINTS, padding included.
+      `contentWidth()` is the wrong question for a child that deliberately
+      spans its parent edge to edge. */
+  const borderWidth = (el) =>
+    el ? Math.round(el.getBoundingClientRect().width * 100) / 100 : null;
+  /** Resolves any CSS length (`0.0625rem`, `1px`, a `var()` value read off a
+      computed style) to px, by laying it out. Used to derive an EXPECTED
+      geometry from the token layer instead of hard-coding a number here. */
+  const cssLengthPx = (value) => {
+    const probe = document.createElement('div');
+    probe.style.cssText = `position:absolute;visibility:hidden;height:0;width:${value}`;
+    document.documentElement.appendChild(probe);
+    const w = probe.getBoundingClientRect().width;
+    probe.remove();
+    return Math.round(w * 100) / 100;
+  };
   /** True when the text is wider than the box that paints it, i.e. it is
-      ellipsized or clipped. Inline elements have `clientWidth === 0` and a
-      rect that is the ink itself, so for those the nearest clipping ancestor
-      is what decides. */
-  const truncated = (el) => {
+      ellipsized, clipped — or simply spilling out of the box it belongs to.
+
+      `boxEl` names the element whose box the text has to fit into, and
+      `borderBox` says WHICH of its boxes. Pass `boxEl` whenever the text
+      lives in an inline element: an inline `<span>` has `clientWidth === 0`
+      and a rect that IS the ink, so the fallback below compares the ink
+      against itself, and with no clipping ancestor it answers `false` no
+      matter how far the text runs. That is not hypothetical — the sidebar's
+      `.sidebar-item__label` was exactly this shape, and this function
+      reported "0 truncated" across 168 cells while the rail's labels were
+      visibly running out of their 84px items on screen (2026-08-28).
+
+      `borderBox` exists because the second answer was wrong too (review
+      2026-08-29, Major 1). Between 2026-08-28 and 2026-08-29 the rail label
+      was measured against ITS OWN box, which happened to equal the item's
+      border box — so a label artificially widened past its item reported
+      `truncated: false` with 101px of ink 8.5px outside an 84px item.
+
+      THE BOX IS THE ONE THAT CLIPS, NOT THE ONE THAT PAINTS (corrected
+      2026-08-29, review pass 2, finding #5). The answer to Major 1 was to
+      compare the rail label's ink against the ITEM's border box — 88px at
+      1280x832 — while `overflow: hidden` sits on the LABEL, whose box is
+      86px (the item less `--size-sidebar-label-inset` per side). Ink between
+      86 and 88 was clipped on screen and reported `truncated: false`: a blind
+      spot exactly `2 x --size-sidebar-label-inset` wide, i.e. precisely the
+      dimension this comparison was rebuilt to be able to see. The call site
+      passes the label itself now. `labelBoxes` below asks the other half of
+      the question — that the label is the size it should be relative to its
+      item — so a widened label is still caught, by the check built for it. */
+  const truncated = (el, boxEl = null, borderBox = false) => {
     if (!el) return null;
     const ink = inkWidth(el);
-    const own = el.clientWidth || el.getBoundingClientRect().width;
+    const own = boxEl
+      ? borderBox
+        ? borderWidth(boxEl)
+        : contentWidth(boxEl)
+      : el.clientWidth || el.getBoundingClientRect().width;
     if (ink > own + 0.5) return true;
     const rect = el.getBoundingClientRect();
     for (let p = el.parentElement; p; p = p.parentElement) {
@@ -201,16 +339,22 @@ function collect() {
     }
     return false;
   };
-  /** One record per piece of text worth checking for wrap/truncation. */
-  const text = (el, where, singleLine = true) =>
+  /** One record per piece of text worth checking for wrap/truncation.
+      `boxEl` — see `truncated()`: the element whose content box bounds the
+      text, for text that carries no box of its own. */
+  const text = (el, where, singleLine = true, boxEl = null, borderBox = false) =>
     el
       ? {
           where,
           text: el.textContent.trim(),
           lines: lineCount(el),
           inkW: inkWidth(el),
-          boxW: Math.round((el.clientWidth || el.getBoundingClientRect().width) * 100) / 100,
-          truncated: truncated(el),
+          boxW: boxEl
+            ? borderBox
+              ? borderWidth(boxEl)
+              : contentWidth(boxEl)
+            : Math.round((el.clientWidth || el.getBoundingClientRect().width) * 100) / 100,
+          truncated: truncated(el, boxEl, borderBox),
           singleLine,
         }
       : null;
@@ -232,6 +376,17 @@ function collect() {
       outside `.shell` — so it is queried from the document, never from the
       route's subtree (02-design.md §8.4). */
   const overlayPanel = document.querySelector('.cdk-overlay-container .status-bar-menu__panel');
+
+  /** The overflow popover, also in the CDK overlay container on document.body
+      (sidebar-catalogue-overflow 02-design.md §7.2). The trigger is identified
+      by `aria-haspopup`, which the CDK writes — the sidebar carries no other
+      marker distinguishing it from an ordinary slot, deliberately: it IS an
+      ordinary `.sidebar-item`. */
+  const overflowTrigger = document.querySelector('.sidebar__menu-items [aria-haspopup]');
+  const overflowPanel = document.querySelector('.cdk-overlay-container .sidebar-overflow');
+  const overflowGrid = overflowPanel
+    ? overflowPanel.querySelector('.sidebar-overflow__grid')
+    : null;
 
   const settingsRoot = document.querySelector('.settings');
   const choiceGroups = [...document.querySelectorAll('.setting-choice')].map((group, gi) => ({
@@ -274,7 +429,56 @@ function collect() {
     activePill: box(document.querySelector('.sidebar-item--active')),
     gapLogoToFirstNav: gap(logo, navItems[0]),
     gapLastNavToSettings: gap(navItems[navItems.length - 1], settingsItem),
-    labels: items.map((i, idx) => text(i.querySelector('.sidebar-item__label'), `sidebar[${idx}]`)),
+    /* The box the ink is compared against is THE LABEL'S OWN BORDER BOX —
+       the box that carries `overflow: hidden` and therefore the box that
+       clips (86px at 1280x832, the item's 88 less the 1px inset per side).
+       Not the item's content box, which is 16px narrower than the label the
+       item paints, and — corrected 2026-08-29, review pass 2, finding #5 —
+       not the item's border box either: that was 2px too generous and hid
+       exactly the inset it was measuring. A label that spills out of its
+       ITEM is caught by `labelBoxes` below, which is the check written for
+       that question. `singleLine: false` because a rail label may take two
+       lines since 2026-08-28; `labelsClamped` says whether a third is being
+       eaten. */
+    labels: items.map((i, idx) => {
+      const label = i.querySelector('.sidebar-item__label');
+      return text(label, `sidebar[${idx}]`, false, label, true);
+    }),
+    /* The invariant NOBODY was measuring (review 2026-08-29, Major 1): the
+       label's own width relative to the item's. It is not equality — since
+       2026-08-29 the label is `--size-sidebar-label-inset` narrower per side
+       — so the expected delta is derived from the token rather than assumed,
+       and an UNEXPECTED one is what gets reported. This is what keeps the
+       `truncated` comparison above honest: ink inside an 88px item says
+       nothing if the label silently became 60px or 120px wide. */
+    labelBoxes: items.map((i, idx) => {
+      const label = i.querySelector('.sidebar-item__label');
+      if (!label) return null;
+      const inset = cssLengthPx(
+        getComputedStyle(i).getPropertyValue('--size-sidebar-label-inset').trim() || '0px',
+      );
+      const itemW = borderWidth(i);
+      const labelW = borderWidth(label);
+      const delta = Math.round((labelW - itemW) * 100) / 100;
+      const expected = Math.round(-2 * inset * 100) / 100;
+      return {
+        where: `sidebar[${idx}]`,
+        itemW,
+        labelW,
+        delta,
+        expected,
+        ok: Math.abs(delta - expected) <= 0.5,
+      };
+    }),
+    /* `-webkit-line-clamp` hides the overflow without changing the ink width,
+       so `truncated()` cannot see it — the same direct question the overflow
+       popover's tiles ask. */
+    labelsClamped: items.map((i, idx) => {
+      const label = i.querySelector('.sidebar-item__label');
+      return label
+        ? { where: `sidebar[${idx}]`, clamped: label.scrollHeight > label.clientHeight + 0.5 }
+        : null;
+    }),
 
     statusBar: statusBar
       ? {
@@ -309,6 +513,81 @@ function collect() {
           ),
         }
       : null,
+
+    menuOverflow: {
+      trigger: overflowTrigger
+        ? {
+            box: box(overflowTrigger),
+            /* The trigger IS an ordinary `.sidebar-item`, so its label is
+               measured exactly like every other rail label — against the
+               label's own border box, the box that clips (see `labels`
+               above). This site did NOT have the `labels` site's 2px blind
+               spot: it used to pass no box at all, so `truncated()` fell back
+               to `el.clientWidth`, which for this zero-padding, zero-border
+               label is its own box already (86 @1280 / 69 @1024). It was
+               changed alongside `labels` 2026-08-29 (review pass 2, finding
+               #5) for two other reasons: sub-pixel precision — `borderWidth`
+               68.81 rather than an integer-rounded 69 — and to stop claiming
+               `singleLine` (review 2026-08-29, Nit 13: it was the only rail
+               label claiming one line). Attribution corrected 2026-08-29 by
+               review pass 3, finding #2; the two call sites still belong in
+               step. */
+            label: text(
+              overflowTrigger.querySelector('.sidebar-item__label'),
+              'overflow.trigger',
+              false,
+              overflowTrigger.querySelector('.sidebar-item__label'),
+              true,
+            ),
+            expanded: overflowTrigger.getAttribute('aria-expanded'),
+            hasPopup: overflowTrigger.getAttribute('aria-haspopup'),
+            ariaLabel: overflowTrigger.getAttribute('aria-label'),
+            active: overflowTrigger.classList.contains('sidebar-item--active'),
+          }
+        : null,
+      panel: overflowPanel
+        ? {
+            inShell: !!document.querySelector('.shell .sidebar-overflow'),
+            onBody: !!document.querySelector('body > .cdk-overlay-container .sidebar-overflow'),
+            box: box(overflowPanel),
+            role: overflowPanel.getAttribute('role'),
+            ariaLabel: overflowPanel.getAttribute('aria-label'),
+            maxHeight: getComputedStyle(overflowPanel).maxHeight,
+            columns: overflowGrid ? getComputedStyle(overflowGrid).gridTemplateColumns : null,
+            /* The GRID may scroll inside the panel — legal since constitution
+               v1.8.0, which binds the document, not a bounded sub-component. */
+            gridScrolls: overflowGrid
+              ? overflowGrid.scrollHeight > overflowGrid.clientHeight + 0.5
+              : null,
+            tiles: [...overflowPanel.querySelectorAll('.sidebar-overflow__tile')].map(
+              (tile, i) => ({
+                box: box(tile),
+                role: tile.getAttribute('role'),
+                label: text(
+                  tile.querySelector('.sidebar-overflow__tile-label'),
+                  `overflow.tile[${i}]`,
+                  false,
+                ),
+                /* `-webkit-line-clamp` hides the overflow without changing
+                   the ink width, so the generic `truncated()` heuristic
+                   cannot see it. This is the direct question: is there a
+                   third line the clamp is eating? */
+                clamped: (() => {
+                  const label = tile.querySelector('.sidebar-overflow__tile-label');
+                  return label ? label.scrollHeight > label.clientHeight + 0.5 : null;
+                })(),
+                glyph: (() => {
+                  const paths = [...tile.querySelectorAll('ng-icon svg path')];
+                  return {
+                    paths: paths.length,
+                    d: paths.length ? (paths[0].getAttribute('d') ?? '') : null,
+                  };
+                })(),
+              }),
+            ),
+          }
+        : null,
+    },
 
     heading: box(document.querySelector('.heading-block')),
     headlineLines: lineCount(document.querySelector('.heading-block__headline')),
@@ -386,10 +665,32 @@ function collect() {
  * buttons — the real write path. Since `guest-frontend-integration` the
  * choice persists SERVER-side (the stay's preference record), so surviving
  * the route loop's `goto()`s needs the fire-and-forget `PUT` to have landed
- * before the next reload hydrates from the session — the second wait below
- * polls the session until the server holds the chosen values (the old
+ * before the next reload hydrates from it — the second wait below polls
+ * `GET /api/guest/content` until the server holds the chosen values (the old
  * sessionStorage stand-in was synchronous and needed no such wait; without
  * it, a reload can race the write and re-render the previous preference).
+ *
+ * That poll addressed `GET /api/guest/session` — the endpoint Part B retired
+ * — from 4459859 until 2026-08-28, and the `!res.ok` escape below swallowed
+ * its `404`, so the guard returned instantly and confirmed nothing. A `404`
+ * from THIS endpoint is therefore no longer treated as offline: it means the
+ * instrument is pointed at a path the server does not serve, and it is
+ * reported under its own heading rather than passing silently.
+ *
+ * The loop is driven from node on purpose. `page.waitForFunction` resolves on
+ * the *truthiness of what the predicate returns*, and an `async` predicate
+ * returns a Promise — always truthy — so it resolves on the first tick no
+ * matter what the check decides (measured 2026-08-28: a deliberately
+ * mismatching server state "confirmed" in 311 ms, the returned handle holding
+ * `false`). `page.evaluate` does await, so the fetch stays in the page and the
+ * polling lives out here.
+ *
+ * Two states are not failures and end the wait: `unpaired` — no token in
+ * `localStorage`, so nothing was persisted to confirm against (the dev build
+ * carries its token as a build-time fallback, so a run without
+ * `GXP_MEASURE_DEVICE_TOKEN` lands here and this guard cannot help it;
+ * reported ONCE at startup, not from here — see the `seedToken` check before
+ * PASS 1) — and `offline`, where the kiosk measures what it renders.
  */
 async function applyPreferences(page, theme, language) {
   await page.goto(baseUrl + '/einstellungen', { waitUntil: 'load' });
@@ -404,23 +705,56 @@ async function applyPreferences(page, theme, language) {
     [theme, language],
     { timeout: 5000 },
   );
-  try {
-    await page.waitForFunction(
+  const deadline = Date.now() + PREFERENCE_CONFIRM_TIMEOUT_MS;
+  let outcome = false;
+  while (outcome === false && Date.now() < deadline) {
+    outcome = await page.evaluate(
       async ([t, l]) => {
         const token = localStorage.getItem('gxp.device-token');
-        if (!token) return true; // unpaired — nothing to persist against
-        const res = await fetch('/api/guest/session', {
+        if (!token) return 'unpaired'; // nothing to persist against
+        const res = await fetch('/api/guest/content', {
+          cache: 'no-store', // never revalidate: a version-stamp ETag can 304 a stale body back
           headers: { Authorization: 'Bearer ' + token },
         });
-        if (!res.ok) return true; // offline states measure what they render
-        const session = await res.json();
-        return session.preference?.appearance === t && session.preference?.language === l;
+        if (res.status === 404) return 'endpoint-missing'; // the instrument is wrong, not the kiosk
+        if (!res.ok) return 'offline'; // offline states measure what they render
+        const content = await res.json();
+        return content.preference?.appearance === t && content.preference?.language === l;
       },
       [theme, language],
-      { timeout: 10000, polling: 500 },
     );
-  } catch {
+    if (outcome === false) await page.waitForTimeout(PREFERENCE_POLL_INTERVAL_MS);
+  }
+  if (outcome === 'endpoint-missing') {
+    note(
+      'INSTRUMENT',
+      'GET /api/guest/content answered 404 — the preference guard confirmed nothing',
+    );
+  } else if (outcome === false) {
     note('PREFERENCE WRITE NOT CONFIRMED', `${theme}/${language} — reloads may show stale values`);
+  }
+}
+
+/**
+ * `applyPreferences` as a guarded *setup* step. It produces no measurement —
+ * it only puts the page into a known state — so an expiry there must cost the
+ * axis, not the process: uncaught it kills the run before `SUMMARY` prints,
+ * losing the findings of every cell already measured. The caller MUST
+ * `continue` on `false`; running the routes anyway would measure them against
+ * an unknown theme and language, and 14 mislabelled numbers are worse than
+ * 14 missing ones. Cost when it fires is one axis — 14 of 168 cells.
+ *
+ * This is deliberately not the shape used for the cells themselves, which
+ * stay unguarded (see `COLD_COMPILE_TIMEOUT_MS`).
+ */
+async function preferencesApplied(page, theme, language, where) {
+  try {
+    await applyPreferences(page, theme, language);
+    return true;
+  } catch (error) {
+    const reason = error?.message ?? String(error);
+    note('INSTRUMENT', `preferences ${theme}/${language} at ${where} skipped: ${reason}`);
+    return false;
   }
 }
 
@@ -428,6 +762,12 @@ async function applyPreferences(page, theme, language) {
 async function openDropdown(page, which /* 0 = language, 1 = appearance */) {
   await page.locator('.status-bar .status-bar-menu__trigger').nth(which).click();
   await page.waitForSelector('.cdk-overlay-container .status-bar-menu__panel', { timeout: 5000 });
+}
+
+/** Opens the sidebar's overflow popover and waits for the panel. */
+async function openOverflow(page) {
+  await page.locator('.sidebar__menu-items [aria-haspopup]').click();
+  await page.waitForSelector('.cdk-overlay-container .sidebar-overflow', { timeout: 5000 });
 }
 
 /**
@@ -546,17 +886,41 @@ console.log(
     `${viewports.length} viewports = ${routes.length * themes.length * languages.length * viewports.length} combinations`,
 );
 
+/* The preference-write guard in `applyPreferences` re-reads the server's
+ * stored preference over `Authorization: Bearer <token>`, and reads that token
+ * from `localStorage` — where only `GXP_MEASURE_DEVICE_TOKEN` ever puts one.
+ * The development build supplies `devDeviceToken` as an in-memory fallback in
+ * `DeviceTokenStore.load()` and deliberately does not persist it, so an
+ * unseeded run against `ng serve` renders and measures exactly as a seeded one
+ * does — but every `applyPreferences` returns `unpaired` before it fetches,
+ * and the guard confirms nothing. That is worth saying out loud; it is not
+ * worth saying twelve times. It is one property of the run, so it is reported
+ * once, here, rather than per (theme, language) axis, which would bury the
+ * finding count the grid's health is read from.
+ */
+if (!seedToken) {
+  note(
+    'INSTRUMENT',
+    'no GXP_MEASURE_DEVICE_TOKEN: no token is written to localStorage, so the ' +
+      'preference-write guard short-circuits as `unpaired` and confirms nothing ' +
+      'this run (the measurements themselves are unaffected)',
+  );
+}
+
 console.log('\n############ PASS 1 — no-scroll grid, status-bar box, wrapping ############');
 
 for (const [w, h] of viewports) {
-  const context = await seedContext(await browser.newContext({
-    viewport: { width: w, height: h },
-    deviceScaleFactor: 1,
-  }));
+  const context = await seedContext(
+    await browser.newContext({
+      viewport: { width: w, height: h },
+      deviceScaleFactor: 1,
+    }),
+  );
   const page = await context.newPage();
+  page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
   for (const theme of themes) {
     for (const language of languages) {
-      await applyPreferences(page, theme, language);
+      if (!(await preferencesApplied(page, theme, language, `${w}x${h}`))) continue;
       console.log(`\n=== ${w} x ${h} · ${theme} · ${language} ===`);
       for (const route of routes) {
         await page.goto(baseUrl + route, { waitUntil: 'load' });
@@ -625,6 +989,31 @@ for (const [w, h] of viewports) {
         );
         for (const p of problems) note('TEXT', `${route} ${w}x${h} ${theme}/${language} ${p}`);
 
+        /* The invariant the width comparison above RESTS on: the label is
+           the item's border box less the token inset per side. If that ever
+           stops holding, "ink fits the item" stops meaning "ink fits the
+           label" and this instrument goes blind again (Major 1). */
+        for (const b of m.labelBoxes ?? []) {
+          if (b && !b.ok) {
+            note(
+              'LABEL BOX',
+              `${route} ${w}x${h} ${theme}/${language} ${b.where} label ${b.labelW} vs item ${b.itemW} ` +
+                `= ${b.delta}, expected ${b.expected} (2 x --size-sidebar-label-inset)`,
+            );
+          }
+        }
+
+        /* The rail's own two-line envelope: a label that needs a third line is
+           being eaten by the clamp, which no width comparison can see. */
+        for (const c of m.labelsClamped ?? []) {
+          if (c?.clamped) {
+            note(
+              'LABEL CLAMPED',
+              `${route} ${w}x${h} ${theme}/${language} ${c.where} needs a third line`,
+            );
+          }
+        }
+
         if (m.logo && (!m.logo.complete || m.logo.naturalWidth === 0)) {
           note('LOGO DID NOT DECODE', JSON.stringify(m.logo));
         }
@@ -645,12 +1034,18 @@ console.log(
 for (const [w, h] of viewports.filter(([vw]) => vw === 1024 || vw === 1280)) {
   for (const theme of themes) {
     for (const language of languages) {
-      const context = await seedContext(await browser.newContext({
-        viewport: { width: w, height: h },
-        deviceScaleFactor: 1,
-      }));
+      const context = await seedContext(
+        await browser.newContext({
+          viewport: { width: w, height: h },
+          deviceScaleFactor: 1,
+        }),
+      );
       const page = await context.newPage();
-      await applyPreferences(page, theme, language);
+      page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
+      if (!(await preferencesApplied(page, theme, language, `${w}x${h}`))) {
+        await context.close();
+        continue;
+      }
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
       await page.waitForSelector('.status-bar');
       await page.waitForTimeout(120);
@@ -695,12 +1090,18 @@ console.log('\n############ PASS 3 — open dropdown overlay (REQ-115, REQ-123) 
 for (const [w, h] of viewports) {
   for (const theme of themes) {
     for (const language of languages) {
-      const context = await seedContext(await browser.newContext({
-        viewport: { width: w, height: h },
-        deviceScaleFactor: 1,
-      }));
+      const context = await seedContext(
+        await browser.newContext({
+          viewport: { width: w, height: h },
+          deviceScaleFactor: 1,
+        }),
+      );
       const page = await context.newPage();
-      await applyPreferences(page, theme, language);
+      page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
+      if (!(await preferencesApplied(page, theme, language, `${w}x${h}`))) {
+        await context.close();
+        continue;
+      }
       await page.goto(baseUrl + '/', { waitUntil: 'load' });
       await page.waitForSelector('.status-bar');
       for (const [which, name] of [
@@ -746,16 +1147,135 @@ for (const [w, h] of viewports) {
   }
 }
 
+/*
+ * The overflow popover (REQ-918, REQ-935). Only the two constitutional
+ * viewports: the no-scroll rule is stated at 1024x768 and 1280x832, and this
+ * pass is about the panel's own geometry rather than about the grid.
+ *
+ * `--size-touch-min` is 2.75rem and the root font size is viewport
+ * proportional, so the minimum is read off the live document rather than
+ * hard-coded — `--size-touch-target` does not exist.
+ */
+console.log('\n############ PASS 3B — open overflow popover (REQ-916…919, REQ-935) ############');
+
+for (const [w, h] of viewports.filter(([vw]) => vw === 1024 || vw === 1280)) {
+  for (const theme of themes) {
+    for (const language of languages) {
+      const context = await seedContext(
+        await browser.newContext({
+          viewport: { width: w, height: h },
+          deviceScaleFactor: 1,
+        }),
+      );
+      const page = await context.newPage();
+      page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
+      if (!(await preferencesApplied(page, theme, language, `${w}x${h}`))) {
+        await context.close();
+        continue;
+      }
+      await page.goto(baseUrl + '/', { waitUntil: 'load' });
+      await page.waitForSelector('.sidebar');
+      const closed = await page.evaluate(collect);
+      if (!closed.menuOverflow.trigger) {
+        console.log(
+          `${w}x${h} · ${theme} · ${language}: no overflow trigger — the property offers ` +
+            `${closed.labels.length - 1} sections, at or below the sidebar's slot count`,
+        );
+        await context.close();
+        continue;
+      }
+      await openOverflow(page);
+      await page.waitForTimeout(120);
+      const m = await page.evaluate(collect);
+      const o = m.menuOverflow.panel;
+      const t = m.menuOverflow.trigger;
+      const s = m.scroll;
+      const rootPx = parseFloat(m.rootFontSize);
+      const touchMin = 2.75 * rootPx;
+      const inside =
+        o.box.x >= 0 && o.box.y >= 0 && o.box.right <= s.clientW && o.box.bottom <= s.clientH;
+      const noScroll = s.scrollW <= s.clientW && s.scrollH <= s.clientH;
+      const contentLeft = m.sidebar ? m.sidebar.right : 0;
+      const smallest = Math.min(...o.tiles.map((x) => Math.min(x.box.w, x.box.h)));
+      const fallbacks = o.tiles.filter(
+        (x) => x.glyph.paths === 1 && x.glyph.d === FALLBACK_GLYPH_PATH,
+      );
+      const glyphless = o.tiles.filter((x) => x.glyph.paths === 0);
+      /* Vertically centred on the trigger is the preferred position; a
+         fallback shifts it, which is legitimate and is printed rather than
+         judged. */
+      const centreDelta = Math.round((o.box.y + o.box.h / 2 - (t.box.y + t.box.h / 2)) * 100) / 100;
+      console.log(
+        `\n${w}x${h} · ${theme} · ${language}  (root ${m.rootFontSize}, touch-min ${round(touchMin)}px)\n` +
+          `  trigger  ${JSON.stringify(t.box)} label="${t.label.text}" ` +
+          `haspopup=${t.hasPopup} expanded=${t.expanded} aria-label=${t.ariaLabel} active=${t.active}\n` +
+          `  panel    ${JSON.stringify(o.box)} role=${o.role} aria-label="${o.ariaLabel}"\n` +
+          `  columns  ${o.columns}\n` +
+          `  max-h    ${o.maxHeight}, grid scrolls internally: ${o.gridScrolls}\n` +
+          `  gap to trigger: panel.x - trigger.right = ${round(o.box.x - t.box.right)}, ` +
+          `centre offset ${centreDelta}\n` +
+          `  right of the sidebar: panel.x - sidebar.right = ${round(o.box.x - contentLeft)}\n` +
+          `  tiles    ${o.tiles.length}: ${o.tiles.map((x) => `${x.box.w}x${x.box.h}`).join(',')} ` +
+          `smallest ${round(smallest)}px ${smallest >= touchMin ? '>= touch-min OK' : 'BELOW TOUCH-MIN'}\n` +
+          `  labels   [${o.tiles.map((x) => `"${x.label.text}"(${x.label.lines}L${x.clamped ? ',CLAMPED' : ''})`).join(' ')}]\n` +
+          `  glyphs   ${o.tiles.length - glyphless.length}/${o.tiles.length} rendered, ` +
+          `${fallbacks.length === 0 ? 'none fell back to phosphorCircle OK' : `${fallbacks.length} FELL BACK`}\n` +
+          `  onBody=${o.onBody} inShell=${o.inShell} withinViewport=${inside} ` +
+          `scroll ${s.scrollW}/${s.clientW} ${s.scrollH}/${s.clientH} ${noScroll ? 'NO-SCROLL OK' : 'OVERFLOW'}`,
+      );
+      if (!noScroll)
+        note('OVERFLOW PANEL CAUSED DOCUMENT SCROLL', `${w}x${h} ${theme}/${language}`);
+      if (!inside)
+        note(
+          'OVERFLOW PANEL OUTSIDE VIEWPORT',
+          `${w}x${h} ${theme}/${language} ${JSON.stringify(o.box)}`,
+        );
+      if (o.inShell)
+        note('OVERFLOW PANEL IN SHELL', 'expected in the CDK overlay container on document.body');
+      if (smallest < touchMin)
+        note(
+          'TILE BELOW TOUCH TARGET',
+          `${w}x${h} ${theme}/${language}: ${round(smallest)}px < ${round(touchMin)}px`,
+        );
+      if (fallbacks.length)
+        note(
+          'FALLBACK GLYPH',
+          `${fallbacks.length} tile(s) at ${w}x${h} ${theme}/${language} render phosphorCircle`,
+        );
+      if (glyphless.length)
+        note('MISSING GLYPH', `${glyphless.length} tile(s) at ${w}x${h} ${theme}/${language}`);
+      for (const p of wrapProblems(o.tiles.map((x) => x.label)))
+        note('TEXT', `overflow tile ${w}x${h} ${theme}/${language} ${p}`);
+      for (const tile of o.tiles.filter((x) => x.clamped))
+        note(
+          'TILE LABEL CLAMPED',
+          `${w}x${h} ${theme}/${language} "${tile.label.text}" needs more than 2 lines`,
+        );
+      if (o.box.x < contentLeft)
+        note('OVERFLOW PANEL OVERLAPS THE SIDEBAR', `${w}x${h} ${theme}/${language}`);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(80);
+      await context.close();
+    }
+  }
+}
+
 console.log('\n############ PASS 4 — composites vs. 02-design.md §3.4 ############');
 
 for (const theme of themes) {
   const [w, h] = [1280, 832];
-  const context = await seedContext(await browser.newContext({
-    viewport: { width: w, height: h },
-    deviceScaleFactor: 1,
-  }));
+  const context = await seedContext(
+    await browser.newContext({
+      viewport: { width: w, height: h },
+      deviceScaleFactor: 1,
+    }),
+  );
   const page = await context.newPage();
-  await applyPreferences(page, theme, 'de');
+  page.setDefaultTimeout(COLD_COMPILE_TIMEOUT_MS);
+  if (!(await preferencesApplied(page, theme, 'de', `${w}x${h}`))) {
+    await context.close();
+    continue;
+  }
   await page.goto(baseUrl + '/', { waitUntil: 'load' });
   await page.waitForSelector('.action-card');
   await page.waitForTimeout(250);

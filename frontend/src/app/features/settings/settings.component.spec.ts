@@ -208,25 +208,28 @@ describe('Settings routing', () => {
     logoAssetId: null,
     branding: null,
     menuItems: [
-      { id: 'home', label: { de: 'Home', en: 'Home' }, icon: 'phosphorHouse', route: '' },
-      { id: 'info', label: { de: 'Info', en: 'Info' }, icon: 'phosphorInfo', route: '/info' },
+      { id: 'home', label: { de: 'Home', en: 'Home' }, icon: 'phosphorHouse', route: '', module: null },
+      { id: 'info', label: { de: 'Info', en: 'Info' }, icon: 'phosphorInfo', route: '/info', module: null },
       {
         id: 'umgebung',
         label: { de: 'Umgebung-L', en: 'Nearby-L' },
         icon: 'phosphorMapPin',
         route: '/umgebung',
+        module: null,
       },
       {
         id: 'smart-home',
         label: { de: 'Smart Home', en: 'Smart Home' },
         icon: 'phosphorLightbulbFilament',
         route: '/smart-home',
+        module: null,
       },
       {
         id: 'services',
         label: { de: 'Services', en: 'Services' },
         icon: 'phosphorShoppingBag',
         route: '/services',
+        module: null,
       },
     ],
     settings: {
@@ -234,6 +237,7 @@ describe('Settings routing', () => {
       label: { de: 'Einstellungen', en: 'Settings' },
       icon: 'phosphorGearSix',
       route: '/einstellungen',
+      module: null,
     },
     settingsConfig: TEST_CONFIG,
     standbyHeadline: { de: 'Testhaus', en: 'Testhaus' },

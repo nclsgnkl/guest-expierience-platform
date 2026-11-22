@@ -6,6 +6,7 @@ import { filter } from 'rxjs';
 import { PropertyContentService } from '../../core/content/property-content.service';
 import { GuestAssetService } from '../../core/guest/guest-asset.service';
 import { SidebarComponent } from '../sidebar/sidebar.component';
+import { StalenessBannerComponent } from '../staleness-banner/staleness-banner.component';
 import { StalenessPillComponent } from '../staleness-pill/staleness-pill.component';
 import { StatusBarComponent } from '../status-bar/status-bar.component';
 
@@ -28,7 +29,13 @@ const LOGO_PLACEHOLDER = 'assets/branding/logo-placeholder.svg';
  */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, SidebarComponent, StatusBarComponent, StalenessPillComponent],
+  imports: [
+    RouterOutlet,
+    SidebarComponent,
+    StatusBarComponent,
+    StalenessPillComponent,
+    StalenessBannerComponent,
+  ],
   templateUrl: './shell.component.html',
   styleUrl: './shell.component.css',
 })
@@ -38,6 +45,9 @@ export class ShellComponent {
   private readonly router = inject(Router);
 
   protected readonly property = this.content.property;
+  /* The sidebar stays input-driven and injects no content service, so the
+     popover's collation locale is passed in like everything else (REQ-925). */
+  protected readonly locale = this.content.locale;
   protected readonly activeRoute = signal(this.router.url);
 
   /** Object URL when the property has a logo and it has arrived; else the placeholder. */

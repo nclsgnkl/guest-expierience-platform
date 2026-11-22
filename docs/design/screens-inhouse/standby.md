@@ -14,8 +14,10 @@
 ## Purpose
 
 What the kiosk shows while its room is **vacant** (`occupancy: VACANT` from
-`GET /api/guest/session`). The backend is maximally data-sparing when vacant
-(spec decision 9): no guest name, no stay-derived value reaches the device —
+`GET /api/guest/content` — one resource since `guest-payload-consolidation`;
+the vacant answer simply carries no stay-derived half). The backend is
+maximally data-sparing when vacant (spec decision 9): no guest name, no
+stay-derived value reaches the device —
 so the screen is property-level only: the property presents itself calmly to
 an empty room (or to housekeeping/the next arriving guest). The texts are
 the **server-resolved standby templates** (`standby.headline`,

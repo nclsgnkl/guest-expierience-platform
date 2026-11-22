@@ -1,0 +1,37 @@
+# /etc/gxp/updater.conf — environment of gxp-updater.service (systemd
+# EnvironmentFile syntax: KEY=VALUE, no quotes needed, no shell expansion).
+# install.sh copies this file to /etc/gxp/updater.conf only if none exists.
+
+# The directory holding compose.yaml and .env of the deployment unit. The
+# updater rewrites the GXP_IMAGE= line of that .env.
+GXP_COMPOSE_DIR=/opt/gxp/backend
+# The compose project name (`name:` in compose.yaml); the exchange volume is
+# <project>_gxp-updates.
+GXP_COMPOSE_PROJECT=gxp
+# Pre-update dumps (root, 0700); the newest GXP_KEEP_BACKUPS are kept.
+GXP_BACKUP_DIR=/var/lib/gxp/backups
+GXP_KEEP_BACKUPS=5
+# The updater's OWN state (root, 0600): the replay guard and the downgrade
+# refusal read only this file; state.json in the exchange volume is a mirror
+# for the app.
+GXP_STATE_FILE=/var/lib/gxp-updater/state.json
+# The host copy of the release signing TRUST SET (one PEM, 2..4 public keys:
+# key 1 active, key 2 dormant) — the updater's trust root, installed by
+# install.sh from the repo resource. A signed release may rotate the set;
+# the rotated set lives in GXP_STATE_FILE and beats this file.
+GXP_PUBLIC_KEYS=/etc/gxp/update-signing-public-keys.pem
+# Health check: seconds to wait for ready + Flyway, then the hold before the
+# second check (REQ-721).
+GXP_HEALTH_TIMEOUT=180
+GXP_HEALTH_HOLD=30
+# Bounds on the steps that have no deadline of their own (review 06 #1):
+# `docker pull` (a slow line: 1800 s ≈ 400 MB at 300 KB/s → pull-failed,
+# nothing swapped), pg_dump (→ backup-failed), pg_restore. The unit's
+# TimeoutStartSec=3h is sized above the sum of all bounds at these defaults —
+# raising one means checking that sum (arithmetic in gxp-updater.service).
+GXP_PULL_TIMEOUT=1800
+GXP_DUMP_TIMEOUT=600
+GXP_RESTORE_TIMEOUT=600
+# What compose.yaml hands PostgreSQL (POSTGRES_USER / POSTGRES_DB).
+GXP_DB_USER=gxp
+GXP_DB_NAME=gxp

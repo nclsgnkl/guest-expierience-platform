@@ -92,8 +92,15 @@
   --surface-menu-dark-raw: rgb(246 240 255 / 0.09);
 
   /* Status palette (design-sheet.md 📋, first value realised 2026-08-20 —
-     docs/design/tokens.md -> In-house tokens). */
+     docs/design/tokens.md -> In-house tokens). Warning follows it 2026-08-27
+     (guest-payload-consolidation REQ-952): derived from the same v1 palette's
+     Warning #F8B84E (hue 37°) rather than placed beside it as a second
+     decision. The dark value IS #F8B84E, essentially unchanged; the light one
+     is that hue darkened to a working lightness. Dark raw values are new
+     primitives, never overrides (frontend/CLAUDE.md -> Appearance & language). */
   --status-offline-raw: #a79dba;
+  --status-warning-raw: #895806;
+  --status-warning-dark-raw: #f9b84e;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -123,6 +130,22 @@
      guest-frontend-integration D1, 2026-08-20) — deliberately NOT remapped
      by [data-theme='dark']. */
   --color-status-offline: var(--status-offline-raw);
+
+  /* Warning status — a FOREGROUND role: text, glyph or border. NEVER a
+     surface fill: #895806 as a background would fail any dark text placed on
+     it, and a tinted warning surface, if it is ever needed, is a second
+     token. Unlike --color-status-offline it IS text-capable, deliberately and
+     from the start — measured on glass at 4.64 over --mesh-6 and 5.17 over
+     --mesh-8 (light), 5.63 over --night-6 and 4.86 over --night-8 (dark), all
+     above 4.5:1 — so the role can later move onto a title or a border with no
+     re-measurement. That is the lesson of the offline role's permanent "never
+     a text colour" caveat above.
+     WARNING IS NOT ERROR. design-sheet.md -> Status keeps Danger #F26666
+     beside it for destructive actions; nobody may repurpose warning for a
+     delete dialog.
+     First use: the escalated staleness banner's WifiSlash glyph (REQ-952) —
+     the glyph names WHAT is wrong, the colour says THAT it matters. */
+  --color-status-warning: var(--status-warning-raw);
 
   /* Mesh background roles (REQ-103). The 16 gradient layers and the base
      colour behind them are semantic roles, not primitives, so the theme axis
@@ -282,11 +305,23 @@
      the glyph it follows and is sized to read as one. */
   --size-icon-xs: 1.125rem;
   --size-icon-caret: 0.75rem;
-  --size-sidebar: 6.25rem;
+  /* 6.5rem, NOT the 6.25rem Figma records (docs/design/tokens.md -> Sizing).
+     Owner decision 2026-08-29: at 6.25rem an ExtraBold "Einstellungen" had
+     0.61px of clearance per side at the 1024x768 floor, so no visible inset
+     was possible at all -- 1px broke the word back onto two lines. +0.25rem
+     buys the inset and doubles the clearance; the owner weighed and rejected
+     +0.5rem (full 2px inset) as too expensive for the content area. The
+     content area pays 4px of width at 1280x832; measured consequences are in
+     docs/design/tokens.md and docs/features/home-screen-prototype/02-design.md. */
+  --size-sidebar: 6.5rem;
+  /* The rail label spans its item edge to edge, minus this per side, so the
+     ink is not flush against the pill's border (owner decision 2026-08-29 --
+     1px at the 1280x832 design size). Only sidebar.component.css reads it. */
+  --size-sidebar-label-inset: 0.0625rem;
   /* Referenced by nothing, deliberately: this is the Figma MenuIcons
      component's own 146px/72px box, kept for traceability to the design file.
      What the sidebar actually renders is derived from --size-sidebar and
-     --space-3 (84px square) -- see sidebar.component.css and
+     --space-3 (88px square since 2026-08-29) -- see sidebar.component.css and
      docs/design/tokens.md -> Sizing (round-3 review finding #12). */
   --size-sidebar-item: 4.5rem;
   --size-panel: 12.25rem;
@@ -336,6 +371,12 @@
      carries further, the same reason the glass border drops from 0.4 to
      0.14 (02-design.md §3.3). */
   --color-divider: color-mix(in srgb, var(--ink-050) 22%, transparent);
+
+  /* The warning role is the one status colour the theme axis does move: the
+     v1 palette's own #F8B84E is the DARK value, and the light theme takes the
+     darkened derivation (see the primitives). --color-status-offline stays
+     theme-stable beside it, unchanged. */
+  --color-status-warning: var(--status-warning-dark-raw);
 
   /* Same colour, same -74.707deg axis, same 9:5 stop ratio as light, scaled
      to 20% alpha. */

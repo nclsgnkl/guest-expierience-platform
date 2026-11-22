@@ -1,0 +1,14 @@
+# gxp-updater.timer — every 5 minutes (update-channel REQ-718, D12): the
+# apply window is 2 h, so a 5-minute cadence is what makes "applied at
+# 04:0x" true. Persistent catches a box that was off at the tick.
+[Unit]
+Description=Guest Experience Platform updater (every 5 minutes)
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+RandomizedDelaySec=60
+Unit=gxp-updater.service
+
+[Install]
+WantedBy=timers.target

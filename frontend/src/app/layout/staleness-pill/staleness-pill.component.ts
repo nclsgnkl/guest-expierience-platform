@@ -1,7 +1,9 @@
 import { Component, computed, inject } from '@angular/core';
+import { NgIcon } from '@ng-icons/core';
 
 import { PropertyContentService } from '../../core/content/property-content.service';
 import { GuestDataService } from '../../core/guest/guest-data.service';
+import { StalenessService } from '../../core/guest/staleness.service';
 import { TranslationService } from '../../core/i18n/translation.service';
 import { PreferencesService } from '../../core/preferences/preferences.service';
 
@@ -12,22 +14,30 @@ import { PreferencesService } from '../../core/preferences/preferences.service';
  * visible ONLY while the kiosk renders cached/held content because the
  * backend is unreachable (`STALE`). The timestamp is the cache's `storedAt`
  * — static per stale episode (when the data was fetched, not a countdown),
- * so the `aria-live` region never chatters.
+ * so the `aria-live` region never chatters. Its mark is the connection
+ * screen's `WifiSlash` glyph (owner decision 2026-08-29, replacing a
+ * decorative dot) — the same glyph the escalated banner carries, one scale
+ * step smaller so the pill keeps its height budget.
+ *
+ * Visibility is `StalenessService`'s tri-state level, not a condition of its
+ * own: after 60 minutes the pill is *replaced* by `StalenessBannerComponent`
+ * (REQ-952), and one derived level is what makes "never both at once" true by
+ * construction.
  */
 @Component({
   selector: 'app-staleness-pill',
+  imports: [NgIcon],
   templateUrl: './staleness-pill.component.html',
   styleUrl: './staleness-pill.component.css',
 })
 export class StalenessPillComponent {
   private readonly guestData = inject(GuestDataService);
+  private readonly staleness = inject(StalenessService);
   private readonly content = inject(PropertyContentService);
   private readonly preferences = inject(PreferencesService);
   protected readonly t = inject(TranslationService).t;
 
-  protected readonly visible = computed(
-    () => this.guestData.connection() === 'STALE' && this.guestData.staleSince() !== null,
-  );
+  protected readonly visible = computed(() => this.staleness.level() === 'PILL');
 
   /** `Stand HH:MM` / `As of HH:MM`, in the active language's own locale. */
   protected readonly label = computed(() => {

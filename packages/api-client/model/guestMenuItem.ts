@@ -7,6 +7,7 @@
  * https://openapi-generator.tech
  * Do not edit the class manually.
  */
+import { GuestModule } from './guestModule';
 
 
 export interface GuestMenuItem { 
@@ -18,5 +19,9 @@ export interface GuestMenuItem {
     icon: string;
     route: string;
     sortIndex: number;
+    /**
+     * Absent means no content is authored for this section yet (D15) — the kiosk renders SectionPlaceholderComponent.
+     */
+    module?: GuestModule;
 }
 

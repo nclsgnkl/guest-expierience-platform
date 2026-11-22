@@ -2,7 +2,7 @@
 
 **Tokens:** [../tokens.md](../tokens.md)
 **Source:** none — **designed in-repo, 2026-08-20** (convention approved by the user 2026-08-20, `guest-frontend-integration` D1)
-**Last updated:** 2026-08-20
+**Last updated:** 2026-08-29 (the staleness pill's mark changed from a decorative dot to the `WifiSlash` glyph, at unchanged height — owner decision)
 
 > ⚠️ **Provenance: designed in-repo — no Figma counterpart.** **A Figma
 > re-import will not produce this file**; if the screen is ever drawn in
@@ -69,29 +69,339 @@ unreachable (`STALE` state). The constitution's wording — "a discreet
 staleness hint" — is the requirement:
 
 - Position: directly **below the status-bar cluster**, right-aligned to it,
-  offset `--space-1` — inside the reserved corner's clearance, verified by
-  measurement at both reference viewports (the recorded clearance to Home's
-  card row is 48px/38px horizontal, 20px/16px vertical — the pill is
-  ≤ 1.75rem tall and must stay inside that envelope; if it cannot, it moves
-  into the status bar's own row rather than pushing content).
+  offset `--space-1` — inside the reserved corner, verified by measurement at
+  both reference viewports. The two recorded clearances there are **48px/38px
+  horizontal** to Home's card row and **20px/16px vertical** from the status
+  bar down to Home's **heading ink**, measured in the heading column
+  (`docs/features/appearance-and-language/02-design.md` §8.2,
+  `../screens/home.md`) — the second one governs the heading column, which is
+  not where the pill is; see the measurement below.
+- Height is whatever the construction produces, not a budget it has to meet:
+  **1.6375rem of scaling box + a 2px hairline border → 1.7619rem at 1280 /
+  1.7922rem at 1024**. The border is `px` by constitution and therefore does
+  not shrink with the root, which is why the rem figure is *larger* at the
+  1024 floor. If the pill ever did collide with something it moves into the
+  status bar's own row rather than pushing content.
 - Shape: pill — `--color-surface-glass` fill, `--border-glass`,
   `border-radius: 999px` (the design sheet's chip radius), padding
   `--space-1` vertical / `--space-3` horizontal, `--blur-glass`.
-- Content: a `0.5rem` dot in `--color-status-offline` (decorative) +
-  `--text-status` (0.875rem / 700) in `--color-text-secondary`:
+- Content: the Phosphor `WifiSlash` glyph at `--size-icon-xs` (1.125rem) in
+  `--color-status-offline` (decorative) + `--text-status` (0.875rem / 700) in
+  `--color-text-secondary`, gap `--space-2`:
   - de: `Stand HH:MM` · en: `As of HH:MM` — from the cache's `storedAt`,
     formatted with the active language's locale (the clock's own convention).
+  - **The glyph replaced a `0.5rem` dot** — owner decision 2026-08-29, which
+    covers the glyph and nothing else. Same glyph as the connection screen
+    above and as the escalated banner below, so all three name **what** is
+    missing — the connection — rather than only marking *that* something is
+    off; a coloured dot said nothing on its own. `--size-icon-xs` and not the
+    banner's `--size-icon-md`: xs is the token for a glyph standing beside a
+    `--text-status` label (the status bar's globe/sun/moon), and at that size
+    the glyph stays inside the label's own line box, so the height does not
+    move.
+  - **The gap tightened from `--space-3` to `--space-2`** — an implementation
+    consequence, **not** part of the owner decision: the status bar's own
+    trigger already pairs an `--size-icon-xs` glyph with a `--text-status`
+    label at exactly `--space-2`, and a 1.125rem glyph needs less air beside
+    the text than a 0.5rem dot did.
+  - **Height is unchanged by the swap**, measured in a real browser at both
+    reference viewports: at 1.125rem the glyph is shorter than the label's own
+    line box (0.875rem × 1.3 = 1.1375rem), so the pill's height stays
+    label-driven — **28.19px at 1280×832 and 22.94px at 1024×768, identical to
+    the dot's to 0.00px**.
+  - **Those heights are not bounded by the 20px/16px figure**, and it would be
+    a false reassurance to say they fit inside it: 28.19px/22.94px fits no
+    20px/16px band, and that band is not the pill's constraint in the first
+    place — it is the status bar's drop to Home's **heading ink**, measured in
+    the heading column. Measured in the same render, the pill does not overlap
+    that column at all: the horizontal separation is **562px at 1280**
+    (heading ~~x172…562~~ **x176…566** since 2026-08-29, pill x1124…1248) and
+    **447px at 1024** (heading ~~x137.6…449.6~~ **x140.78…452.78**, pill
+    x896.4…998.4). The pill hangs over the **widget
+    column**, which the banner section below records as *empty by design in
+    both directions*, and the nearest content underneath is Home's card row at
+    y548…744 / y541…698 — ~644px from the pill's bottom edge to that row's
+    bottom at 1280. So: **it collides with nothing because the region under
+    the anchor is empty**, not because it fits in a 20px band.
+    > **Heading extents re-measured 2026-08-29** (`tools/measure.mjs` /
+    > `tools/measure-states.mjs` against a live dev backend), because
+    > `--size-sidebar` went 6.25rem → 6.5rem and Home's content column slid
+    > 4px right at 1280 × 832 / 3.19px at 1024 × 768 — an owner decision
+    > recorded in [`../tokens.md`](../tokens.md) → Sizing, not a correction.
+    > The two **separation** figures are the pre-move ones: the pill is
+    > right-anchored and did not move, so each is ~4px / ~3.2px smaller today
+    > (**arithmetic, not a fresh measurement** — the pill's own x depends on
+    > the clock string in the render, which is why it is not restated here).
+    > The conclusion is untouched: the region under the anchor is empty.
+  - The pill is **8px wider at 1280 / 6.4px at 1024** than with the dot (the
+    glyph is wider than 0.5rem, minus the tightened gap). It is right-anchored,
+    so it grows leftwards into the recorded 48px/38px horizontal clearance to
+    Home's card row, which absorbs it — to be re-confirmed on the next full
+    `tools/measure-states.mjs` run against a dev backend.
 - Not interactive, `role="status"` with `aria-live="polite"` set once (it
   appears/disappears; it must not chatter on every minute tick — the
   timestamp is static per stale episode, showing when the data was fetched,
   not a countdown).
 - Appears in `STALE` only; never during pairing, never on this connection
   screen (nothing is rendered from cache there — there is no cache).
+- **Until the escalation replaces it** (added 2026-08-27): after 60 minutes
+  without successful backend contact the pill is *replaced* by the banner
+  below. The two are never on screen together — one derived level decides,
+  not two independent conditions.
+
+## The escalated staleness banner (chrome, not a screen — specified here)
+
+Added 2026-08-27 for `guest-payload-consolidation` **REQ-952** (owner decision
+**D13**), implementing `docs/constitution.md` v1.9.0: *"After a prolonged loss
+of contact that hint escalates to a prominent banner naming the situation and
+directing the guest to their host; content keeps rendering."*
+
+**The reason is operational, not security.** On a box with no remote access a
+guest complaint is the only alerting channel that exists, and the failure being
+fixed is a screen that looks perfectly normal while serving day-old content. A
+hard cutoff was explicitly rejected: a guest whose backend is unreachable is
+exactly the guest who still needs the door code and the WiFi password.
+
+### Trigger
+
+- **60 minutes since the last successful backend contact** — not since the
+  content last changed. A backend answering `304` forever is `ONLINE` and
+  raises nothing.
+- `STALE` only. `DISCONNECTED` already renders the full-screen connection panel
+  above, which names the situation as prominently as anything can.
+- A cold boot from a cache whose `storedAt` is already older than an hour shows
+  the banner **immediately**. That is correct, not an edge case.
+- It **replaces** the pill. Content keeps rendering behind it, on every route.
+
+### Layout — a bar, not a panel (revised 2026-08-27)
+
+The hint **escalates in place**: same anchor as the pill — directly below the
+status-bar cluster, right-aligned to it — but it grows **sideways**, not into a
+block. The first build clamped it at `min(22rem, 40vw)` and the body ran to
+three lines; the owner struck the clamp instead of the clause, so the width
+now follows the copy. Measured, the object is ~540 × 60 at 1024×768 and
+~679 × 74 at 1280×832 — roughly **9 : 1**, a bar. It is deliberately *not*
+"the pill grown into a panel" any more: a wide flat bar states one sentence
+and covers almost nothing, where a panel would sit on the screen like a
+dialogue the guest cannot dismiss.
+
+- Overlay, not flow: `position: absolute` inside the host's padding box, host
+  `display: contents`. It takes no layout space, so it cannot grow the document
+  on any route (`docs/constitution.md` → "Nothing scrolls") and it moves
+  nothing when it appears.
+- **Width follows the copy**: `width: max-content` — exactly as wide as the
+  body needs on **one line** — with `max-width` stopping it at the **content
+  area's left edge** (the sidebar stays fully visible and navigable, and the
+  bar never reaches over it). No `rem` clamp: a fixed width plus a line-count
+  clause is the contradiction the first build shipped.
+- Surface: `--color-surface-glass`, `--border-glass`, `--radius-2xl`,
+  `--blur-glass`, `--shadow-panel`; padding **`--space-4` vertical, and
+  horizontally `--space-3` left / `--space-5` right**, glyph-to-text gap
+  `--space-4`.
+  **The horizontal asymmetry is deliberate, and it is free** (owner decision
+  2026-08-28, revising the 2026-08-27 cut to `--space-4` on all four sides —
+  *"chrome a bar does not need is width the copy does"*, which remains true
+  and is why the total is not allowed to grow). Both text edges on the right
+  end inside a `--radius-2xl` arc, and the tighter of the two is **not** the
+  timestamp: because the bar is `max-content`, **the body is what sizes it**,
+  so the body's own bottom-right corner sits at exactly the right padding,
+  in the bottom arc. Measured perpendicular to the arc it was **4.4 px
+  (1024) / 5.1 px (1280)** — that is the pinch, and it is the thing that
+  reads as cramped. The glyph on the left is a small wedge crossing the
+  *straight* part of the left edge, so it loses only 0.3–0.5 px to the
+  rounding and padding costs least there. Moving **one scale step** from the
+  left to the right therefore lifts the bar's worst clearance to **6.4 px /
+  7.7 px** while **`--space-3` + `--space-5` = 2 × `--space-4` exactly** —
+  the only such pair on the scale. The bar's width, its left edge, and with
+  it the clearance to Home's headline column are unchanged **to the pixel**;
+  see "Where the bar lands, measured".
+- **Glyph** — Phosphor `WifiSlash` (regular weight), `--size-icon-md` (one step
+  down from the panel's `lg`: a bar carries a smaller glyph), in
+  **`--color-status-warning`**. Still **decorative** — the text carries the
+  information — but the colour now carries the severity. Deliberately the
+  **connection screen's own glyph**, not a warning sign: the glyph names *what*
+  is wrong (the connection), the colour says *that* it matters, and swapping in
+  an alarm symbol would replace the first statement with the second. The
+  severity order stays honest: the full-screen panel above is a takeover and
+  outranks anything a bar can do.
+- **Two rows, not three.** Top row: the **title** (`--text-title`,
+  `--color-text-primary`, one line) at the left and the **timestamp** —
+  the pill's own `Stand HH:MM` / `As of HH:MM`, `--text-status` in
+  `--color-text-secondary` — right-aligned at the bar's own edge. Second row:
+  the **body** (`--text-body`, `--color-text-secondary`), **one line**. The
+  timestamp rides the title's row rather than a line of its own because it
+  costs no width there (the body is always the widest line) and it keeps the
+  bar flat.
+- Not interactive. No dismiss, no retry button: recovery is automatic, and a
+  button would imply the guest is responsible for infrastructure.
+- `role="status"` with `aria-live="polite"`, set once — the pill's discipline
+  verbatim. The banner appears once per stale episode and its text is static,
+  so the live region never chatters on the minute tick. **The entrance
+  animation below must never be what changes that text**: the region is created
+  and destroyed by an `@if`, so an animation that also re-wrote the copy would
+  make the live region announce mid-motion.
+
+### Motion (added 2026-08-27)
+
+Both behind `prefers-reduced-motion: reduce`, as `../design-sheet.md` → *Motion*
+requires; both are disabled there, and nothing about the bar depends on either.
+
+- **Entrance** — 350 ms `cubic-bezier(0.16, 1, 0.3, 1)` (the sheet's *Page
+  Transition* duration and easing), opacity plus a `--space-3` rise. The
+  pill → bar swap is an event, not a silent substitution; calm, no bounce, no
+  scale.
+- **A slow pulse on the glyph only** — 4 s, opacity 1 ↔ 0.55. **Never on the
+  text**: the bar can stand for hours in an occupied guest room and its copy
+  must stay re-readable at any moment. For the same reason there is **no
+  marquee** — it was proposed and rejected: it contradicts *"Animationen ruhig
+  und hochwertig"*, needs a WCAG 2.2.2 pause mechanism a kiosk cannot offer,
+  and disappears under reduced-motion exactly where a fallback is needed.
+
+### Where the bar lands, measured
+
+Measured on the built app by `frontend/tools/measure-states.mjs` — **28 banner
+cells**: both hosts × both reference viewports × both themes × both languages
+(16), plus the `/info` route at both viewports × both themes × both languages
+(8, added by `module-content`), plus a **37-character unbroken display name**
+at both viewports × both languages (4). `storedAt` aged past the threshold,
+`/api` blocked at the browser. The whole run is **52/52 cells `NO-SCROLL OK`,
+0 findings**. *(The counts read "20 banner cells" and "44/44" until
+2026-08-28: `module-content` added eight `/info` cells to the instrument
+without these sentences being touched.)*
+
+**Every figure in the table below survived the 2026-08-28 padding revision
+unchanged**, and that is the whole point of it: `--space-3` + `--space-5` is
+the same total as `--space-4` + `--space-4`, so the chrome sum, the bar's
+width, its left edge and its clearance to the headline column are identical
+before and after. Re-measured to confirm rather than assumed.
+
+| | 1024 × 768 | 1280 × 832 |
+|---|---|---|
+| bar, longest German cell (shell) | `x459 y58 w540 h60` | `x569 y72 w679 h74` |
+| bar, longest English cell (standby) | `x446 y58 w553 h60` | `x554 y72 w694 h74` |
+| chrome (glyph + gap + padding + border) | 51.6 px | 64.0 px |
+| `.heading-block` — the headline's own column, `--size-heading` wide ⚠️ | x140.78…**452.78** | x176…**566** |
+| `.home-content__screen` — Home's whole left flex item, sized by the card row at its bottom ⚠️ | x140.78…**796.75** | x176…**996** |
+| `.home-content__widgets` — the empty widget column ⚠️ | **x822.34**…998 (176.06 px) | **x1028**…1248 (220 px) |
+| Home's card row | y541…698 | y548…744 |
+| body / title / timestamp lines | 1 / 1 / 1 in every cell | 1 / 1 / 1 in every cell |
+| **the bar's worst text-to-arc clearance** — body's bottom-right corner, perpendicular | **4.4 → 6.4 px** | **5.1 → 7.7 px** |
+| timestamp's top-right corner → the same arc | 6.4 → 12.4 px | 7.8 → 15.5 px |
+| glyph → the left edge (straight there; 0.3–0.5 px lost to the arc) | 9.4 → 6.4 px | 11.5 → 7.7 px |
+
+> ⚠️ **The three marked rows were re-measured 2026-08-29** (`tools/measure.mjs`
+> and `tools/measure-states.mjs` against a live dev backend) and are **not**
+> what this table carried before. `--size-sidebar` went 6.25rem → 6.5rem, an
+> owner decision recorded in [`../tokens.md`](../tokens.md) → Sizing, so Home's
+> content column starts 4px further right at 1280 × 832 and 3.19px at
+> 1024 × 768. Previous values, for the record: heading block x138…450 /
+> x172…562, screen column x138…794 / x172…992, widget column x819…998 (179 px)
+> / x1024…1248 (224 px). **The rail took its 4px entirely out of the widget
+> column** — the screen column keeps its width to the pixel (655.97 / 820) and
+> only the empty column shrinks. Every other row of this table is unchanged and
+> was re-confirmed in the same run: the bar's boxes came back `x459 y58 w540
+> h60` / `x569 y72 w679 h74` (German, shell) and `x446 y58 w553 h60` /
+> `x554 y72 w694 h74` (English, standby), exactly as recorded.
+
+The last three rows are the only thing 2026-08-28 changed, and they are read
+as *before → after*. Note the third: after the revision the bar's tightest
+point is no longer on the right but is the **glyph on the left**, at
+essentially the value the body's corner had before it. That is not a
+regression — a glyph beside a straight edge and a line of text pinched into a
+curve do not read alike — but it is the reason more right-hand padding buys
+nothing further without also widening the left.
+
+> **Correction, 2026-08-27.** Earlier revisions of this table gave the widget
+> column as x475…998 / x594…1248 and named x450 / x562 as
+> `.home-content__screen`. Both were wrong: x475 is x449.6 + `--space-7`, i.e.
+> the gap was measured from the *heading block* as though that were the flex
+> item, which is true only for a Home with no cards. The widget column is a
+> third of the width the old figure claimed.
+
+Two consequences worth writing down rather than re-deriving:
+
+- **The bar lies over the empty band between Home's heading and its card row.**
+  Home's left item runs to x796.75 / x996 and lays its two children out with
+  `space-between` — heading at the top, cards at the bottom — so the band
+  beside the heading is deliberately empty. Of the bar's 540 px at 1024:
+  **338 px** sit over that band (x458.83…796.75), 25.6 px over the gutter and
+  176.06 px over the widget column; at 1280, **427 px** of 679 over the band,
+  32 px gutter, 220 px widget column. *(Updated 2026-08-29 from ~~335 / 25 /
+  179~~ and ~~423 / 32 / 224~~ — the three parts are **arithmetic on the
+  re-measured edges above**, not separate measurements, and they still sum to
+  the bar's measured width: 539.6 of 540, 679 of 679.)* *(The 1024 figure read 360 px until the third
+  review round re-measured it: 360 is the distance from the bar's left edge to
+  the widget column's left edge — 819.2 − 458.8 — which already contains the
+  25 px gutter, so the three parts summed to 564 of a 540 px bar.)* The old claim — "the bar overlaps the empty
+  widget column and, for the longest strings, the gutter beside it" — had the
+  proportions backwards. What matters is unchanged and is what the anchor rests
+  on: the region is **empty by design in both directions**, and the bar reaches
+  neither the heading block nor the card row (clearance to the card row:
+  424 px / 402 px vertically).
+- **Clearance to Home's hero headline is structural, for any name.** The
+  headline is manager-authored with `{stay.displayName}` interpolated, and the
+  first build cleared it by 4–5 px — a margin that depended on one guest's
+  name. `.heading-block` is a fixed `--size-heading` wide and
+  `.heading-block__headline` carries **`overflow-wrap: anywhere`**, so not even
+  an unbroken token can pass x450 / x562, while the bar starts at x459 / x569:
+  **≥ 9 px / ≥ 7 px for any name**. Measured with a 37-character unbroken
+  display name the headline takes five lines and reaches x450 / x560 — 9 px of
+  clearance at both viewports. Without that one CSS line the same name renders
+  **one** line to x935…953 / x1173…1195 (the lower figure of each pair is
+  the German cell, the higher the English one) and passes under the bar; the
+  instrument's
+  `OVERFLOW` check is the ratchet that says so (removing the line reproduces
+  8 findings in exactly those 4 cells).
+
+The anchor is free on both hosts: on Home the top-right is the empty band
+above the card row and beside the heading — the widget column
+(`../screens/home.md`, "open by design") and the gutter and the heading's own
+empty right-hand side — and standby has no sidebar and a centred block
+(measured clearance to it: 230 px / 224 px vertically). Verified by measurement
+at 1024×768 and 1280×832, both themes, both languages — the bar collides with
+neither the status-bar cluster, Home's heading block, Home's headline lines,
+Home's card row nor the standby block, and nothing scrolls in any cell.
+
+### Content
+
+Via `TranslationService` (both catalogues; app chrome, like every other string
+here). **Two body variants**, because the occupied wording directs the guest to
+their host and a vacant room has no guest — there the audience is whoever else
+sees the screen (cleaning staff, the manager), and the escalation serves the
+same operational purpose: a dead backend must not stay invisible just because
+the room happens to be empty. The variant follows **occupancy**, not the host
+component.
+
+| Key | de | en |
+|---|---|---|
+| `stale.banner.title` | Diese Anzeige ist nicht aktuell | This display is out of date |
+| `stale.banner.body` (occupied) | Seit über einer Stunde besteht keine Verbindung zum Server. Bitte den Gastgeber informieren. | There has been no connection to the server for over an hour. Please let your host know. |
+| `stale.banner.bodyStandby` (vacant) | Seit über einer Stunde besteht keine Verbindung zum Server. Bitte die Verwaltung informieren. | There has been no connection to the server for over an hour. Please inform the property manager. |
+| `stale.asOf` (reused verbatim) | Stand {time} | As of {time} |
+
+German stays imperative-neutral (no *ihr/euch*), like the rest of the
+connection copy. Never here, as on the connection screen: HTTP status codes,
+hostnames, stack traces, retry counters — or the word "error".
+
+### Both themes
+
+Token roles only; every piece of information rides a standard text role. The
+bar's one status colour is **`--color-status-warning`**, and unlike
+`--color-status-offline` it *is* mapped by the theme axis: `#895806` light,
+`#f9b84e` dark — the design sheet's own v1 `Warning #F8B84E` is the dark value
+and the light one is that hue darkened to a working lightness. Both were
+measured **above 4.5 : 1 on glass** (light 4.64 over `--mesh-6`, 5.17 over
+`--mesh-8`; dark 5.63 over `--night-6`, 4.86 over `--night-8`), which a
+decorative glyph does not need — it is deliberate, so the role can later move
+onto a title or a border with no re-measurement. See
+[`../tokens.md`](../tokens.md) → *In-house tokens*.
 
 ## Responsive behaviour
 
-None — proportional scaling; both the panel and the pill are far inside the
-no-scroll envelope.
+None — proportional scaling; the connection panel, the pill and the escalated
+banner are all far inside the no-scroll envelope. Sizes are `rem` and the root
+is viewport-proportional, so a fit at 1280 x 832 is a fit at 1024 x 768 —
+measured, not assumed.
 
 ## Interactions
 
@@ -107,4 +417,7 @@ on both meshes as a non-text element, 3:1 not required for decorative use).
 
 ## Open questions
 
-- None for v1.
+- None for v1. *(2026-08-27: whether the full-screen `DISCONNECTED` panel above
+  should also point at the host after an hour is deliberately left open — D13
+  scoped the escalation to `STALE`, where the invisibility problem is, and that
+  panel already names the situation.)*

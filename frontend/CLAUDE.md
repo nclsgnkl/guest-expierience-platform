@@ -26,13 +26,26 @@ this file only adds what it does not already say.
   component consuming a raw value.
 - Property content arrives from the guest API: `core/guest/` owns all content
   wire I/O (`GuestDataService`), and only `core/guest/` and `core/api/` may
-  import `@gxp/api-client` models — components keep reading
+  import `@gxp/api-client` **content models** — components keep reading
   `PropertyContentService`. There is no static content fallback; a spec that
-  needs content builds a config double.
-- Routes for menu-shaped things are resolved with
-  `PropertyContentService.getSectionRoute(id)`. Action cards are not
-  menu-shaped any more: they navigate the server-resolved `route` the wire
-  delivers, because enablement/ceiling resolution lives on the server.
+  needs content builds a config double. *(Scoped 2026-08-28: the rule is about
+  content, not about every generated symbol. A handful of files outside those
+  two folders import generated enums and pairing status values — `OccupancyState`,
+  `PairingCompleted`, `PairingRequestCreated` — and that is fine, because the
+  thing being prevented is a component reading the wire's shape of the property
+  instead of the resolved domain model. If you find yourself importing a type
+  that carries property content, you are on the wrong side of this rule.)*
+- **Routes come from the wire, not from a lookup.** Every menu-shaped thing —
+  a sidebar entry, an overflow tile, an action card — navigates the
+  server-resolved `route` the payload delivers, because enablement and
+  ceiling resolution live on the server. For the reverse direction, from the
+  current URL back to the item that claims it, use
+  `layout/sidebar/menu-split.ts`'s `routeMatches(item, url)` /
+  `itemForRoute(items, url)`; `SidebarComponent` and
+  `SectionPlaceholderComponent` share them, so a route normalises identically
+  in both. There is no id→route lookup service —
+  `PropertyContentService.getSectionRoute(id)` was retired in 2026-08-27 once
+  nothing called it.
 - Every in-app route renders inside `ShellComponent`; a section without a real
   design yet gets `SectionPlaceholderComponent`, never a standalone stub page.
   The three kiosk **state** screens — `/pairing`, `/standby`, `/connection` —
@@ -57,6 +70,10 @@ this file only adds what it does not already say.
 - Sizes are `rem`; the root font size is viewport-proportional
   (`global.css`), so the whole UI scales without breakpoints. Do not add a
   media query to compensate for something being the wrong size.
+- **A string a manager or a guest supplies is width you do not control.** Text
+  that interpolates one — Home's headline is `{stay.displayName}` — sets
+  `overflow-wrap: anywhere`: a fixed column width does not break an unbroken
+  token, and the overflow is invisible in every seed-data render.
 
 ## Icons
 
@@ -94,8 +111,23 @@ double through DI — if a test has to import the data file to assert something,
 that is a design smell, not a test convenience.
 
 `tools/measure-states.mjs` is the review instrument for the three full-screen
-states and the staleness pill; it needs the dev backend and drives its state
-via the manager API (and restores it).
+states and for the staleness chrome — the discreet pill and its escalated
+banner, the latter driven by ageing the cached record's `storedAt` past the
+threshold; it needs the dev backend and drives its state via the manager API
+(and restores it).
+
+`ng test` builds the **development** configuration — `angular.json`'s `test`
+target sets no `buildTarget` and `@angular/build:unit-test` defaults to
+`::development`, so specs see `environment.development.ts`. A test that depends
+on a value the environment pair varies must express it as an offset from the
+imported constant, never as a wall-clock literal.
+
+**`src/test-setup.ts` runs before every spec** (`setupFiles` on the `test`
+target). It supplies `localStorage`/`sessionStorage`, because Node ≥ 26 defines
+those names on `globalThis` itself and Vitest then skips jsdom's — it installs
+only what is missing, so a future runtime that fixes this upstream silently
+wins. No other global state belongs in that file: a test double lives in the
+spec that needs it.
 
 **A service's collaborator is a DI double built from writable signals**
 (`{ provide: PreferencesService, useValue: { language } }`), not the real

@@ -13,7 +13,11 @@
   right: var(--space-7);
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  /* --space-2, down from --space-3 when the mark was a 0.5rem dot: the
+     status bar's own trigger sets exactly this gap between a --size-icon-xs
+     glyph and a --text-status label, and a 1.125rem glyph needs less air
+     beside the text than a small dot did. */
+  gap: var(--space-2);
   padding: var(--space-1) var(--space-3);
   background: var(--color-surface-glass);
   border: var(--border-glass);
@@ -22,11 +26,25 @@
   -webkit-backdrop-filter: var(--blur-glass);
 }
 
-.staleness-pill__dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--color-status-offline); /* decorative — the text carries the information */
+/* The connection screen's and the banner's own glyph, replacing the 0.5rem
+   dot (owner decision 2026-08-29). Sized --size-icon-xs (1.125rem) and NOT
+   the banner's --size-icon-md: xs is the token for a glyph standing beside a
+   --text-status label (tokens.css, the status bar's globe/sun/moon). At
+   1.125rem the glyph sits just under the label's own 1.1375rem line box, so
+   the pill's height stays label-driven and does not move at all: measured
+   28.19px at 1280x832 and 22.94px at 1024x768, identical to the dot's to
+   0.00px. Neither height fits the 20px/16px figure in connection.md, and
+   nothing here needs to: that clearance is the status bar's drop to Home's
+   *heading ink*, measured in the heading column, and the pill is 562px
+   (1280) / 447px (1024) clear of that column horizontally. It hangs over the
+   widget column, which is empty by design in both directions, so it collides
+   with nothing (connection.md -> "The staleness pill"). The colour rides on
+   the `ng-icon` host, which is a template element — the injected `<svg>` is
+   not (frontend/CLAUDE.md -> Icons) and inherits `currentColor`. Decorative:
+   the text carries the information. */
+.staleness-pill__glyph {
+  flex: none;
+  color: var(--color-status-offline);
 }
 
 .staleness-pill__label {

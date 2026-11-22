@@ -1,5 +1,5 @@
-import type { GuestHomeScreen, GuestSession } from '@gxp/api-client';
-import { describe, expect, it } from 'vitest';
+import type { GuestContent, GuestHome } from '@gxp/api-client';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CONTENT_FALLBACK_ICON } from '../icons/registered-icons';
 import {
@@ -12,8 +12,11 @@ import {
  * S-map — the wire boundary (REQ-510/512, 02-design.md §6). Fixtures mirror
  * the dev seed (`DevDataSeeder`), so what the spec accepts is what a dev
  * backend actually serves.
+ *
+ * Since guest-payload-consolidation there is **one** payload: `home` is
+ * nested inside it and is absent exactly when the room is vacant.
  */
-function sessionFixture(overrides: Partial<GuestSession> = {}): GuestSession {
+function contentFixture(overrides: Partial<GuestContent> = {}): GuestContent {
   return {
     property: {
       name: 'Meine Unterkunft',
@@ -52,11 +55,21 @@ function sessionFixture(overrides: Partial<GuestSession> = {}): GuestSession {
       headline: { de: 'Meine Unterkunft', en: 'Meine Unterkunft' },
       message: { de: 'Herzlich willkommen', en: 'Welcome' },
     },
+    home: homeFixture(),
     ...overrides,
   };
 }
 
-function homeFixture(overrides: Partial<GuestHomeScreen> = {}): GuestHomeScreen {
+/** The vacant answer: the property half intact, the stay-derived half absent. */
+function vacantFixture(): GuestContent {
+  const content = contentFixture();
+  delete content.guestDisplayName;
+  delete content.preference;
+  delete content.home;
+  return { ...content, occupancy: 'VACANT' };
+}
+
+function homeFixture(overrides: Partial<GuestHome> = {}): GuestHome {
   return {
     headline: { de: 'Willkommen im Airbnb von Anna & Tom!', en: "Welcome to Anna & Tom's Airbnb!" },
     subtitle: { de: 'Schön, dass ihr da seid', en: 'Great to have you here' },
@@ -75,8 +88,8 @@ function homeFixture(overrides: Partial<GuestHomeScreen> = {}): GuestHomeScreen 
 }
 
 describe('mapGuestContent', () => {
-  it('maps the dev-seed-shaped payloads to the internal config (happy path)', () => {
-    const config = mapGuestContent(sessionFixture(), homeFixture());
+  it('maps the dev-seed-shaped payload to the internal config (happy path)', () => {
+    const config = mapGuestContent(contentFixture());
 
     expect(config.propertyName).toBe('Meine Unterkunft');
     expect(config.logoAssetId).toBe(7);
@@ -91,99 +104,259 @@ describe('mapGuestContent', () => {
     expect(config.standbyMessage['de']).toBe('Herzlich willkommen');
     expect(config.home?.headline['de']).toBe('Willkommen im Airbnb von Anna & Tom!');
     expect(config.home?.cards[0]?.route).toBe('/info');
-    expect(config.home?.cards[0]?.targetSectionId).toBe('info');
   });
 
-  it('orders menu items by sortIndex regardless of wire order', () => {
-    const session = sessionFixture();
-    session.menu.items = [...session.menu.items].reverse();
+  /**
+   * REQ-962's observable half, and it REPLACES an assertion that pinned the
+   * opposite. This case used to be "orders menu items by sortIndex regardless
+   * of wire order" — the client's own re-sort, deleted in module-content T-13.
+   * `api/openapi.yaml` → `GuestMenu.items` says "Resolved-enabled items only,
+   * ordered by resolved sort index", so the delivered order is authoritative
+   * and a second client-side opinion about it could only ever disagree with
+   * the server.
+   */
+  it('renders menu items in delivered order — the client never re-sorts (REQ-962)', () => {
+    const content = contentFixture();
+    content.menu.items = [...content.menu.items].reverse();
 
-    const config = mapGuestContent(session, null);
+    const config = mapGuestContent(content);
+    expect(config.menuItems.map((i) => i.id)).toEqual(['info', 'home']);
+  });
+
+  it('a vacant payload maps to home: null, property half intact', () => {
+    const config = mapGuestContent(vacantFixture());
+
+    expect(config.home).toBeNull();
+    expect(config.propertyName).toBe('Meine Unterkunft');
     expect(config.menuItems.map((i) => i.id)).toEqual(['home', 'info']);
   });
 
-  it('a null home maps to home: null (vacant path)', () => {
-    const config = mapGuestContent(sessionFixture(), null);
-    expect(config.home).toBeNull();
+  it('rejects an OCCUPIED payload with no home — a server bug, not half a screen', () => {
+    const content = contentFixture();
+    delete content.home;
+
+    expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
+    expect(() => mapGuestContent(content)).toThrow(/OCCUPIED but "home" is absent/);
   });
 
   it('rejects an invalid brand hex — branding null, everything else survives (REQ-512)', () => {
-    const session = sessionFixture();
-    session.property.brand.primary = '#zz0000';
+    const content = contentFixture();
+    content.property.brand!.primary = '#zz0000';
 
-    const config = mapGuestContent(session, homeFixture());
+    const config = mapGuestContent(content);
     expect(config.branding).toBeNull();
     expect(config.propertyName).toBe('Meine Unterkunft');
   });
 
   it('renders an unknown icon name as the neutral fallback glyph, never a crash', () => {
-    const session = sessionFixture();
-    session.menu.items[0]!.icon = 'phosphorDoesNotExist';
-    const home = homeFixture();
-    home.actionCards[0]!.icon = '<script>alert(1)</script>';
+    const content = contentFixture();
+    content.menu.items[0]!.icon = 'phosphorDoesNotExist';
+    content.home!.actionCards[0]!.icon = '<script>alert(1)</script>';
 
-    const config = mapGuestContent(session, home);
+    const config = mapGuestContent(content);
     expect(config.menuItems[0]?.icon).toBe(CONTENT_FALLBACK_ICON);
     expect(config.home?.cards[0]?.icon).toBe(CONTENT_FALLBACK_ICON);
   });
 
   it('accepts 0 menu items and 0 cards (the contract minima)', () => {
-    const session = sessionFixture();
-    session.menu.items = [];
-    const home = homeFixture({ actionCards: [] });
+    const content = contentFixture({ home: homeFixture({ actionCards: [] }) });
+    content.menu.items = [];
 
-    const config = mapGuestContent(session, home);
+    const config = mapGuestContent(content);
     expect(config.menuItems).toEqual([]);
     expect(config.home?.cards).toEqual([]);
   });
 
-  it('rejects more than 5 items / 4 cards as a contract violation', () => {
-    const session = sessionFixture();
-    session.menu.items = Array.from({ length: 6 }, (_, i) => ({
+  it('rejects more than 4 cards as a contract violation', () => {
+    const home = homeFixture();
+    home.actionCards = Array.from({ length: 5 }, () => home.actionCards[0]!);
+    expect(() => mapGuestContent(contentFixture({ home }))).toThrow(GuestContentMappingError);
+  });
+
+  it('maps a catalogue larger than the sidebar without dropping or rejecting any item', () => {
+    // REQ-901: the mapper used to reject a 6th item, citing a contract bound
+    // that did not exist. The bound it enforces now is the one the contract
+    // really declares (`GuestMenu.items.maxItems: 50`), and how many fit down
+    // the side of the screen is the sidebar's business — a 13-row catalogue is
+    // what %dev serves.
+    const content = contentFixture();
+    content.menu.items = Array.from({ length: 12 }, (_, i) => ({
       key: `k${i}`,
-      label: { de: 'X' },
+      label: { de: `Eintrag ${i}`, en: `Entry ${i}` },
       icon: 'phosphorInfo',
       route: `/k${i}`,
       sortIndex: i,
     }));
-    expect(() => mapGuestContent(session, null)).toThrow(GuestContentMappingError);
 
-    const home = homeFixture();
-    home.actionCards = Array.from({ length: 5 }, () => home.actionCards[0]!);
-    expect(() => mapGuestContent(sessionFixture(), home)).toThrow(GuestContentMappingError);
+    const config = mapGuestContent(content);
+
+    expect(config.menuItems).toHaveLength(12);
+    expect(config.menuItems.map((i) => i.id)).toEqual(
+      Array.from({ length: 12 }, (_, i) => `k${i}`),
+    );
+  });
+
+  it('maps exactly maxItems menu items and rejects one more', () => {
+    // REQ-901's acceptance criterion: the rejection message names a bound that
+    // actually exists — `api/openapi.yaml` declares `GuestMenu.items.maxItems: 50`.
+    const itemsOfLength = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        key: `k${i}`,
+        label: { de: `Eintrag ${i}`, en: `Entry ${i}` },
+        icon: 'phosphorInfo',
+        route: `/k${i}`,
+        sortIndex: i,
+      }));
+
+    const atTheBound = contentFixture();
+    atTheBound.menu.items = itemsOfLength(50);
+    expect(mapGuestContent(atTheBound).menuItems).toHaveLength(50);
+
+    const overTheBound = contentFixture();
+    overTheBound.menu.items = itemsOfLength(51);
+    expect(() => mapGuestContent(overTheBound)).toThrow(
+      /menu\.items exceeds the contract's 0–50/,
+    );
   });
 
   it('rejects a localized map missing the default-language entry', () => {
-    const session = sessionFixture();
-    session.standby.message = { en: 'Welcome' }; // defaultLanguage is 'de'
-    expect(() => mapGuestContent(session, null)).toThrow(GuestContentMappingError);
+    const content = contentFixture();
+    content.standby.message = { en: 'Welcome' }; // defaultLanguage is 'de'
+    expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
   });
 
   it('rejects an offered language with no registered catalogue', () => {
-    const session = sessionFixture();
-    session.settings.languages = [
+    const content = contentFixture();
+    content.settings.languages = [
       { code: 'fr' as never, shortLabel: 'FR', label: 'Français', locale: 'fr-FR' },
     ];
-    session.settings.defaultLanguage = 'fr' as never;
-    expect(() => mapGuestContent(session, null)).toThrow(GuestContentMappingError);
+    content.settings.defaultLanguage = 'fr' as never;
+    expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
   });
 
   it('rejects a default outside the offered set', () => {
-    const session = sessionFixture();
-    session.settings.defaultAppearance = 'system';
-    expect(() => mapGuestContent(session, null)).toThrow(GuestContentMappingError);
+    const content = contentFixture();
+    content.settings.defaultAppearance = 'system';
+    expect(() => mapGuestContent(content)).toThrow(GuestContentMappingError);
+  });
+});
+
+/**
+ * The module branch (module-content REQ-963/972). Two properties are load
+ * bearing and are asserted separately because they fail differently:
+ *
+ *   - the **bounds** are the kiosk's own. The contract declares
+ *     `rows.maxItems: 10` and `ModuleText.maxLength: 240`, but neither binds a
+ *     served payload — the response DTO carries no `@Valid` and V12's columns
+ *     are unbounded `text` (see `module-registry.ts`). This is where they are
+ *     enforced, so this is where they are tested.
+ *   - the **isolation** is REQ-972: one malformed module is dropped, every
+ *     other item and the whole envelope survive, and `mapGuestContent` does not
+ *     throw. Only a bad envelope is fatal.
+ */
+describe('mapGuestContent — modules', () => {
+  function withModule(module: unknown): GuestContent {
+    const content = contentFixture();
+    (content.menu.items[1] as { module?: unknown }).module = module;
+    return content;
+  }
+
+  function infoModule(rowCount: number, valueLength: number): unknown {
+    return {
+      type: 'info',
+      rows: Array.from({ length: rowCount }, (_, index) => ({
+        label: { de: `Label ${index}`, en: `Label ${index}` },
+        value: { de: 'x'.repeat(valueLength), en: 'x'.repeat(valueLength) },
+      })),
+    };
+  }
+
+  it('maps 10 rows with a 240-character value — both bounds exactly met', () => {
+    const config = mapGuestContent(withModule(infoModule(10, 240)));
+
+    const module = config.menuItems[1]?.module;
+    expect(module?.type).toBe('info');
+    expect(module?.rows).toHaveLength(10);
+    expect(module?.rows[0]?.value['de']).toHaveLength(240);
+  });
+
+  it('drops the module at 11 rows (REQ-963)', () => {
+    expect(mapGuestContent(withModule(infoModule(11, 10))).menuItems[1]?.module).toBeNull();
+  });
+
+  it('drops the module at a 241-character value (REQ-963)', () => {
+    expect(mapGuestContent(withModule(infoModule(1, 241))).menuItems[1]?.module).toBeNull();
+  });
+
+  it('drops a module with no entry for the default language', () => {
+    const module = {
+      type: 'info',
+      rows: [{ label: { en: 'Check-out' }, value: { en: 'By 11:00' } }],
+    };
+    expect(mapGuestContent(withModule(module)).menuItems[1]?.module).toBeNull();
+  });
+
+  it('a null module is the absent case, not a crash (F-3 — the wire sends null)', () => {
+    const config = mapGuestContent(withModule(null));
+
+    expect(config.menuItems[1]?.module).toBeNull();
+    expect(config.menuItems).toHaveLength(2);
+  });
+
+  it('renders an unknown module type as no module, never a throw (REQ-973)', () => {
+    const config = mapGuestContent(withModule({ type: 'wlan', ssid: 'Haus' }));
+
+    expect(config.menuItems[1]?.module).toBeNull();
+  });
+
+  it('one malformed module leaves every other item and the envelope intact (REQ-972)', () => {
+    const content = withModule({ type: 'info', rows: 'not-an-array' });
+    (content.menu.items[0] as { module?: unknown }).module = infoModule(1, 10);
+
+    const config = mapGuestContent(content);
+
+    expect(config.menuItems.map((item) => item.id)).toEqual(['home', 'info']);
+    expect(config.menuItems[0]?.module?.type).toBe('info');
+    expect(config.menuItems[1]?.module).toBeNull();
+    expect(config.home).not.toBeNull();
+    expect(config.settings.id).toBe('einstellungen');
+  });
+
+  /**
+   * Constitution principle 3. A dropped module could carry the WiFi password,
+   * and `info.md` names that row as exactly where somebody will be tempted to
+   * add a diagnostic. A console warning is not exempt.
+   */
+  it('logs nothing on any drop path — not even the fact of a drop', () => {
+    const spies = (['log', 'info', 'warn', 'error', 'debug', 'trace'] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation(() => undefined),
+    );
+    try {
+      mapGuestContent(withModule(infoModule(11, 10)));
+      mapGuestContent(withModule({ type: 'wlan', ssid: 'Haus' }));
+      mapGuestContent(withModule({ type: 'info', rows: 'not-an-array' }));
+      mapGuestContent(withModule(infoModule(1, 241)));
+
+      for (const spy of spies) {
+        expect(spy).not.toHaveBeenCalled();
+      }
+    } finally {
+      for (const spy of spies) {
+        spy.mockRestore();
+      }
+    }
   });
 });
 
 describe('mapStoredPreferences', () => {
   it('hands the raw stay override to hydration', () => {
-    expect(mapStoredPreferences(sessionFixture())).toEqual({ language: 'en' });
+    expect(mapStoredPreferences(contentFixture())).toEqual({ language: 'en' });
   });
 
   it('absent preference → null; junk values are dropped', () => {
-    expect(mapStoredPreferences(sessionFixture({ preference: undefined }))).toBeNull();
+    expect(mapStoredPreferences(contentFixture({ preference: undefined }))).toBeNull();
     expect(
-      mapStoredPreferences(sessionFixture({ preference: { language: '', appearance: 'neon' } })),
+      mapStoredPreferences(contentFixture({ preference: { language: '', appearance: 'neon' } })),
     ).toEqual({});
   });
 });

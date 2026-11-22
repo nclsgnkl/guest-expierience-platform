@@ -13,10 +13,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import de.gxp.testsupport.DeviceFixtures;
+import de.gxp.infrastructure.testsupport.DeviceFixtures;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-21 (REQ-411, REQ-425): the two-devices/two-rooms matrix. Each device
@@ -38,10 +39,7 @@ class RoomScopingTest {
 
     @BeforeEach
     void seedTwoRoomsWithStaysAndDevices() {
-        adminToken = given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        adminToken = ManagerFixtures.login();
         roomA = createRoom("SCOPE-A", "Zimmer A");
         roomB = createRoom("SCOPE-B", "Zimmer B");
         createStay(roomA, "Gast Alpha", "de");
@@ -97,14 +95,14 @@ class RoomScopingTest {
     @Test
     void eachDeviceSeesExactlyItsOwnRoom() {
         given().header("Authorization", "Bearer " + deviceA)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("room.code", equalTo("SCOPE-A"))
                 .body("guestDisplayName", equalTo("Gast Alpha"))
                 .body("preference.language", equalTo("de"))
                 .body("menu.items.key", hasItem("smart-home")); // room A inherits — enabled
         given().header("Authorization", "Bearer " + deviceB)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("room.code", equalTo("SCOPE-B"))
                 .body("guestDisplayName", equalTo("Gast Beta"))
@@ -118,7 +116,8 @@ class RoomScopingTest {
         given().header("Authorization", "Bearer " + adminToken)
                 .when().post("/api/manager/devices/" + deviceId + "/revoke")
                 .then().statusCode(204);
-        for (String path : List.of("/api/guest/session", "/api/guest/screens/home", "/api/system/info")) {
+        // one path per guest GET the contract still has, plus system/info
+        for (String path : List.of("/api/guest/content", "/api/guest/assets/1", "/api/system/info")) {
             given().header("Authorization", "Bearer " + deviceA)
                     .when().get(path)
                     .then().statusCode(401);

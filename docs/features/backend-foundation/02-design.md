@@ -94,6 +94,52 @@ package copies. Strict spec §4 shape:
 | `InstanceInfo` | Entity — no persistence methods | package-private |
 | `InstanceInfoMapper` | Entity → `SystemInfoDto`, hand-written | package-private |
 
+**Amended 2026-08-25 (owner decision D1, constitution v1.6.0).** The table
+above is the ORIGINAL flat shape and is kept as the record of what was built
+on 2026-08-19. `de.gxp.system` was the first package migrated to the
+`boundary` / `control` / `entity` sub-package layout — it was chosen to go
+first precisely because it is the reference package, it is five files, and
+nothing else in the codebase imports it, so the scheme could be proven at
+runtime before the nine harder packages follow. The shape now is:
+
+| Type | Sub-package | Role | Visibility |
+|---|---|---|---|
+| `SystemResource` | `boundary` | unchanged — the JAX-RS adapter, and the only thing in `boundary` | public |
+| `SystemControl` | `control` | unchanged, except that security annotations moved to the Boundary (D2) | **public** — the only type another feature may reference |
+| `InstanceInfoRepository` | `control` | unchanged | **package-private** — it lives in `.control` rather than beside the Entity for exactly this reason |
+| `InstanceInfo` | `entity` | unchanged | **public** type, package-private FIELDS (see below) |
+| `InstanceInfoMapper` | `entity` | unchanged | **public** |
+
+Two notes that will matter when the remaining packages migrate:
+
+- Entity and Mapper are `public` only because Java has no sub-package
+  visibility. Nothing about the boundary being enforced changed in intent —
+  only who enforces it. The compiler no longer can; `FeatureInternalsImportTest`
+  and `EntityExposureTest` (`de.gxp.architecture`) do, and the constitution
+  makes them part of the definition of done. **A third guard,
+  `ControlPackageVisibilityTest`, was added 2026-08-25** before the
+  collaborator-heavy packages migrated: only a `*Control` may be public inside
+  a `.control` package, so `InstanceInfoRepository` — and the two dozen
+  repositories, hashers, SPI adapters and helpers that followed it into
+  `.control` — cannot be quietly widened. **Widened to `.boundary` later the
+  same day**, after the migration review walked a public
+  `StayView extends Stay` in `de.gxp.stay.boundary` past all three guards:
+  the source scan now covers the `.boundary.` prefix with no exception, the
+  visibility guard admits only a `*Resource` there, and `EntityExposureTest`
+  now also reads the supertypes of every public type, so an entity that is
+  inherited rather than declared is caught too. See `01-prd.md` → REQ-210.
+- `InstanceInfo`'s **fields stayed package-private**. The accepted cost of D1
+  is ~97 public entity fields across the whole migration, because Controls
+  elsewhere mutate entity state directly across the new sub-package line
+  (**actual figure once all ten packages had migrated on 2026-08-25: 58 of the
+  17 entities' 97 fields — 39 stayed package-private**, because the per-field
+  rule below was applied throughout rather than widening whole entities; the
+  ~97 estimate was an upper bound from static analysis, not a target) — but
+  `SystemControl` does not touch a single `InstanceInfo` field (only the
+  Mapper does, and the Mapper lives in `.entity` beside it). Widening those
+  three fields would have been widening for nothing. Widen per field, where a
+  Control actually needs it.
+
 Behavior:
 
 - `info()` — loads the single `instance_info` row, maps to the generated DTO,
@@ -128,6 +174,21 @@ not a new pattern requiring approval.
   constitution ("authorization hangs off `@RolesAllowed` on Control methods"),
   never on the Boundary. `SystemControl`'s three methods are `@PermitAll`
   (they are the box-diagnosis endpoints; nothing sensitive crosses them).
+  - **Amended 2026-08-24 (owner decision D2, constitution v1.6.0 — this
+    convention is reversed):** the annotation carrier is the **Boundary**. The
+    constitution sentence quoted above was rewritten with it; Controls now carry
+    none, and `quarkus.security.jaxrs.deny-unannotated-endpoints=true` (global,
+    build-time) makes an unannotated *endpoint* fail closed — which the
+    class-scoped `deny-unannotated-members` cannot do once a Control has no
+    annotations at all. `SystemResource` (not `SystemControl`) now carries
+    `@PermitAll` on `/health` and `/ready`, `@RolesAllowed({"admin","device"})`
+    on `/info` (REQ-432). This also **supersedes the "honest residual gap"
+    bullet below**: the Control with zero security annotations is no longer
+    hypothetical, it is every Control, so `deny-unannotated-members` is inert
+    and the every-method Control convention that used to close the gap no
+    longer exists — `quarkus.security.jaxrs.deny-unannotated-endpoints=true`
+    is what closes it now, globally and at the endpoint, and the review-time
+    grep is replaced by `BoundaryAnnotationAuditTest` over the Boundaries.
 - **Honest residual gap, recorded:** `deny-unannotated-members` covers classes
   with ≥1 annotation; a hypothetical Control with *zero* security annotations
   would not be auto-denied. The every-method convention above closes it and is
@@ -314,6 +375,12 @@ is the working summary, not a replacement.
 
 - Package **by feature** under `de.gxp.<feature>`: Boundary (`*Resource`),
   Control (`*Control`), Entities (+ package-private `*Repository`, `*Mapper`).
+  **Amended 2026-08-25 (D1):** each feature package is split into the
+  sub-packages `boundary` (the `*Resource` adapters, nothing else), `control`
+  (the public `*Control` plus every package-private non-JPA collaborator,
+  `*Repository` included) and `entity` (the `@Entity` types and their
+  `*Mapper`). `de.gxp.api`, `de.gxp.web`, `de.gxp.devseed` and
+  `de.gxp.testsupport` are not feature packages and are excluded by name.
 - **A Boundary method is one delegating line** — take the generated DTO, call
   one Control method, return the result. No `if`, no `try`, no loop, no
   mapping, no second call — not even for plain CRUD. Anything more belongs in
@@ -323,7 +390,17 @@ is the working summary, not a replacement.
 - The **Control is the package's only public type** (the Boundary is just its
   HTTP adapter). Cross-feature access injects the other feature's Control;
   Entity, Repository and Mapper stay package-private, and Entities never
-  leave their package.
+  leave their package. **Amended 2026-08-25 (D1):** the Repository still stays
+  package-private, inside `.control`; Entity and Mapper become `public`
+  because Java has no sub-package visibility. The rule itself is unchanged —
+  the **Control is the only type another feature may reference**, and
+  **entities never leave their feature** — but it is now enforced by
+  `FeatureInternalsImportTest` (no file outside `de.gxp.<feature>` names a
+  `.entity` or `.control` type other than that feature's `*Control`; wildcard
+  imports forbidden) and `EntityExposureTest` (no public signature outside a
+  `.entity` package mentions an entity type, generics and arrays included),
+  not by the compiler. ArchUnit was rejected for this: a new dependency on an
+  unpatchable box (principle 4).
 - Controls accept and return **generated API DTOs** and call the hand-written
   Mapper themselves. No mapping framework, no Lombok.
 - Data access uses Panache **repositories**; entities carry no persistence
@@ -345,6 +422,9 @@ is the working summary, not a replacement.
   and **every public Control method carries exactly one of** `@PermitAll` /
   `@RolesAllowed(...)` — on the Control, never the Boundary. Roles: `admin`,
   `device`. A test asserts unannotated methods are denied; keep it green.
+  **Amended 2026-08-24 (D2):** read `backend/CLAUDE.md` → "Security & logging"
+  for the current rule — both flags are on, and the exactly-one requirement
+  applies to public **Boundary** methods. Roles unchanged.
 - **Logging is a security surface** (constitution principle 3, verbatim for
   the backend): no SQL statement or bind-parameter logging, no access/request-
   body logging, no guest-sensitive value (door/key-box/alarm codes, WiFi

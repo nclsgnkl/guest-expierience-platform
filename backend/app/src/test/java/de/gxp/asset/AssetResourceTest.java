@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.Response;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * Asset pipeline over the real contract paths (REQ-310, REQ-316, REQ-324,
@@ -37,10 +38,7 @@ import io.restassured.response.Response;
 class AssetResourceTest {
 
     private static String token() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private static byte[] encode(BufferedImage image, String format) {

@@ -475,3 +475,55 @@ in-sandbox.
    new packages.
 3. Nothing committed — the user commits contract + backend +
    `packages/api-client/` together.
+
+## Addendum 2026-08-24 — `backend-bce-refactor` block A
+
+Appended to a closed record. `LoginRateLimiter` (the 5-failure / 30 s global
+lockout) and `PairingRateLimiter` (5 creates / 60 s global) have been replaced
+by `LoginConcurrencyGate` / `PairingConcurrencyGate` — both pace instead of
+denying, per the owner's amendment to REQ-326. `gxp.auth.lockout-seconds` is
+gone; `AdminPasswordSeeder` now enforces the same ≥ 8 minimum as a password
+change and refuses the first start below it. Nothing else in this handoff
+changes.
+
+## Addendum 2026-08-24 (second, same day) — throttling removed entirely
+
+Appended to a closed record; the addendum above is superseded in its
+conclusion, not in its history. Owner decision: **no throttling anywhere in
+the backend for now.** `LoginConcurrencyGate` and `PairingConcurrencyGate`
+(and, before them, `LoginRateLimiter` / `PairingRateLimiter`) are all gone,
+together with `ApiErrors.tooManyRequests`, the `gxp.auth.gate-*` /
+`gxp.pairing.*` config keys and the login `429` in the contract. Rationale:
+the production hardware is not chosen. **Kept:** the `AdminPasswordSeeder`
+≥ 8 policy and its tests — a password policy is not a rate limit, and with no
+throttle it is the only thing carrying brute-force resistance. Revisit once
+the deployment target is known.
+
+
+## Addendum 2026-08-25 — the sub-package split (`backend-bce-refactor`, block C)
+
+Appended, not rewritten. Owner decision **D1** (constitution **v1.6.0**) split
+every feature package into `de.gxp.<f>.boundary` / `.control` / `.entity`.
+Two verified findings above are superseded in their MECHANISM, not in their
+substance:
+
+- *"Every Entity/Repository/Mapper is package-private (verified for all seven
+  packages)"* — the **Repositories are all still package-private**, now inside
+  each feature's `.control` package, which is the whole reason they live there
+  rather than beside the entity. **Entities and Mappers are now `public`**,
+  because Java has no sub-package visibility and the Control has to name them
+  across the split. Entity FIELDS were widened one at a time and only where a
+  Control genuinely touches one — most stayed package-private (`Room` and
+  `Property` gave up one field each; `Stay` six of eight; `Device`,
+  `PairingRequest` and `AdminCredential` all of theirs, because their Controls
+  drive the whole row and they have no or nearly no mapper).
+- *"BCE strictness preserved: … no new cross-package imports"* — still true,
+  and no longer only by review: `FeatureInternalsImportTest` fails the build
+  on any reference from outside a feature to its `.entity`/`.control` types
+  other than the feature's own `*Control`.
+
+The compiler's role is taken by three dependency-free architecture tests in
+`de.gxp.architecture` (`FeatureInternalsImportTest`, `EntityExposureTest`,
+`ControlPackageVisibilityTest`), all re-proven by injected violation at full
+scope on 2026-08-25. ArchUnit was rejected — a new dependency on an
+unpatchable box, principle 4.

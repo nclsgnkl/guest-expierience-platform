@@ -21,7 +21,7 @@
 | REQ-406 | Token minted at claim; pinned params | T-05, T-20 | ✅ covered |
 | REQ-407 | Contract table (manager-devices); DeviceControl | T-05, T-06, T-20 | ✅ covered |
 | REQ-408 | Data model (room deletion); cross-feature notes | T-07, T-21 | ✅ covered |
-| REQ-409 | Pinned params; no-scheduler decision | T-04, T-05, T-20 | ✅ covered |
+| REQ-409 | Pinned params; no-scheduler decision (**amended 2026-08-24, owner decision:** the rate-limit leg of this requirement is withdrawn — create is unthrottled; entropy + TTL carry the guessing argument, and the opportunistic cleanup + TTL are what bound live rows) | T-04, T-05, T-20 | ✅ covered |
 | REQ-410 | Device authentication (auth extension) | T-08, T-21 | ✅ covered |
 | REQ-411 | Guest read model step 1; contract note | T-01, T-10, T-21 | ✅ covered |
 | REQ-412 | Device authentication (revocation immediacy) | T-08, T-21 | ✅ covered |

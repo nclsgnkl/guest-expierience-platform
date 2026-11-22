@@ -20,20 +20,21 @@ import { GuestBootstrapService } from '../../core/guest/guest-bootstrap.service'
  * backend's two-credential design).
  *
  * Pins (verbatim from §3): poll cadence 3 s; create-retry backoff 5 s → 30 s
- * doubling; `429` honors `Retry-After`; expiry/`404` renews unattended (the
- * old code stays visible, dimmed — the no-jump rule is the component's);
- * network loss during WAITING resumes the same code/secret until `expiresAt`,
- * then renews. A 401 cannot occur (pairing ops are unauthenticated).
+ * doubling; expiry/`404` renews unattended (the old code stays visible,
+ * dimmed — the no-jump rule is the component's); network loss during WAITING
+ * resumes the same code/secret until `expiresAt`, then renews. A 401 cannot
+ * occur (pairing ops are unauthenticated). Create has no throttled answer to
+ * honour any more: the contract's `429` was removed on 2026-08-24 with the
+ * backend's rate limiter, so **every** create failure is the offline path.
  *
  * On claim: the token is stored, the guest bootstrap runs and the router
  * leaves — **no reload** (REQ-506); the guards route to `/` or `/standby`
  * per occupancy.
  */
-export type PairingStatus = 'waiting' | 'renewing' | 'cooldown' | 'offline';
+export type PairingStatus = 'waiting' | 'renewing' | 'offline';
 
 export const POLL_INTERVAL_MS = 3_000;
 export const CREATE_BACKOFF_MS = [5_000, 10_000, 20_000, 30_000] as const;
-export const COOLDOWN_FALLBACK_MS = 30_000;
 
 @Injectable()
 export class PairingService {
@@ -90,12 +91,7 @@ export class PairingService {
       this.backoffStep = 0;
       this._status.set('waiting');
       this.schedule(() => void this.poll(), POLL_INTERVAL_MS);
-    } catch (error) {
-      if (error instanceof HttpErrorResponse && error.status === 429) {
-        this._status.set('cooldown');
-        this.schedule(() => void this.create(), retryAfterMs(error));
-        return;
-      }
+    } catch {
       this._status.set('offline');
       this.schedule(() => void this.create(), this.nextBackoff());
     }
@@ -181,9 +177,8 @@ export class PairingService {
  * `expiresAt` defensively"). A kiosk has no reliable clock — it may boot
  * years off, and comparing the server's absolute instant against
  * `Date.now()` made a device whose clock runs ahead consider every fresh code
- * already expired: create → 3 s → renew → create …, until the global pairing
- * rate limit answered 429 and the screen sat in `cooldown` with no usable
- * code, forever.
+ * already expired: create → 3 s → renew → create …, forever, and the screen
+ * never settled on a usable code.
  *
  * So the code's *lifetime* is measured entirely on the server's clock
  * (`expiresAt` − the response's `Date` header) and only then counted down
@@ -200,11 +195,4 @@ function localDeadline(dateHeader: string | null, expiresAt: string): number | n
   }
   const lifetime = expires - serverNow;
   return lifetime > 0 ? Date.now() + lifetime : null;
-}
-
-/** `Retry-After` in seconds per RFC 9110; the pinned fallback when absent. */
-function retryAfterMs(error: HttpErrorResponse): number {
-  const header = error.headers?.get('Retry-After');
-  const seconds = header === null || header === undefined ? NaN : Number(header);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1_000 : COOLDOWN_FALLBACK_MS;
 }

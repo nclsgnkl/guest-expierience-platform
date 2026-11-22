@@ -472,7 +472,9 @@ Two changes, in `shell.component.css` and `sidebar.component.css`:
 .sidebar__menu-items { width: 100%; }
 
 .sidebar-item {
-  width: 100%;          /* = --size-sidebar − 2 × --space-3 = 84px, derived */
+  width: 100%;          /* = --size-sidebar − 2 × --space-3; 84px when this
+                           was written, 88px since --size-sidebar went to
+                           6.5rem on 2026-08-29 — derived either way */
   aspect-ratio: 1;      /* square, replaces the fixed --size-sidebar-item */
   height: auto;
 }
@@ -491,7 +493,10 @@ Why the item stops using `--size-sidebar-item`: the reference render's item is
 the sidebar's inner width. Deriving it (`width: 100%` + `aspect-ratio: 1`)
 keeps one source of truth rather than adding a second literal, and it is what
 makes the "Smart Home" label fit (D5). Recorded in `docs/design/tokens.md` →
-Sizing, with the measurement.
+Sizing, with the measurement. **The derivation is exactly why the 2026-08-29
+widening cost one token edit and no arithmetic:** `--size-sidebar` 6.25rem →
+6.5rem moved the item to 88px and the popover's tile with it, without a second
+number changing anywhere.
 
 ### Home content vertical composition (REQ-014, REQ-010)
 
@@ -522,7 +527,11 @@ a component that must be *removed* to not break the layout is a worse seam than
 one that declares it renders nothing.
 
 Result, measured against the reference: heading top at 24 + 64 = 88, card row
-bottom at 808 − 64 = 744, card row left edge at 172.
+bottom at 808 − 64 = 744, card row left edge at 172. *(The left edge is **176**
+in the built app since `--size-sidebar` went to 6.5rem on 2026-08-29 — the
+derivation "sidebar + one `--space-8`" is unchanged, only the sidebar is. The
+vertical pair is untouched. See REQ-014 in `01-prd.md` and the deviation in
+`docs/design/tokens.md` → Sizing.)*
 
 ### Text must not wrap (REQ-007, REQ-009)
 
@@ -534,6 +543,211 @@ the boxes are the design's.
 property-configured label degrades predictably instead of silently reflowing
 the whole nav column. The reference's own longest label ("Einstellungen")
 measures ~84px, i.e. the design is already at the edge of that box.
+*(**Corrected 2026-08-29, review pass 2 finding #7 — two claims in that last
+sentence are wrong.** "Einstellungen" is not the longest label, and it does
+not measure ~84px. Measured in the shipped rail at 1280×832, injected into a
+live item in both weights: `Einstellungen` **77 / 77 px**, `Hausordnung`
+**78 inactive / 79 active** — so `Hausordnung` is the wider of the two and
+that viewport's tightest cell. At the 1024×768 floor the order reverses
+(`Einstellungen` 63 / **66**, `Hausordnung` 64 / 64), and the floor is the
+cell the owner's decision turned on. The ~84 was never re-derived from the
+reference render and nothing corroborates it. The paragraph's conclusion —
+that the design sits at the edge of its box — survives both corrections;
+only the numbers and the superlative were wrong.)*
+
+> **Superseded 2026-08-28 (owner decision) — `nowrap` is gone.** "Degrades
+> predictably" turned out to mean "runs out of the item and keeps going":
+> "Einstellungen" needs 79px against a 68px content box at 1280 and simply
+> painted over the item's edge. *(**77px**, corrected 2026-08-29 — the 79 was
+> re-measured and is 2px out, in both weights; see the refinement below. It
+> does not change this paragraph's conclusion, it was never close to 68.)*
+> The label now reserves **two lines for every
+> item** and is clamped with an ellipsis past that, which is what actually
+> removes this section's problem — the item's height no longer depends on its
+> text at all, so no label can move an icon. *(**The reservation is gone since
+> 2026-08-29** — the item's own `aspect-ratio` plus a two-line `max-height`
+> cap carry that property now; see below.)* See
+> `01-prd.md` → REQ-007 and the D5 note under Defects for the re-diagnosis,
+> and `sidebar.component.css` for the rule. The heading above ("Text must not
+> wrap") is now true of card titles only.
+
+> **Refined 2026-08-29 (owner decision), in three parts.** The two-line box
+> becomes the item's full width less a 1px inset, the rail gets 0.25rem wider,
+> and the reservation is dropped so the visible pair sits in the middle of its
+> item. Owner decision first, implementation consequence second.
+>
+> **(a) The box.** The reserved box was `width: 100%` of the item's *content*
+> box, i.e. 68px, so the "79px" figure above was being compared against a box
+> 16px narrower than the item that paints it — **and 79px is itself wrong**:
+> `Einstellungen` measures **77px** on one line at 1280 × 832, at
+> `--text-label-weight` *and* at `--text-label-active-weight` alike (Chromium
+> rounds both to the same advances at 12px). The 2026-08-28 note's 79 was 2px
+> out; 77 replaces it. At 1024 × 768 the same string measures 63px inactive
+> and 66px active. Giving the item's `--space-3` inline padding back to the
+> label puts it on one line everywhere it renders. Nothing else in the item
+> wants that padding: the glyph is centred and 26px wide *(24px between
+> 2026-08-28 and the glyph revert later on 2026-08-29 — see (d) below; the
+> label's box does not depend on the glyph either way)*.
+>
+> **(b) The rail is 0.25rem wider and the label stops 1px short of the pill on
+> each side.** `--size-sidebar` 6.25rem → **6.5rem**,
+> `--size-sidebar-label-inset` **0.0625rem**. The owner asked for **2px** of
+> inset; measured per reference cell at the old width, 2px is carried by three
+> of the four cells and fails the fourth — and so does 1px:
+>
+> | inset per side, at `--size-sidebar: 6.25rem` | 1280 inactive | 1280 active | 1024 inactive | 1024 active |
+> |---|---|---|---|---|
+> | 0px | fits, 3.5px clear | fits, 3.5px clear | fits, 2.11px clear | fits, **0.61px clear** |
+> | 1px | fits | fits | fits | **breaks to two lines** |
+> | 2px | fits | fits | fits | **breaks to two lines** |
+>
+> **2px was therefore rejected on measurement, not on taste.** The owner
+> weighed a `+0.5rem` rail (which would carry the full 2px), rejected it as
+> too expensive for the content area, and chose `+0.25rem` with 1px. After:
+> item **88 × 88** (70.41² at 1024), label box **86** (68.81), and
+> `Einstellungen` clears its label box by **4.5px** per side at 1280 in both
+> weights, 2.91px inactive and **1.41px active** at 1024 — against 0.61px
+> before. `.shell__content` gives up **4px** of width at 1280 (3.19px at
+> 1024): the heading block and card row start at x = 176 (was 172) and end at
+> 996 (was 992); the status bar and the staleness pill are right-anchored and
+> did not move; the status bar's clearance to the card row went 52 → **48px**
+> and its vertical clearance to Home's heading is unchanged at 20px; Home's
+> signed-off vertical baseline (heading y = 88, card row bottom 744) is
+> untouched. The overflow popover's tiles derive from the same expression and
+> grew with it: panel 470 × 200 → **490 × 208** at 1280, 376 × 160 →
+> **392 × 167** at 1024, tiles 84 → 88 and 67 → 70, still inside the viewport,
+> grid not scrolling.
+> Full run: 168 cells, **0 overflowing, 0 truncated, 0 clamped**, 200 ×
+> NO-SCROLL OK, plus every state cell of `tools/measure-states.mjs`.
+>
+> > **Where those 4px actually land — nowhere visible (measured 2026-08-29,
+> > after review; the two `--size-sidebar` values compared in one live
+> > render).** At 1280 × 832 `.home-content__screen` stays **820** and
+> > `--size-heading` stays **390**; the whole difference comes out of
+> > `.home-content__widgets`, **224 → 220**. At 1024 × 768: 655.97 → 655.97
+> > and 179.25 → **176.06**. That column is `flex: 1` and empty by design, so
+> > the price of `+0.25rem` was 4px of empty reserved space, and the rejected
+> > `+0.5rem` would have cost 8px of it. Recorded because "too expensive for
+> > the content area" was decided on the other reading — **not** as an
+> > argument to reopen a decision the owner took and that shipped.
+>
+> > **The third consumer of `--size-sidebar` — the escalated staleness
+> > banner.** `.sidebar` and `.sidebar-overflow__grid` are the two everybody
+> > lists; `staleness-banner.component.css` is the third, via
+> > `max-width: calc(100% - var(--size-sidebar) - var(--space-8) - 2 *
+> > var(--space-7))`. Measured 2026-08-29 with `tools/measure-states.mjs`
+> > against a live dev backend:
+> >
+> > **(1) First order, none.** The bound resolves to 1076 → **1072px** at
+> > 1280 and 860.8 → **857.59px** at 1024, against a bar that is at most
+> > **694px** wide (English, standby, 1280) / 553px at 1024. Not binding, so
+> > the bar's own box does not move — its measured boxes are `x459 y58 w540
+> > h60` / `x569 y72 w679 h74` (German, shell) and `x446 … w553` / `x554 …
+> > w694` (English, standby), unchanged.
+> >
+> > **(2) Second order, and this is the one worth writing down.** The bar is
+> > right-anchored and did *not* move; Home's headline column did. The gap the
+> > bar's left edge keeps to the headline's ink therefore shrank by the same
+> > 4px / 3.19px. In the worst cell the instrument can produce — the
+> > 37-character unbroken display name, five headline lines — the bar clears
+> > the ink by **5px at 1280 × 832** (bar x569, ink to x564) and **~6px at
+> > 1024 × 768** (bar x458.83, ink to x453); with the seeded name, 7px / ~10px.
+> > The instrument reported **no COLLISION in any banner cell**, so the
+> > clearance holds. But it is the same margin
+> > `../guest-payload-consolidation/06-review.md` already called *"four and
+> > five pixels of luck"*, now ~4px thinner, on a headline that is
+> > manager-authored (`{stay.displayName}`). Stated as a consequence for
+> > whoever next touches either number; nothing was changed here to buy it
+> > back.
+>
+> **(c) Variant "B2" — the pair is centred in the item, not the line in the
+> box.** `align-content: center` (2026-08-29 morning) centred the *line* in a
+> box whose second half was blank, so the visible icon+label pair still sat
+> **4.20px above the item's centre** at 1280 (3.37px at 1024): icon top 12.41
+> below the item's top against ink bottom 20.80 above its bottom (9.94 /
+> 16.67 at 1024). The owner was shown both remedies and chose **B2** — every
+> pair centred in its own button — over **B1** — every icon on one column
+> line, pair sitting high. So the fixed `height: calc(2 * line-height * 1em)`
+> is gone; the label is as tall as its own text and `.sidebar-item`'s own
+> `justify-content: center` centres the real pair. Measured after: **22.20 /
+> 22.80 at 1280 (offset 0.30px)** and **17.78 / 18.25 at 1024 (offset
+> 0.23px)**, one-line and two-line alike. The residual 0.3px is the range
+> rect's half-leading, not a layout error.
+> *(**Re-measured after (d)'s 26px glyph, same day:** glyph top / ink bottom
+> are **21.20 / 21.80 at 1280** and **16.97 / 17.45 at 1024**, one- and
+> two-line alike; a two-line item reads 13.41 / 14.00 and 10.73 / 11.22. The
+> pair offset is unchanged at 0.30 / 0.24px — a taller glyph moves both ends
+> of the pair, so centring is untouched. The four figures above are the
+> 24px state and are kept because they are what the B2 decision was taken
+> on.)*
+>
+> **What B2 costs, recorded as a consequence and not talked away:** two items
+> with a different number of lines no longer share an icon line — 7.79px apart
+> at 1280, 6.23px at 1024. The rail as it renders today is unaffected (all six
+> labels are one-liners), but **6 of the 26 seeded catalogue labels take two
+> lines in a rail item** ("Anreise & Abreise", "Müll & Recycling", "Ärztliche
+> Versorgung", "Essen & Trinken", "Arrival & departure", "Waste & recycling"),
+> so enabling one into a sidebar slot is enough to show it. What D5 needed is
+> unaffected: the **item** is still square and never follows its text.
+>
+> **`align-content` / `-webkit-box-pack` are both gone, and the 2026-08-28
+> reasoning for dropping the legacy one was wrong.** The note that shipped
+> said `-webkit-box-pack: center` "does nothing on this `-webkit-box`". The
+> observation was right and the reason was not: with `-webkit-line-clamp` set,
+> Chromium 151 computes the element's `display` to **`flow-root`** — it is not
+> a `-webkit-box` at all, which is precisely why the legacy property was
+> inert. Remove the clamp and the same declarations do compute to a real
+> legacy `-webkit-box`, and the polarity reverses exactly: `-webkit-box-pack`
+> works and `align-content` does not. Under B2 the question disappears —
+> there is no free space inside the label box for either property to
+> distribute — and that was verified in **both** models rather than assumed:
+> with the clamp armed (`flow-root`) and with it removed (`-webkit-box`), the
+> pair offset is the same 0.30 / 0.23px. `docs/system-context.md` still
+> carries the kiosk browser as an open `NEEDS DECISION`, so "Chromium does X"
+> is not an argument either way and neither model may be assumed away.
+>
+> **A two-line `max-height` replaces the `height`** — a cap, never a
+> reservation. It is what keeps D5 fixed on an engine that ignores
+> `-webkit-line-clamp` entirely: measured with the clamp removed, without the
+> cap the item goes 70.41 → **103.91px** on a five-line label; with it the
+> item stays square and the label is cut at two lines in both models.
+>
+> **All of these clearances presume the shipped Plus Jakarta Sans.** With the
+> `woff2` blocked, the fallback measures `Einstellungen` at 78.69px (1280) and
+> 62.91px (1024) in the same 86 / 68.81px box — it fits, at 3.66 / 2.95px
+> clearance, but that is the fallback's metrics being kind, not a property of
+> the layout.
+>
+> **(d) The rail glyph goes back to `--size-icon-md` (2026-08-29, owner
+> decision — "measure, then decide").** The 2026-08-28 step down to
+> `--size-icon-sm` had exactly one recorded justification, and by the end of
+> 2026-08-29 both of its terms were gone: `26 + 4 + 2 × 15.6 = 61.2px` was
+> measured against the *then* 84px item's 60px content box, and it was paid
+> for by the two-line **reservation** that (c) replaced with a cap. The item
+> is 88px now.
+>
+> Measured before deciding — **both reference viewports, active and inactive,
+> with every seeded catalogue label of both languages injected into a live rail
+> item**, one- and two-line. (The item probe does not vary the theme: no size
+> or weight token is theme-varying, `[data-theme]` overrides colour roles only.
+> The theme × language grid is `tools/measure.mjs`'s 168 cells, last row.)
+>
+> | | 24px glyph | 26px glyph |
+> |---|---|---|
+> | item @1280, one line / two lines | 88 × 88 / 88 × 88 | **88 × 88 / 88 × 88** (Δ0.00) |
+> | item @1024, one line / two lines | 70.41² / 70.41² | **70.41² / 70.41²** (Δ0.00) |
+> | label box @1280 / @1024 | 86 × 15.59 / 68.81 × 12.47 | unchanged |
+> | ink widths, both weights | — | unchanged (the label box does not depend on the glyph) |
+> | glyph top inside the item @1280, one / two lines | 22.20 / 14.41 | **21.20 / 13.41** |
+> | glyph top inside the item @1024, one / two lines | 17.78 / 11.55 | **16.97 / 10.73** |
+> | `tools/measure.mjs` | 168 cells clean | **168 cells, 0 overflowing, 0 truncated, 0 clamped, 200 × NO-SCROLL OK** |
+>
+> Nothing else was needed: no new token, no changed spacing, no wider rail.
+> This is a **return to the extracted value** (`docs/design/screens/home.md` →
+> `MenuIcons`, `--size-icon-md`), not a new deviation — the glyph deviation
+> recorded on 2026-08-28 is closed rather than restated. **The 24px is
+> committed in `63fcc6d`**, so going back is a new change on top of it, not
+> the repair of an uncommitted mistake.
 
 **Card titles.** The title box is **162px** (196 − 2 × 1px glass border − 2 ×
 16px padding; the "164px" this originally read forgot the border) and "Haus &
@@ -885,7 +1099,8 @@ to real code.
   this config should carry it as a field hint. Flagged, not solved.
 - **Round 3: the sidebar item size is now derived, not tokenised.**
   `--size-sidebar-item` (72px) stays in the token layer for traceability to the
-  Figma component but is no longer what the sidebar renders (84px, derived from
+  Figma component but is no longer what the sidebar renders (84px when this was
+  written, 88px since 2026-08-29, derived from
   `--size-sidebar` − 2 × `--space-3`). A token that exists and is deliberately
   not used is a trap for the next person; `docs/design/tokens.md` carries the
   explanation, but this is worth revisiting the next time the token layer is

@@ -9,10 +9,11 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import de.gxp.testsupport.DeviceFixtures;
+import de.gxp.infrastructure.testsupport.DeviceFixtures;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-21 (REQ-408): deleting a room with an ACTIVE device is a 409 NAMING it —
@@ -26,10 +27,7 @@ class RoomDeviceGuardTest {
     EntityManager entityManager;
 
     private static String adminToken() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     @Test

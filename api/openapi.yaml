@@ -13,13 +13,49 @@ tags:
     description: Box diagnosis — health, readiness and instance metadata.
   - name: manager-auth
     description: >-
-      Manager session lifecycle. The shared admin password is sent to
-      managerLogin ONLY; every other manager operation authenticates with the
-      opaque bearer token it returns (10-minute idle expiry, sliding). Every
-      authenticated response carries the refreshed expiry in the
-      GXP-Token-Expires header (ISO-8601 instant) so a client can warn before
-      idle-out. One interface is generated per manager-* tag so each BCE
-      package keeps its own Boundary.
+      Manager session lifecycle. Every manager has a named account (username
+      + password, all with role admin); the password is sent to managerLogin
+      ONLY, and every other manager operation authenticates with the opaque
+      bearer token it returns (10-minute idle expiry, sliding). The bearer
+      identity carries the username. Every authenticated response carries the
+      refreshed expiry in the GXP-Token-Expires header (ISO-8601 instant) so
+      a client can warn before idle-out. One interface is generated per
+      manager-* tag so each BCE package keeps its own Boundary.
+  - name: manager-users
+    description: >-
+      Manager account administration (auth-hardening A2). Every account has
+      role admin; any admin may create, deactivate, reactivate, reset the
+      password and reset the second factor of any other account, but never
+      deactivate their own (the one guard that keeps a box from having zero
+      active admins) nor reset their own password or factor without the
+      current password (the /me operations). Second-factor self-service
+      (auth-hardening A3) lives under /me: enroll, confirm, disable,
+      regenerate recovery codes. No response ever carries password material
+      or the secret, except the one-time enrollment and recovery-code
+      responses. Deactivation and every reset drop that user's bearer tokens
+      on the next request. One Boundary (UserResource) over the de.gxp.user
+      Control.
+  - name: manager-audit
+    description: >-
+      The append-only audit trail (auth-hardening A4). Every manager
+      mutation, every login outcome and every account / second-factor
+      action is recorded with who, when, the attributed client address,
+      whether it came through the trusted proxy, the action, the entity,
+      the entity id and — for updates — the NAME of each changed field.
+      Never a value: the table has no value column at all. Read only —
+      there is no update or delete operation; retention (365 days) is the
+      only deletion. One Boundary (AuditResource) over the de.gxp.audit
+      Control.
+  - name: manager-updates
+    description: >-
+      The update channel (remote-operations Part C). The box polls a static
+      manifest + detached Ed25519 signature outbound only, verifies it with
+      the public key shipped inside the image, and hands a verified request
+      to the host-side updater through a shared volume. Managers see the
+      state, switch automatic updates on/off, choose the daily apply time
+      (property-local), trigger a check and apply an available update now.
+      No operation ever carries manifest bytes, signatures or key material.
+      One Boundary (UpdateResource) over the de.gxp.update Control.
   - name: manager-property
     description: >-
       The single property (invariant 4 — exactly one row, no create/delete).
@@ -123,12 +159,25 @@ paths:
     post:
       tags: [manager-auth]
       operationId: managerLogin
-      summary: Log in with the shared admin password
+      summary: Log in with username and password
       description: >-
         The only operation that ever sees the password. Success returns an
-        opaque 256-bit bearer token with a sliding 10-minute idle expiry.
-        Failure is a deliberately generic 401 (no oracle); after 5 consecutive
-        failures the endpoint locks for 30 seconds (429 + Retry-After).
+        opaque 256-bit bearer token with a sliding 10-minute idle expiry and
+        the username it was issued for. Failure is a deliberately generic 401
+        (no oracle): an unknown username, a deactivated user and a wrong
+        password answer the same body and cost the same work. Failed attempts are
+        budgeted per attributed source address (5 per 15 minutes, escalating
+        block from 60 s up to 15 minutes): an exhausted address is answered
+        429 with Retry-After before any password work, every other address is
+        unaffected, and no account is ever locked. Second factor (auth-hardening
+        A3): a login arriving through the configured trusted proxy MUST carry
+        totpCode or recoveryCode — without one it is answered 401
+        `second-factor-required` BEFORE the password is looked at (nothing is
+        verified, nothing is counted). With one, password and code are verified
+        together and every failure — wrong password, wrong or replayed code,
+        spent recovery code, or an account without a confirmed factor — is the
+        same generic 401 `invalid-credentials` and counts against the address.
+        On the LAN the factor is never asked and both fields are ignored.
       requestBody:
         required: true
         content:
@@ -146,18 +195,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
         "401":
-          description: Wrong password — deliberately generic.
+          description: >-
+            Either `second-factor-required` (via the trusted proxy, no code
+            supplied; the password was not verified) or `invalid-credentials`
+            (unknown user, deactivated user, wrong password, wrong/replayed/spent
+            code, or no confirmed factor via the proxy) — deliberately generic.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "429":
-          description: Locked after 5 consecutive failures.
+          description: >-
+            This address has exhausted its login budget (code
+            `too-many-attempts`); retry after the number of seconds in
+            Retry-After. Other addresses are unaffected.
           headers:
             Retry-After:
-              description: Seconds until the lock lifts.
-              schema:
-                type: integer
+              $ref: "#/components/headers/RetryAfter"
           content:
             application/json:
               schema:
@@ -178,11 +232,11 @@ paths:
     put:
       tags: [manager-auth]
       operationId: changeManagerPassword
-      summary: Change the shared admin password
+      summary: Change the caller's own password
       description: >-
-        Verifies the current password, enforces the minimal policy
+        Verifies the caller's current password, enforces the minimal policy
         (at least 8 characters), stores the new hash and immediately drops
-        EVERY active bearer token — including the caller's.
+        the caller's active bearer tokens — including the one presented.
       security:
         - bearerAuth: []
       requestBody:
@@ -193,13 +247,483 @@ paths:
               $ref: "#/components/schemas/PasswordChangeRequest"
       responses:
         "204":
-          description: Password changed; all bearer tokens are dropped.
+          description: Password changed; the caller's bearer tokens are dropped.
         "400":
           description: Current password mismatch or policy violation.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "429":
+          description: >-
+            The caller's address has exhausted its login budget (the
+            current-password check shares it; code `too-many-attempts`).
+          headers:
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/users:
+    get:
+      tags: [manager-users]
+      operationId: listUsers
+      summary: List every manager account
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Every account, active or not, ordered by id. Never any hash or secret.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserDto"
+        "401":
+          description: Missing, unknown or expired token.
+    post:
+      tags: [manager-users]
+      operationId: createUser
+      summary: Create a manager account
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "201":
+          description: Created and active.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserDto"
+        "400":
+          description: Validation failure (username pattern, password shorter than 8).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: The username is taken (code `username-taken`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/users/{userId}/deactivate:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [manager-users]
+      operationId: deactivateUser
+      summary: Deactivate an account — its tokens are dead on the next request
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Deactivated (idempotent).
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such account (code `user-not-found`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The caller's own account (code `cannot-deactivate-self`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/users/{userId}/reactivate:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    post:
+      tags: [manager-users]
+      operationId: reactivateUser
+      summary: Reactivate a deactivated account
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Active again (idempotent).
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such account (code `user-not-found`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/users/{userId}/password:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    put:
+      tags: [manager-users]
+      operationId: resetUserPassword
+      summary: Set another account's password (admin reset) — its tokens are dropped
+      description: >-
+        Replaces another account's password without knowing the old one and
+        drops that user's bearer tokens. The caller's OWN account is refused
+        (code `cannot-reset-self`): an own change goes through
+        changeManagerPassword, which requires the current password.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "204":
+          description: Password replaced; that user's bearer tokens are dropped.
+        "400":
+          description: Policy violation (shorter than 8).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such account (code `user-not-found`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The caller's own account (code `cannot-reset-self`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/users/{userId}/second-factor:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    delete:
+      tags: [manager-users]
+      operationId: resetUserSecondFactor
+      summary: Remove another account's second factor (admin reset) — its tokens are dropped
+      description: >-
+        The documented recovery route (auth-hardening REQ-618): a colleague
+        on the LAN clears the lost factor and its recovery codes; the user
+        then enrolls again on the LAN. The caller's OWN factor is refused
+        (code `cannot-reset-self`) — that path is DELETE
+        /api/manager/users/me/second-factor with the current password.
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Factor and recovery codes removed (idempotent); that user's bearer tokens are dropped.
+        "401":
+          description: Missing, unknown or expired token.
+        "404":
+          description: No such account (code `user-not-found`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: The caller's own account (code `cannot-reset-self`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/users/me/second-factor:
+    get:
+      tags: [manager-users]
+      operationId: getOwnSecondFactor
+      summary: The caller's second-factor state
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: State and remaining recovery codes — never the secret.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondFactorStatusDto"
+        "401":
+          description: Missing, unknown or expired token.
+    post:
+      tags: [manager-users]
+      operationId: enrollOwnSecondFactor
+      summary: Start enrolling a second factor (TOTP)
+      description: >-
+        Generates a PENDING secret and returns it exactly once, as base32 and
+        as an otpauth:// URI (render the QR client-side; the backend never
+        does). Calling it again while pending replaces the secret. The factor
+        is not required for anything until confirmOwnSecondFactor succeeds.
+        Refused while a confirmed factor exists — disable it first.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The one-time enrollment material.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondFactorEnrollmentDto"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: A confirmed factor exists (code `second-factor-already-confirmed`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags: [manager-users]
+      operationId: disableOwnSecondFactor
+      summary: Remove the caller's second factor — requires the current password
+      description: >-
+        Clears the secret (pending or confirmed) and every recovery code. The
+        current password is required so an idle-but-open session cannot strip
+        the factor. Idempotent.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordConfirmationRequest"
+      responses:
+        "204":
+          description: No factor enrolled any more.
+        "400":
+          description: Current password mismatch (code `current-password-mismatch`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/users/me/second-factor/confirm:
+    post:
+      tags: [manager-users]
+      operationId: confirmOwnSecondFactor
+      summary: Confirm the pending enrollment with one code — returns the recovery codes
+      description: >-
+        One valid TOTP code turns the pending secret into a confirmed factor
+        and returns the first batch of 10 single-use recovery codes, shown
+        exactly once (stored hashed). From then on every login through the
+        trusted proxy requires a code.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecondFactorCodeRequest"
+      responses:
+        "200":
+          description: Confirmed; these recovery codes are shown once.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodesDto"
+        "400":
+          description: The code did not verify (code `invalid-code`) or failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: Nothing is pending — enroll first (code `no-pending-enrollment`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/users/me/recovery-codes:
+    post:
+      tags: [manager-users]
+      operationId: regenerateOwnRecoveryCodes
+      summary: Replace the caller's recovery codes — requires the current password
+      description: >-
+        Invalidates every previous code and returns a fresh batch of 10,
+        shown exactly once. Only with a confirmed factor.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordConfirmationRequest"
+      responses:
+        "200":
+          description: The new batch; the old one no longer works.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodesDto"
+        "400":
+          description: Current password mismatch (code `current-password-mismatch`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: No confirmed factor (code `second-factor-not-confirmed`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/audit:
+    get:
+      tags: [manager-audit]
+      operationId: listAuditEntries
+      summary: Page through the audit trail, newest first
+      description: >-
+        Entries ordered by occurredAt descending (then id descending), with
+        the total count. Page size 1–200, default 50.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index.
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: One page of entries plus the total.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPageDto"
+        "400":
+          description: Validation failure (size outside 1–200, negative page).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/updates:
+    get:
+      tags: [manager-updates]
+      operationId: getUpdateStatus
+      summary: Update channel status
+      description: >-
+        Configuration, the last check outcome, the available update (if any,
+        also while automatic updates are disabled), when it is scheduled and
+        the host-side updater's last reported state.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateStatusDto"
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/updates/settings:
+    put:
+      tags: [manager-updates]
+      operationId: updateUpdateSettings
+      summary: Switch automatic updates and set the daily apply time
+      description: >-
+        applyAt is HH:MM in the property's timezone. Audited (one row per
+        changed field). The desired-update file is reconciled immediately.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsRequest"
+      responses:
+        "200":
+          description: Settings stored; the new status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateStatusDto"
+        "400":
+          description: Validation failure (applyAt not HH:MM).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Missing, unknown or expired token.
+  /api/manager/updates/apply:
+    post:
+      tags: [manager-updates]
+      operationId: applyUpdateNow
+      summary: Apply the available update at the next updater run
+      description: >-
+        Requests the available update now instead of at the apply time.
+        The updater (a host timer, every 5 minutes) performs it; the box
+        restarts once. Audited.
+      security:
+        - bearerAuth: []
+      responses:
+        "202":
+          description: Request recorded; the status with the new schedule.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateStatusDto"
+        "401":
+          description: Missing, unknown or expired token.
+        "409":
+          description: No verified update is available (code `no-update-available`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/manager/updates/check:
+    post:
+      tags: [manager-updates]
+      operationId: checkForUpdateNow
+      summary: Check the update server now
+      description: >-
+        Runs one check synchronously (at most ~15 s) and returns the
+        resulting status. A check already running is not duplicated.
+        Audited.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: The status after the check.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateStatusDto"
         "401":
           description: Missing, unknown or expired token.
   /api/manager/property:
@@ -449,7 +973,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/MenuItemConfigEntryDto"
         "400":
-          description: Unknown menu item key or duplicate entry.
+          description: >-
+            Unknown menu item key, duplicate entry, or an entry that disables
+            or re-sorts a mandatory item (menu-item-mandatory).
           content:
             application/json:
               schema:
@@ -515,7 +1041,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/MenuItemConfigEntryDto"
         "400":
-          description: Unknown menu item key or duplicate entry.
+          description: >-
+            Unknown menu item key, duplicate entry, or an entry that disables
+            or re-sorts a mandatory item (menu-item-mandatory).
           content:
             application/json:
               schema:
@@ -957,9 +1485,13 @@ paths:
       summary: Create a short-lived pairing request (kiosk, unauthenticated)
       description: >-
         Returns the display code the kiosk shows to the manager, the poll
-        secret the kiosk keeps (never displayed), and the expiry.
-        Rate-limited (pairing is a rare, manager-attended act); expired
+        secret the kiosk keeps (never displayed), and the expiry. Expired
         requests are cleaned up opportunistically on each create.
+        Deliberately not throttled (owner decision 2026-08-24): no rate limit
+        and no admission gate, so there is no 429 here — the number of live
+        requests is bounded only in age, by the 10-minute TTL plus that
+        opportunistic cleanup, and guessing is made infeasible by the code
+        entropy and TTL rather than by a budget.
       responses:
         "201":
           description: Pairing request created.
@@ -967,17 +1499,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PairingRequestCreated"
-        "429":
-          description: Create rate limit hit.
-          headers:
-            Retry-After:
-              description: Seconds until the next create is accepted.
-              schema:
-                type: integer
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /api/pairing/requests/{code}:
     get:
       tags: [pairing]
@@ -1171,77 +1692,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
-  /api/guest/session:
+  /api/guest/content:
     get:
       tags: [guest]
-      operationId: getGuestSession
-      summary: Everything route-independent for the device's room
+      operationId: getGuestContent
+      summary: Everything the device's room renders from, in one document
       description: >-
         Property (name, brand, logo), room, occupancy, settings config with
         resolved defaults (room override, else property default), the stay's
         raw preference override (occupied only), the resolved menu under the
-        ceiling rule plus the fixed settings chrome, and the resolved standby
-        texts. Vacant rooms serve no stay-derived value (data-sparing) but
-        still answer 200 — the standby screen renders from this.
+        ceiling rule plus the fixed settings chrome, the resolved standby
+        texts, and — for an occupied room — the home content (headline/
+        subtitle/paragraph and 0-4 action cards, all templates RESOLVED
+        server-side per offered language against the active stay; no braces
+        ever leave the server, artwork falls back room -> property). Vacant
+        rooms serve no stay-derived value (data-sparing) but still answer 200
+        — the standby screen renders from this.
       security:
         - bearerAuth: []
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
       responses:
         "200":
-          description: The session for the device's room.
+          description: The content for the device's room.
           headers:
             ETag:
-              description: Strong ETag — SHA-256 over the response bytes.
+              description: >-
+                Strong ETag — an opaque 64-hex version stamp for this room's
+                content. Compared, never parsed.
               schema:
                 type: string
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GuestSession"
+                $ref: "#/components/schemas/GuestContent"
         "304":
-          description: If-None-Match matched — empty body.
+          description: If-None-Match matched the current version stamp — empty body.
         "401":
           description: Missing, unknown or revoked device token.
-  /api/guest/screens/home:
-    get:
-      tags: [guest]
-      operationId: getGuestHomeScreen
-      summary: The home screen content for the device's room
-      description: >-
-        Headline/subtitle/paragraph and 0–4 action cards, all templates
-        RESOLVED server-side per offered language against the active stay
-        (checkout time/date in the property timezone, each language's
-        locale) — no braces ever leave the server. Artwork falls back room →
-        property.
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: The resolved home screen.
-          headers:
-            ETag:
-              description: Strong ETag — SHA-256 over the response bytes.
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GuestHomeScreen"
-        "304":
-          description: If-None-Match matched — empty body.
-        "401":
-          description: Missing, unknown or revoked device token.
-        "404":
-          description: Unknown screen key, or the home item resolves disabled for this room.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-        "409":
-          description: The room is vacant (room-vacant) — no stay-derived content is served.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /api/guest/assets/{assetId}:
     get:
       tags: [guest]
@@ -1342,6 +1834,13 @@ components:
         The token is identity AND authentication; a device's room is derived
         from it, never from a request parameter.
   parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
     RoomId:
       name: roomId
       in: path
@@ -1350,6 +1849,11 @@ components:
         type: integer
         format: int64
   headers:
+    RetryAfter:
+      description: Seconds until the address is admitted again (whole number).
+      schema:
+        type: integer
+        format: int64
     GXPTokenExpires:
       description: >-
         Refreshed idle expiry of the presented (or issued) bearer token,
@@ -1360,18 +1864,33 @@ components:
   schemas:
     LoginRequest:
       type: object
-      required: [password]
+      required: [username, password]
       properties:
+        username:
+          type: string
+          description: Unique, lower-case account name.
+          pattern: "^[a-z0-9][a-z0-9._-]{0,63}$"
         password:
           type: string
           minLength: 1
+        totpCode:
+          type: string
+          description: Current 6-digit TOTP code — required via the trusted proxy, ignored on the LAN.
+          pattern: "^[0-9]{6}$"
+        recoveryCode:
+          type: string
+          description: A single-use recovery code in place of totpCode — required via the trusted proxy, ignored on the LAN.
+          pattern: "^[a-z0-9]{10}$"
     LoginResponse:
       type: object
-      required: [token, idleTimeoutSeconds, expiresAt]
+      required: [token, username, idleTimeoutSeconds, expiresAt]
       properties:
         token:
           type: string
           description: Opaque bearer token — keep in memory only.
+        username:
+          type: string
+          description: The account the token was issued for.
         idleTimeoutSeconds:
           type: integer
           format: int64
@@ -1388,6 +1907,95 @@ components:
         newPassword:
           type: string
           minLength: 8
+    UserDto:
+      type: object
+      description: A manager account. Never carries password material or the second-factor secret.
+      required: [id, username, active, secondFactorState, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        active:
+          type: boolean
+        secondFactorState:
+          $ref: "#/components/schemas/SecondFactorState"
+        createdAt:
+          type: string
+          format: date-time
+    UserCreateRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          description: Unique, lower-case account name.
+          pattern: "^[a-z0-9][a-z0-9._-]{0,63}$"
+        password:
+          type: string
+          description: Initial password, at least 8 characters.
+          minLength: 8
+    PasswordResetRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword:
+          type: string
+          minLength: 8
+    SecondFactorState:
+      type: string
+      description: none = not enrolled; pending = secret issued, not yet confirmed; confirmed = required via the trusted proxy.
+      enum: [none, pending, confirmed]
+    SecondFactorStatusDto:
+      type: object
+      required: [state, recoveryCodesRemaining]
+      properties:
+        state:
+          $ref: "#/components/schemas/SecondFactorState"
+        recoveryCodesRemaining:
+          type: integer
+          format: int32
+          description: Unspent recovery codes (0 unless confirmed).
+    SecondFactorEnrollmentDto:
+      type: object
+      description: Shown exactly once — the only response that ever carries the secret.
+      required: [secret, otpauthUri]
+      properties:
+        secret:
+          type: string
+          description: The shared secret, base32 (RFC 4648), for manual entry.
+        otpauthUri:
+          type: string
+          description: otpauth://totp/GXP:<username>?secret=…&issuer=GXP&algorithm=SHA1&digits=6&period=30
+    SecondFactorCodeRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: A current 6-digit TOTP code.
+          pattern: "^[0-9]{6}$"
+    PasswordConfirmationRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: The caller's current password.
+          minLength: 1
+    RecoveryCodesDto:
+      type: object
+      description: Shown exactly once; stored hashed.
+      required: [codes]
+      properties:
+        codes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: string
+            pattern: "^[a-z0-9]{10}$"
     LanguageCode:
       type: string
       description: v1 supports exactly the kiosk's compiled catalogues.
@@ -1656,6 +2264,161 @@ components:
           type: string
         applicationVersion:
           type: string
+    AuditEntryDto:
+      type: object
+      description: >-
+        One audit row. Carries the NAME of a changed field, never a value
+        (constitution principle 3).
+      required: [id, occurredAt, address, viaProxy, action, entity]
+      properties:
+        id:
+          type: integer
+          format: int64
+        occurredAt:
+          type: string
+          format: date-time
+        actor:
+          type: string
+          description: Principal username; absent when nobody was authenticated (a failed login).
+        address:
+          type: string
+          description: Attributed client address (socket peer, or the trusted proxy's forwarded address).
+        viaProxy:
+          type: boolean
+        action:
+          type: string
+          description: >-
+            login-success, login-failure, second-factor-required, create,
+            update, delete, replace, confirm, rename, revoke, user-create,
+            user-deactivate, user-reactivate, password-reset,
+            password-change, second-factor-reset, second-factor-enroll,
+            second-factor-confirm, second-factor-disable,
+            recovery-codes-regenerate.
+        entity:
+          type: string
+          description: user, property, room, stay, asset, menu-config, action-cards, device.
+        entityId:
+          type: string
+          description: The entity's id, the username, or "property" for a property-scope menu/card replace.
+        field:
+          type: string
+          description: Name of the changed field (update rows only).
+    AuditPageDto:
+      type: object
+      required: [entries, page, size, total]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntryDto"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    UpdateCheckOutcome:
+      type: string
+      description: >-
+        Outcome of the last manifest check. never-checked = no check since
+        install; not-configured = no base URL; insecure-base-url = plain
+        http outside a test profile; unreachable / http-error / too-large =
+        the fetch failed; invalid-signature / malformed / wrong-schema-version
+        / wrong-channel = the manifest was rejected; no-update = a valid
+        manifest at or below the running version; minimum-from-version-not-met
+        = the running version is too old for the offered one;
+        update-available = a verified, newer manifest is stored.
+      enum: [never-checked, not-configured, insecure-base-url, unreachable, http-error, too-large,
+             invalid-signature, malformed, wrong-schema-version, wrong-channel, no-update,
+             minimum-from-version-not-met, update-available]
+    AvailableUpdateDto:
+      type: object
+      required: [version, publishedAt, artifactRef]
+      properties:
+        version:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        artifactRef:
+          type: string
+          description: The image reference the updater will pull.
+    UpdaterStateDto:
+      description: >-
+        The host-side updater's last reported state. outcome and message are
+        free strings on purpose — a newer updater may report a code this
+        application version does not know, and the status must still render.
+      type: object
+      required: [updatedAt, outcome, rolledBack, currentImage]
+      properties:
+        updatedAt:
+          type: string
+          format: date-time
+        lastAttemptAt:
+          type: string
+          format: date-time
+        attemptedVersion:
+          type: string
+        outcome:
+          type: string
+        rolledBack:
+          type: boolean
+        currentImage:
+          type: string
+        currentVersion:
+          type: string
+        previousImage:
+          type: string
+        backupFile:
+          type: string
+        message:
+          type: string
+    UpdateStatusDto:
+      type: object
+      required: [currentVersion, channel, configured, autoUpdateEnabled, applyAt, timezone, lastCheckOutcome]
+      properties:
+        currentVersion:
+          type: string
+          description: The running application version, e.g. 1.0.0-SNAPSHOT.
+        channel:
+          type: string
+        configured:
+          type: boolean
+          description: Whether an update base URL is set.
+        autoUpdateEnabled:
+          type: boolean
+        applyAt:
+          type: string
+          description: Daily apply time, HH:MM in the property's timezone.
+        timezone:
+          type: string
+          description: The property's IANA timezone.
+        lastCheckAt:
+          type: string
+          format: date-time
+        lastCheckOutcome:
+          $ref: "#/components/schemas/UpdateCheckOutcome"
+        available:
+          $ref: "#/components/schemas/AvailableUpdateDto"
+        scheduledFor:
+          type: string
+          format: date-time
+          description: applyNotBefore of the current desired-update file, if one exists.
+        updater:
+          $ref: "#/components/schemas/UpdaterStateDto"
+    UpdateSettingsRequest:
+      type: object
+      required: [autoUpdateEnabled, applyAt]
+      properties:
+        autoUpdateEnabled:
+          type: boolean
+        applyAt:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          description: HH:MM in the property's timezone.
     ApiError:
       description: >-
         Shared error shape. code is machine-usable (e.g.
@@ -1826,6 +2589,11 @@ components:
           type: string
         sortIndex:
           type: integer
+        module:
+          description: >-
+            Absent means no content is authored for this section yet (D15) —
+            the kiosk renders SectionPlaceholderComponent.
+          $ref: "#/components/schemas/GuestModule"
     GuestSettingsEntry:
       type: object
       description: Fixed app chrome — NOT a catalogue item, no configuration removes it.
@@ -1846,10 +2614,68 @@ components:
         items:
           type: array
           description: Resolved-enabled items only, ordered by resolved sort index.
+          maxItems: 50
           items:
             $ref: "#/components/schemas/GuestMenuItem"
         settingsEntry:
           $ref: "#/components/schemas/GuestSettingsEntry"
+    GuestModule:
+      description: >-
+        A section's content, one member per module type (A3: fixed shape per
+        type, D14). The member's `type` is a plain string whose allowed values
+        are pinned by `discriminator.mapping` below and by @JsonTypeName on the
+        generated Java class — NEVER a single-value enum on the member. See
+        docs/features/module-content/d9-spike.md: the enum spelling compiles
+        and ships `"type":"GuestModule"` on the wire, or fails to compile once
+        useOneOfInterfaces is on.
+      oneOf:
+        - $ref: "#/components/schemas/GuestInfoModule"
+      discriminator:
+        propertyName: type
+        mapping:
+          info: "#/components/schemas/GuestInfoModule"
+    GuestInfoModule:
+      type: object
+      description: >-
+        The `info` section's content — a list of label/value rows in delivered
+        order (docs/design/screens-inhouse/info.md). No title (the screen's h1
+        is GuestMenuItem.label), no per-row icon, no per-row sort key, no row
+        id, no sensitive flag.
+      required: [type, rows]
+      properties:
+        type:
+          type: string
+          description: >-
+            Always "info". Deliberately NOT an enum (D9) and deliberately NOT
+            maxLength-bounded (REQ-963 carve-out, 02-design.md §1.3): the value
+            set is pinned by discriminator.mapping here, by @JsonTypeName in
+            Java, and by the kiosk's registry-derived validation (REQ-971).
+        rows:
+          type: array
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/GuestInfoRow"
+    GuestInfoRow:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          description: RESOLVED per offered language — never a raw template.
+          $ref: "#/components/schemas/ModuleText"
+        value:
+          description: RESOLVED per offered language — never a raw template.
+          $ref: "#/components/schemas/ModuleText"
+    ModuleText:
+      type: object
+      description: >-
+        Language-keyed map (keys are LanguageCode values), resolved per offered
+        language — the LocalizedText convention (REQ-964) with the wire bound
+        REQ-963 requires. LocalizedText itself stays unbounded: bounding it
+        would put @Size on every existing text field in the contract, which is
+        a contract-wide change this Part has no mandate for.
+      additionalProperties:
+        type: string
+        maxLength: 240
     GuestStandby:
       type: object
       description: Standby texts, template-resolved per offered language.
@@ -1859,7 +2685,7 @@ components:
           $ref: "#/components/schemas/LocalizedText"
         message:
           $ref: "#/components/schemas/LocalizedText"
-    GuestSession:
+    GuestContent:
       type: object
       required: [property, room, occupancy, settings, menu, standby]
       properties:
@@ -1880,6 +2706,9 @@ components:
           $ref: "#/components/schemas/GuestMenu"
         standby:
           $ref: "#/components/schemas/GuestStandby"
+        home:
+          description: Occupied only — a vacant room serves no stay-derived value.
+          $ref: "#/components/schemas/GuestHome"
     GuestActionCard:
       type: object
       required: [icon, title, description, targetKey, targetRoute]
@@ -1896,7 +2725,7 @@ components:
           type: string
         targetRoute:
           type: string
-    GuestHomeScreen:
+    GuestHome:
       type: object
       required: [headline, subtitle, paragraph, actionCards]
       properties:

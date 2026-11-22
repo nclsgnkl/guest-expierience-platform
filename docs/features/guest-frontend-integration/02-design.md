@@ -75,7 +75,8 @@ review.
 UNPAIRED (no stored token)
   → CREATING    POST /api/pairing/requests
       201 → WAITING(code, secret in memory, expiresAt)
-      429 → COOLDOWN(Retry-After) → CREATING
+      (429 → COOLDOWN(Retry-After) → CREATING — REMOVED 2026-08-24: the
+       backend no longer throttles create, so this transition is dead)
       network error → OFFLINE_PAIRING (retry backoff 5→30 s) → CREATING
   WAITING: poll GET /api/pairing/requests/{code} + GXP-Pairing-Secret
       every 3 s

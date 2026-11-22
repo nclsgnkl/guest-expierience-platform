@@ -63,10 +63,10 @@ recorded because the pipeline's later phases will be tempted to re-open them.
 | 1 | **`Stay` is an entity; `Guest` is not** | Guest name, stay period, check-out time and language preference hang off a `Stay`. No separate person aggregate and no contact details — minimal PII on a box that stands in a physically accessible building. Gives "dynamic check-out time" and "derive language from guest data" a real anchor without collecting people |
 | 2 | **Structural configuration resolves Property → Room; preferences resolve Stay → Room → Property** | One rule to remember: *configuration lives on the house and the room, data lives on the stay*. A suite may deviate from the house default; the manager UI shows the house standard plus a few explicit room overrides rather than n rooms to maintain individually |
 | 3 | **Device pairing with an opaque token** | The kiosk is paired once by the manager and stores a long-lived token. The token is identity **and** authentication: no valid token, no room data, and a device cannot change which room it claims to be. Resolves the open `NEEDS DECISION` in `system-context.md` → "does the app authenticate the guest at all?" |
-| 4 | **One shared admin password, exchanged for a short-lived bearer token** | Per-user accounts were deliberately deferred. Consequence accepted and recorded: there is **no** "who changed this" audit trail and no revoking an individual person's access. The password is sent **once**, to `/api/manager/login`, and exchanged for an opaque token that idles out after 10 minutes and is refreshed by every action — see §6. Auth is to be isolated so a user table can replace it later without touching a Boundary or a Control |
+| 4 | **One shared admin password, exchanged for a short-lived bearer token** | *Superseded 2026-08-26 by `auth-hardening` (named `manager_user` accounts, per-address throttle, TOTP via the trusted proxy, audit trail — see §6).* Original reasoning: Per-user accounts were deliberately deferred. Consequence accepted and recorded: there is **no** "who changed this" audit trail and no revoking an individual person's access. The password is sent **once**, to `/api/manager/login`, and exchanged for an opaque token that idles out after 10 minutes and is refreshed by every action — see §6. Auth is to be isolated so a user table can replace it later without touching a Boundary or a Control |
 | 5 | **The menu catalogue is release data** | A menu item *is* a route with an implemented screen, so the manager cannot invent one. The backend seeds a catalogue per release (stable `key`, default label, default icon, frontend route); the manager only enables/disables, reorders, and overrides label and icon. A new menu item becomes a seed row plus a frontend screen — not a feature |
 | 6 | **i18n: structure now, one language maintained** | Every manager-authored text carries a language key from day one, but the manager UI maintains only the house's main language in v1. Avoids the expensive migration across every content type that WiFi/house-rules/surroundings will add, without paying for translation workflows yet |
-| 7 | **Guest API is split: shell vs. screen** | `GET /api/guest/session` for everything route-independent, `GET /api/guest/screens/{key}` for screen content. Two calls at boot, one per navigation. New screens are a new `screens/{key}` without touching the existing contract, and a screen holding sensitive data can be secured separately instead of riding in a shared payload |
+| 7 | **Guest API is split: shell vs. screen** | *Superseded 2026-08-27 by `guest-payload-consolidation` D7 (Part B): the two guest reads are **one** resource, `GET /api/guest/content`, carrying `home` for an occupied room and omitting it for a vacant one. Original reasoning:* `GET /api/guest/session` for everything route-independent, `GET /api/guest/screens/{key}` for screen content. Two calls at boot, one per navigation. New screens are a new `screens/{key}` without touching the existing contract, and a screen holding sensitive data can be secured separately instead of riding in a shared payload |
 | 8 | **Contract-first OpenAPI with code generation** | `api/openapi.yaml` is the source of truth. JAX-RS interfaces + DTOs are generated for the backend (interfaces only; implementations are hand-written), and a typed TypeScript client for the frontends. The contract becomes a constraint, not documentation: a breach fails the build instead of surfacing at runtime |
 | 9 | **Vacant rooms get their own standby screen** | Between check-out and the next check-in the kiosk shows a dedicated, reduced screen — not the previous guest's data, and not a half-filled normal screen. Maximally data-sparing, and it makes an unoccupied room unmistakable to cleaning staff. **Needs a Figma design that does not exist yet** (see §11) |
 | 10 | **Binary assets live in Postgres** | Renderings and the logo are stored in the database, so the whole instance is exactly **one** backup artifact — a real argument for a box nobody maintains. Mitigations that follow are mandatory, not optional: hard size cap, server-side downscaling on upload, streaming rather than full buffering, and strong-ETag delivery so each kiosk fetches an image once |
@@ -121,13 +121,22 @@ Boundary, a Control and its Entities.
 > package without a Control, and "it is only CRUD" is not a reason to skip one.
 
 ```
-de.<org>.gxp.room/
-    RoomResource.java     # Boundary — JAX-RS adapter, one delegating line per endpoint
-    RoomControl.java      # Control  — all behaviour, @Transactional, the package's public type
-    RoomRepository.java   # Control  — data access only (PanacheRepository), package-private
-    Room.java             # Entity   — state + invariants, no persistence methods
-    RoomMapper.java       # Entity <-> API DTO, package-private, invoked by the Control
+de.gxp.room/
+    boundary/RoomResource.java   # Boundary — JAX-RS adapter, one delegating line per endpoint,
+                                 #            carries the endpoint's ONE security annotation
+    control/RoomControl.java     # Control  — all behaviour, @Transactional, the feature's only
+                                 #            cross-feature entry point; NO security annotations
+    control/RoomRepository.java  # Control  — data access only (PanacheRepository), package-private
+    entity/Room.java             # Entity   — state + invariants, no persistence methods; public
+                                 #            only because Java has no sub-package visibility
+    entity/RoomMapper.java       # Entity <-> API DTO, invoked by the Control
 ```
+
+The sub-package split is the project owner's decision of 2026-08-24: it is a
+deliberate departure from textbook BCE, taken for readability. Its cost is that
+package-private visibility no longer enforces the feature boundary — two
+dependency-free architecture tests in `de.gxp.architecture` do — three of
+them (see `backend/CLAUDE.md`).
 
 Conventions to write down once and then enforce at review:
 
@@ -138,12 +147,15 @@ Conventions to write down once and then enforce at review:
 - **`@Transactional` sits on the Control, never on the Boundary.** The
   transaction boundary follows the behaviour, and no behaviour lives in the
   Boundary.
-- **The Control is the package's public type; the Boundary is only its HTTP
-  adapter.** This follows directly from the rule above: with a pass-through
-  Boundary, making *it* the cross-package entry point would drag HTTP concerns
-  into internal calls. A feature needing another feature's data therefore
-  injects **that feature's Control**. Repository, Mapper and Entity stay
-  package-private.
+- **The Control is the feature's public type; the Boundary is only its HTTP
+  adapter.** A feature needing another feature's data injects **that feature's
+  Control**. Repository and the Control's non-JPA collaborators stay
+  package-private inside `.control`; Entity and Mapper are `public` inside
+  `.entity` purely because Java has no sub-package visibility, and referencing
+  them from another feature is a violation caught by the architecture tests.
+  **Security annotations are the one exception to "the Boundary is trivial":
+  authorization is stated on the Boundary, because HTTP is the trust
+  boundary.**
 - **Controls speak API DTOs; Entities never leave the package.** Because the
   Boundary may not map, the Control accepts and returns the generated types and
   calls the Mapper itself. The trade-off is deliberate and worth stating: the
@@ -244,7 +256,7 @@ surprise on a kiosk. Start with `{stay.displayName}`, `{stay.checkOut|time}`,
 
 All paths are illustrative; `api/openapi.yaml` is the authority once written.
 
-### Pairing (unauthenticated, rate-limited)
+### Pairing (unauthenticated, unthrottled since 2026-08-24)
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -256,8 +268,7 @@ All paths are illustrative; `api/openapi.yaml` is the authority once written.
 
 | Method | Path | Returns |
 |---|---|---|
-| `GET` | `/api/guest/session` | Room, property, brand primitives, logo URL, resolved preferences (language, theme), **occupancy state**, guest display name when occupied, and the resolved menu |
-| `GET` | `/api/guest/screens/home` | Headline, subtitle, paragraph, artwork URL, and 0–4 resolved action cards |
+| `GET` | `/api/guest/content` | Room, property, brand primitives, logo asset id, resolved settings config, the stay's raw preference override, **occupancy state**, guest display name when occupied, the resolved menu and the standby texts — and, for an occupied room, the nested `home` (headline, subtitle, paragraph, artwork asset id, 0–4 resolved action cards). Merged from the retired `/api/guest/session` + `/api/guest/screens/home` by `guest-payload-consolidation`, 2026-08-27 |
 | `GET` | `/api/guest/assets/{id}` | Binary, strong ETag, long `Cache-Control` |
 
 Every guest response carries an `ETag`; the kiosk polls with `If-None-Match` and
@@ -267,35 +278,82 @@ reintroduce exactly the enumeration hole that decision 3 closes.
 
 ### Manager (short-lived bearer token with sliding expiry)
 
+*Rewritten 2026-08-26 to the as-built state after `auth-hardening`
+(REQ-601…628, decisions D1–D25 in `docs/features/auth-hardening/02-design.md`).*
+
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/manager/login` | Password in, opaque bearer token out. The **only** endpoint that ever sees the password |
+| `POST` | `/api/manager/login` | `username` + `password` (+ `totpCode` **or** `recoveryCode` when arriving through the trusted proxy) in, opaque bearer token + username out. The **only** endpoint that ever sees the password. `429` + `Retry-After` when the caller's address is throttled |
 | `POST` | `/api/manager/logout` | Invalidates the token immediately |
+| `PUT` | `/api/manager/password` | Own password change; drops every token of that account |
+| `GET`/`POST` | `/api/manager/users`, `…/{id}/deactivate`, `…/{id}/reactivate`, `PUT …/{id}/password`, `DELETE …/{id}/second-factor` | Account administration by an admin — never on yourself (`409`), so the last account cannot lock itself out |
+| `GET`/`POST`/`DELETE` | `/api/manager/users/me/second-factor`, `…/confirm`, `POST …/me/recovery-codes` | Own TOTP enrolment (secret + `otpauth://` URI), confirmation (returns the ten recovery codes once), status, disable, regenerate |
+| `GET` | `/api/manager/audit?page&size` | Append-only audit trail, newest first, default 50 / max 200; no update or delete operation exists |
 
 Every other manager request carries `Authorization: Bearer <token>`. The token
 is idle-expiring: **10 minutes** by default, and every authenticated request
 resets the clock. After that the manager logs in again.
 
-Why this rather than sending the password on each request (HTTP Basic), which
-an earlier draft proposed:
+The auth model, as built:
+
+- **Named accounts, every one an admin** (`de.gxp.user`, `manager_user`). The
+  first account is created on first start from `GXP_ADMIN_USERNAME`
+  (default `admin`) and `GXP_ADMIN_PASSWORD` (≥ 8) and both variables are
+  ignored forever afterwards; an instance upgraded from the shared-password
+  schema keeps its credential as user `admin` (Flyway V5 carry-over).
+  Deactivating an account, resetting its password or its second factor drops
+  that account's tokens (`UserControl.CredentialsInvalidated` → `AuthControl`).
+- **Per-address login throttle, never global, never per account**
+  (`de.gxp.auth.control.LoginThrottle`): 5 failures within 15 minutes block the
+  attributed client address for 60 s, doubling per further exhaustion up to
+  900 s, answered `429 too-many-attempts` before any PBKDF2 work or database
+  read; a success clears the address. The two global mechanisms tried on
+  2026-08-24 were withdrawn because they answered the manager's *correct*
+  password with `429`; the residual — a distributed attacker with many
+  addresses still costs one PBKDF2 derivation per attempt for its first five —
+  is what the second factor exists for. Unknown user, deactivated user and
+  wrong password are one generic `401 invalid-credentials` after the same
+  derivation (no wording or timing oracle).
+- **Attribution is one transport fact** (`ClientAttribution`, constitution
+  v1.8.0): the socket peer on a LAN-only box; with `GXP_TRUSTED_PROXY_ENABLED`
+  and `GXP_TRUSTED_PROXY` (the relay's exact address) the standard `Forwarded`
+  header from that peer only. Off by default and to stay off on the LAN.
+- **Second factor only through the trusted proxy** (RFC 6238 TOTP SHA-1 /
+  6 digits / 30 s ±1 step with a per-user replay guard, plus ten SHA-256-at-rest
+  recovery codes, each accepted once by a conditional UPDATE): a via-proxy
+  login without a code is answered `401 second-factor-required` *before* the
+  password is verified and is not counted; with a code, password and factor
+  are verified together. On the LAN the code fields are ignored. TOTP depends
+  on the box's clock (no RTC on a Pi) — remote login requires NTP.
+- **Append-only audit trail** (`de.gxp.audit`, `audit_entry`): when, actor,
+  attributed address, via-proxy, action, entity, entity id, field — **no value
+  column exists**. Every manager mutation records explicitly in its own
+  transaction (rolled back with it), every login outcome after the throttle
+  in its own (`REQUIRES_NEW`, so the row survives the `401`); a failed login
+  names the matched account or nothing, never the submitted text; the `429`
+  is never recorded. Retention 365 days by a 02:00 job.
+
+Why a bearer token rather than sending the password on each request (HTTP
+Basic), which an earlier draft proposed:
 
 - **The password crosses the wire once**, not on every request — far fewer
   chances to lose it to a log, a proxy or a misconfigured TLS chain.
 - **Idle logout is a real security property here**, not convenience. The manager
   laptop may sit at a hotel reception desk. Basic authentication has no notion
   of idleness at all.
-- **Brute-force limiting gets a single choke point again.** Rate limiting and
-  failed-attempt lockout live on `/api/manager/login` alone, instead of having
-  to be applied to every manager path.
+- **The password reaches a single endpoint.** `/api/manager/login` is the only
+  operation that ever sees it, instead of the credential travelling on every
+  manager path.
 - **Logout becomes real** — the server drops the token — instead of "the client
   forgot the password".
 
 Shape:
 
-- **The token store is in memory, not in the database.** With one administrator
-  it is a map with a handful of entries and a timeout; it needs no maintenance,
-  and it avoids a database write on *every* request just to slide an expiry. A
-  restart means logging in again, which is acceptable and arguably desirable.
+- **The token store is in memory, not in the database.** With a handful of
+  administrators it is a map with a few entries and a timeout; it needs no
+  maintenance, and it avoids a database write on *every* request just to slide
+  an expiry. A restart means logging in again, which is acceptable and arguably
+  desirable.
 - **Sliding means extending the existing token's expiry, not rotating it.**
   Rotation on every response would race whenever two requests are in flight and
   buys little against a 10-minute idle window. Note the option exists if the
@@ -378,7 +436,9 @@ rather than assumed.
 | `quarkus-hibernate-validator` | Constitution: *input validated at every system boundary* |
 | `quarkus-smallrye-openapi` | Serves the contract and the dev UI |
 | `quarkus-flyway` | Migrations and catalogue seeding (decision 15) |
-| `quarkus-security` | Kept for **one specific reason**: authorization hangs off `@RolesAllowed` on the individual Control method, with `deny-unannotated-members` so a new endpoint fails closed. The alternative — a filter matching path prefixes — is exactly where authorization holes appear, because an endpoint added under the wrong prefix is silently public. Core Quarkus, versioned with the platform |
+| `quarkus-security` | Kept for **one specific reason**: authorization hangs off `@PermitAll`/`@RolesAllowed` on the **Boundary** method or class, with `quarkus.security.jaxrs.deny-unannotated-endpoints=true` so a new endpoint — including one in a Boundary that does not exist yet — fails closed at build time (constitution v1.6.0, 2026-08-24; it previously sat on the Control with the class-scoped `deny-unannotated-members`, which would have gone inert once the Controls carry no annotations). The alternative — a filter matching path prefixes — is exactly where authorization holes appear, because an endpoint added under the wrong prefix is silently public. Core Quarkus, versioned with the platform |
+
+| `quarkus-scheduler` | Time-driven housekeeping (expired pairing requests, idled-out manager tokens) that must not depend on traffic arriving. Core Quarkus, in-JVM `@Scheduled`, no job store — approved constitution v1.7.0 |
 
 **Build-time**
 
@@ -396,6 +456,7 @@ nobody can reach.
 |---|---|
 | `quarkus-elytron-security-common` | Its role here was `BcryptUtil`, i.e. hashing **one** password that is now checked only at login. **PBKDF2 from the JDK** (`SecretKeyFactory`, `PBKDF2WithHmacSHA256`, high iteration count) covers that in a few lines with no dependency at all |
 | `quarkus-smallrye-jwt` | The manager token is opaque and validated against an in-memory store (§6). A signed JWT would add an extension and a key to manage, in exchange for statelessness this instance has no use for |
+| `quarkus-quartz` | The core `quarkus-scheduler` covers `@Scheduled` in-JVM. Quartz adds a database job store and cluster coordination — both answer problems a single self-hosted instance does not have (constitution v1.7.0) |
 | Any mapping framework, Lombok, utility libraries | Hand-written mappers and plain Java |
 
 **A pleasant consequence worth protecting:** because the TypeScript client is
@@ -410,8 +471,9 @@ and `rxjs`, both already present. `frontend/package.json` stays untouched.
 - **Migrations run at startup.** No one on site can apply SQL by hand.
 - **First run must yield a usable instance** with no database work: create the
   single `Property` row, seed the menu catalogue, create one default room, and
-  set the admin password from an environment variable — refusing to start if it
-  is unset rather than shipping a default.
+  create the first manager account from `GXP_ADMIN_USERNAME`/`GXP_ADMIN_PASSWORD` —
+  refusing to start if the password is unset rather than shipping a default
+  (ignored once any account exists).
 - **Backup is one `pg_dump`.** That is the whole point of decision 10, so the
   documentation must say it plainly and say how to restore.
 - **TLS material is generated on first start** and the CA is handed to kiosks
@@ -464,7 +526,7 @@ For the project owner to ratify. Proposed, not written — per
 | 5 | **Admin password rotation** — environment variable, or changeable through the UI and stored hashed in the database? Whichever is chosen, a rotation must also drop every token currently in the in-memory store, or the old credential keeps working for up to one idle window | Owner |
 | 6 | **Clock and timezone.** Check-out times and stay dates need a correct clock on a box that may have no internet and therefore no NTP | Owner |
 | 7 | **Who backs the instance up, and how often?** Still open from `system-context.md`, and now there is real data to lose | Owner |
-| 8 | **How do instances get updated?** Open since 2026-08-17 and now the dominant operational risk, since the backend adds a schema and a database to every update | Owner |
+| 8 | ~~**How do instances get updated?**~~ **Resolved 2026-08-26 by `update-channel`** (constitution v1.8.0, `docs/features/update-channel/`): the app polls an Ed25519-signed manifest hourly (outbound `GET` only, key in the image), a host-side root updater (`backend/updater/`, systemd timer every 5 min) verifies it again with OpenSSL, dumps the database, pulls the digest-pinned image, swaps it with one restart, checks ready + Flyway, and rolls back (image, then image + restore) on failure. Automatic by default at 04:00 local, manager-controlled via `/api/manager/updates`. The *who* is the release signer (owner, D17) — see `backend/README.md` → "Updates" | Owner |
 | 9 | **Guest-frontend cache: what exactly counts as sensitive?** Needs an explicit field-level list before the first sensitive screen ships | Owner |
 
 ---

@@ -15,22 +15,22 @@ import type { PropertyConfig } from './property.model';
  * a writable signal — the static data file was deleted per D6, and the
  * boundary strictness moved to `guest-content.mapper.spec.ts`). What this
  * spec owns: the component-facing semantics — per-field language resolution
- * over server maps, the settings entry in `getSectionRoute()`, the loud
- * throws on unknown ids and on reads before any config is held.
+ * over server maps and the loud throw on a read before any config is held.
  */
 const CONFIG: PropertyConfig = {
   propertyName: 'Testhaus',
   logoAssetId: 7,
   branding: { primary: '#f45aa8', primaryDeep: '#cc49af', secondary: '#8a5cf6' },
   menuItems: [
-    { id: 'home', label: { de: 'Startseite', en: 'Home' }, icon: 'phosphorHouse', route: '' },
-    { id: 'info', label: { de: 'Info', en: 'Info' }, icon: 'phosphorInfo', route: '/info' },
+    { id: 'home', label: { de: 'Startseite', en: 'Home' }, icon: 'phosphorHouse', route: '', module: null },
+    { id: 'info', label: { de: 'Info', en: 'Info' }, icon: 'phosphorInfo', route: '/info', module: null },
   ],
   settings: {
     id: 'einstellungen',
     label: { de: 'Einstellungen', en: 'Settings' },
     icon: 'phosphorGearSix',
     route: '/einstellungen',
+    module: null,
   },
   settingsConfig: {
     languages: [
@@ -54,7 +54,6 @@ const CONFIG: PropertyConfig = {
         icon: 'phosphorKey',
         header: { de: 'Check-Out', en: 'Check-out' },
         description: { de: 'Bis 11:00', en: 'By 11:00' },
-        targetSectionId: 'info',
         route: '/info',
       },
     ],
@@ -121,6 +120,30 @@ describe('PropertyContentService', () => {
     expect(before.defaultLanguage).toBe('de');
   });
 
+  it('locale() resolves from the offered language options, not the bare code (REQ-925)', () => {
+    const { service } = setup('de');
+    expect(service.locale()).toBe('de-DE');
+  });
+
+  it('locale() follows a language switch and fetches nothing (REQ-926)', () => {
+    const { service, language, config } = setup('de');
+    expect(service.locale()).toBe('de-DE');
+    const configReadsBefore = config();
+
+    language.set('en');
+
+    expect(service.locale()).toBe('en-GB');
+    // the same held config answered both — nothing was re-fetched or replaced
+    expect(config()).toBe(configReadsBefore);
+  });
+
+  it('locale() falls back to the bare language code when the property offers no match', () => {
+    const { service, language } = setup('de');
+    language.set('fr');
+
+    expect(service.locale()).toBe('fr');
+  });
+
   it('branding() and loaded() reflect the held config', () => {
     const { service } = setup();
     expect(service.loaded()).toBe(true);
@@ -130,18 +153,6 @@ describe('PropertyContentService', () => {
   it('a rejected wire brand reads as null — the defaults stay in force (REQ-512)', () => {
     const { service } = setup('de', { ...CONFIG, branding: null });
     expect(service.branding()).toBeNull();
-  });
-
-  it('getSectionRoute() resolves menu items AND the settings entry', () => {
-    const { service } = setup();
-    expect(service.getSectionRoute('info')).toBe('/info');
-    expect(service.getSectionRoute('home')).toBe('');
-    expect(service.getSectionRoute('einstellungen')).toBe('/einstellungen');
-  });
-
-  it('getSectionRoute() throws for an unknown id — loudly, in tests, not silently on a kiosk', () => {
-    const { service } = setup();
-    expect(() => service.getSectionRoute('does-not-exist')).toThrowError(/does-not-exist/);
   });
 
   it('reading content before anything is loaded throws — a guard let a route through early', () => {

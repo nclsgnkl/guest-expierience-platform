@@ -1,7 +1,143 @@
 # Constitution: Guest Experience Platform
 **Status:** Ratified
-**Version:** 1.5.1 | **Last amended:** 2026-08-19
+**Version:** 1.10.0 | **Last amended:** 2026-08-28
 
+> **1.10.0** — owner decision 2026-08-28, wording approved verbatim before it
+> was written. Adds a constraint on thresholds that gate hard-to-reach states.
+> The occasion was `guest-payload-consolidation`'s staleness escalation: seeing
+> it meant waiting an hour or editing a running system, and the owner asked for
+> the pattern he knows from work — production keeps the real value, development
+> gets one reachable by hand. The clause generalises that, and names the failure
+> it is really guarding against: not the wait, but the constant somebody edits
+> to test and forgets to edit back.
+>
+> > **1.9.0** — owner decision 2026-08-27, wording approved verbatim before it
+> was written. The kiosk cache clause was an absolute prohibition on caching
+> door codes, key-box codes, alarm codes and WiFi passwords. It is replaced by
+> a threat-model boundary: the cache may hold what the manager deliberately put
+> on a guest-facing screen, and must never hold anything that extends reach
+> beyond the device. Rationale, in the owner's terms: a value displayed to the
+> guest can be photographed or written down, so purging it later removes
+> nothing an attacker has — while withholding the WiFi password or the door
+> code from the cache denies them to exactly the guest who needs them when the
+> backend is unreachable. What we secure is what we control; physical loss of a
+> device is disclosed to the operator, not defended against speculatively. The
+> same amendment concretises stale rendering: a prolonged loss of contact
+> escalates the discreet staleness hint to a prominent banner, for
+> **operational** reasons — on a box with no remote access a guest complaint is
+> the only alerting channel there is. The threshold is deliberately not fixed
+> here; it lives with the feature that implements it.
+>
+> **1.8.3** — accuracy correction, not a new approval: principle 4 said the
+> update signature is verified against *"a signing key compiled into the
+> image"*. What shipped (`update-channel`, architect finding A-1) is a
+> **rotatable trust set of two keys** — active and dormant — compiled into
+> the image and mirrored on the host, with in-band rotation so a lost or
+> stolen key never means a site visit. Reworded below; the property it
+> protects (nothing unsigned is ever applied) is unchanged.
+>
+> **1.8.2** — accuracy correction, not a new approval (the v1.7.1 precedent):
+> *"A password change **immediately invalidates every active bearer
+> token**"* was written for one shared credential. With named accounts
+> (`auth-hardening`, REQ-611) a password change, reset or deactivation drops
+> **that user's** tokens — every other user's sessions survive, which is the
+> whole point of per-user accounts. The sentence below is reworded; the
+> intent (the old credential never survives into another idle window) is
+> unchanged.
+>
+> **1.8.1** — **principle 4's fourth consequence turns from a statement of
+> fact into a decision** (owner decision 2026-08-25, ratifying
+> `docs/backend/remote-operations.md` §10 item 1). *"It cannot be patched
+> centrally"* was written as helplessness and the whole
+> dependency-minimisation posture was derived from it. It now reads:
+> instances **are patched through an outbound, signed update channel** — the
+> box asks, nothing ever connects to the box, the signature is verified
+> against a key compiled into the image before anything is applied, and the
+> component that applies the update lives *beside* the application, not in
+> it. **The dependency-minimisation posture stays regardless**: a dependency
+> is still code we must keep updating in the field, only now there is a
+> channel to do it through, which makes the channel itself the
+> highest-value target associated with the product. Two further bullets are
+> added under the same principle, both derived from the remote-operations
+> specification: the **survival invariant** (the product keeps working when
+> everything we operate is gone — guest screens and the LAN manager UI never
+> depend on the relay, the update server, or our company) and the rule that
+> **remote access is a separately sold, optional capability** the
+> application never branches on. Also recorded here: the owner reopened
+> **REQ-326** — login throttling returns, per source address, never global
+> (the reason for the 2026-08-24 deferral, "a LAN threat model", expires the
+> moment the endpoint is internet-reachable). A major-feeling minor, the
+> v1.4.0 precedent: a previously approved sentence is rewritten, nothing
+> approved is contradicted in spirit.
+>
+> **1.8.0** — the "nothing scrolls" constraint now states its **scope**
+> (owner decision 2026-08-26, wording approved verbatim). A **clarification
+> with real consequences**, recorded as a minor rather than a patch because it
+> permits something the previous wording read as forbidden: the rule binds the
+> *document*, and a bounded sub-component may scroll its own content. It was
+> written for full-screen routes and had been read — by me, in planning
+> `modular-menu-catalogue` — as a component-level ban, which produced a
+> recommendation against a scrolling overflow popover on constitutional
+> grounds that did not exist. The owner corrected the reading and chose the
+> popover. Nothing about page-level overflow changes, and `overflow: hidden`
+> at screen level stays forbidden.
+>
+> **1.7.1** — accuracy correction, not a new approval: the backend constraint
+> said the feature boundary is held by **three** dependency-free architecture
+> tests and named three. It has been **five** since the scheduler work of
+> 2026-08-25 — `PersistenceAccessTest` landed on 2026-08-25 (`89cd289`,
+> owner-approved) without an amendment, and `ScheduledJobInventoryTest` arrived
+> with the scheduled-housekeeping change. Both are named now. This is the
+> second time this exact sentence has drifted (v1.6.1 (c) corrected "two →
+> three"), and it drifted the same way: a guard was approved and shipped while
+> the sentence counting the guards was not touched. Recorded rather than
+> quietly fixed, per the v1.3.0 lesson.
+>
+> **1.7.0** — `quarkus-scheduler` added to the approved backend dependencies
+> (owner decision 2026-08-25). A **new approval**, not a correction: the
+> allow-list previously had no scheduler at all, and the code says so — the
+> pairing table is swept opportunistically on every create, and the manager
+> token store purges on every issue. Both work, but both tie housekeeping to
+> traffic: an instance nobody touches never cleans up. The owner chose the
+> **core `quarkus-scheduler`** (a `@Scheduled` annotation, in-JVM, no store, no
+> cluster coordination) explicitly **over Quartz**, whose persistence and
+> clustering answer problems one self-hosted box does not have. Principle 4
+> still applies — it is one more extension to keep patched on machines nobody
+> can reach — and it was accepted because the replacement it displaces is
+> "hang the cleanup off unrelated traffic", not "do nothing". Existing
+> opportunistic cleanups may stay or move; nothing is required to change.
+>
+> **1.6.1** — accuracy corrections to v1.6.0, not new approvals: three
+> statements written on 2026-08-24 were contradicted by measurement once the
+> work landed, and the owner approved the corrected wording on 2026-08-25.
+> (a) *"fails closed **at build time**"* — the build does not fail; a dropped
+> annotation compiles and is denied at runtime. (b) *"the types in `.entity`
+> **(and their fields)**"* — only the fields a Control outside `.entity`
+> actually touches must be widened: 58 of 97, compiler-proven minimal.
+> (c) *"**two** dependency-free architecture tests"* — there are **three**,
+> and the third exists because a reviewer walked a real leak through the
+> unguarded `.boundary` sub-package that the first two did not cover. Recorded
+> rather than quietly fixed, per the v1.3.0 lesson.
+>
+> **1.6.0** — the project owner's two backend conventions of 2026-08-24,
+> approved after an architecture review. (a) **Feature packages gain
+> `boundary`/`control`/`entity` sub-packages.** Chosen for readability, in full
+> knowledge of the price: Java has no sub-package visibility, so entity types
+> and their fields become `public` and the feature boundary is enforced by two
+> dependency-free architecture tests instead of by the compiler. ArchUnit was
+> considered and rejected — a dependency on an unpatchable box for what 120
+> lines of reflection do (principle 4). (b) **Security annotations move from the
+> Control to the Boundary**, together with
+> `quarkus.security.jaxrs.deny-unannotated-endpoints=true`. This is a net
+> *increase* in safety: `deny-unannotated-members` is class-scoped and would
+> have gone inert on annotation-free Controls, whereas
+> `deny-unannotated-endpoints` denies **every** unannotated JAX-RS endpoint,
+> including in a Boundary that does not exist yet — a hole the old model left
+> open. It also removes the five `@PermitAll`-on-internal-method warts and the
+> latent "this internal call only works because the caller happens to be admin"
+> coupling. Both are rewrites of previously approved sentences, hence a
+> major-feeling minor (the v1.4.0 precedent).
+>
 > **1.5.1** — name correction, not a new approval: `quarkus-junit5` was renamed
 > **`quarkus-junit`** upstream in Quarkus 3.31 (the old id is only a relocation
 > pom), verified by `dev` at scaffold time against Quarkus 3.33 per the
@@ -116,11 +252,33 @@
      devices, and possibly with neighbours. Anything reachable over HTTP is
      reachable by anyone on that network — "not linked in the UI" is never a
      protection.
-   - **It cannot be patched centrally.** Instances run in buildings we may have
-     no access to, so an unpatched vulnerability can persist for a long time.
-     Prefer fewer dependencies, and prefer platform features over libraries. A
-     dependency is not just code you add, it is code you must keep updating in
-     the field.
+   - **Instances are patched through an outbound, signed update channel; the
+     dependency-minimisation posture stays regardless** (rewritten in v1.8.1
+     — this bullet previously read *"It cannot be patched centrally"*).
+     Instances run in buildings we may have no access to, so the only way a
+     fix reaches them is a channel the box itself polls: outbound only,
+     nothing ever connects to the box, every artifact verified against a
+     rotatable trust set of signing keys compiled into the image (v1.8.3)
+     *before* it is applied, signing done
+     offline so a compromised update server can serve nothing a box accepts,
+     and the updater living beside the application (it cannot replace its own
+     container) with rollback on a failed health check. Still: prefer fewer
+     dependencies, and prefer platform features over libraries. A dependency
+     is not just code you add, it is code you must keep updating in the
+     field — the channel makes that possible, not free.
+   - **The product keeps working when everything we operate is gone** (added
+     in v1.8.1). Guest screens and the manager UI on the LAN never depend on
+     the relay, the update server, the internet or our company's continued
+     existence; what any central component adds is convenience, never
+     function. A design that breaks that row is wrong, not the invariant.
+   - **Remote access is an optional, separately sold capability** (added in
+     v1.8.1). A box must be fully functional having never enrolled, enrollment
+     must be possible later without a reinstall and reversible without loss,
+     and security updates must never be gated behind it. The application
+     never branches on where a request came from — the single transport-level
+     fact it may consume is the attributed client address (trusted only from
+     the configured proxy), which feeds the per-address login budget and the
+     second-factor requirement, and nothing else.
 5. **Components reference semantic design tokens only.** Never a raw hex value,
    never a raw pixel size. Raw values live once, in the token layer
    (`docs/design/tokens.md`), which is what makes theming and per-property
@@ -141,11 +299,34 @@
   `quarkus-rest` + Hibernate ORM with **Panache repositories** (entities carry
   no persistence methods). Packages follow **BCE (Boundary–Control–Entity),
   by feature**, under the strict rules of `docs/backend/specification.md` §4 —
-  binding highlights: a Boundary method is **one delegating line** (no
-  validation, mapping, branching or transactions — not even for plain CRUD);
-  `@Transactional` sits on the Control; the Control is the package's public
-  type and speaks generated API DTOs; Entities, Repositories and Mappers stay
-  package-private; mappers are hand-written, no mapping framework.
+  binding highlights: every feature package `de.gxp.<feature>` is split into
+  the sub-packages **`boundary` / `control` / `entity`** (owner decision
+  2026-08-24); a Boundary method is **one delegating line** (no validation,
+  mapping, branching or transactions — not even for plain CRUD);
+  `@Transactional` sits on the Control; **the Control is the only type any
+  other feature may reference**, and it speaks generated API DTOs; mappers are
+  hand-written, no mapping framework. Because Java has no sub-package
+  visibility, the types in `.entity` are necessarily `public`, and so is every
+  field that a Control outside `.entity` actually touches — but only those:
+  the migration widened **58 of 97** fields and left 39 package-private, and
+  that minimum is compiler-checkable. **The feature boundary is therefore held
+  by five dependency-free architecture tests in `de.gxp.architecture`, not by
+  the compiler**: `FeatureInternalsImportTest` (nothing outside
+  `de.gxp.<feature>` may reference that feature's `.entity`, `.control` or
+  `.boundary` types, except its own `*Control`; no wildcard imports; the
+  layout is actually present), `EntityExposureTest` (no public signature
+  outside `.entity` may expose an entity type — including generic arguments,
+  array components, supertypes and interfaces),
+  `ControlPackageVisibilityTest` (only a `*Control` may be public in
+  `.control`, only a `*Resource` in `.boundary`), `PersistenceAccessTest`
+  (only entities and repositories reach the database) and
+  `ScheduledJobInventoryTest` (every `@Scheduled` job and its cron, pinned as
+  a literal list, so a job cannot be added, removed or re-timed silently).
+  The first four derive the feature list from disk; the job inventory is
+  pinned by hand on purpose. Those tests are part of the
+  definition of done and must stay green. They are a strong regression net,
+  not a proof: each records its known gaps in its own javadoc, and leaving one
+  sub-package out of scope is exactly how a real leak survived review once. A library such as ArchUnit is **deliberately not used** (principle 4).
 - **Contract-first API.** `api/openapi.yaml` is the source of truth. The Maven
   build generates the JAX-RS interfaces + DTOs (implementations hand-written)
   **and** the TypeScript client in `packages/api-client/` — which is generated
@@ -170,8 +351,17 @@
   bearer token (**10-minute idle expiry, sliding**, in-memory store on the
   server, in-memory only on the client, 256-bit `SecureRandom`, stored
   hashed). Password hashing is **JDK PBKDF2** — no Elytron. Authorization
-  hangs off `@RolesAllowed` on Control methods with `deny-unannotated-members`
-  so a new endpoint **fails closed**. All LAN traffic is **HTTPS** with an
+  hangs off `@PermitAll` / `@RolesAllowed(...)` on **Boundary** methods or
+  Boundary classes — the trust boundary is HTTP, not a Java call — with
+  **`quarkus.security.jaxrs.deny-unannotated-endpoints=true`**, so any endpoint
+  carrying no annotation, **including one in a brand-new Boundary**, **fails
+  closed** — denied at runtime by a decision baked in at build time; the build
+  itself does not fail, and `BoundaryAnnotationAuditTest` is the loud, early
+  signal. `deny-unannotated-members` stays on as the second
+  line for any bean mixing annotated and unannotated members. Controls carry no
+  security annotations: internal calls are not a trust boundary, and the room
+  is still derived exclusively from the authenticated device identity
+  (principle 4). All LAN traffic is **HTTPS** with an
   instance-generated CA distributed to kiosks at pairing — non-negotiable,
   since a shared password over plain HTTP is readable by the guest WiFi.
   Accepted and recorded: no per-user audit trail until a user table replaces
@@ -179,8 +369,29 @@
   Control. **Password lifecycle (v1.5.0):** the environment variable seeds the
   password on **first start only**; from then on it lives hashed in Postgres
   and the manager changes it through an authenticated manager-UI endpoint. A
-  password change **immediately invalidates every active bearer token** — the
-  old credential must never survive into another idle window.
+  password change **immediately invalidates every active bearer token of
+  that user** (v1.8.2: per user, not per instance) — the old credential must
+  never survive into another idle window.
+  **Authentication hardening (v1.8.1, owner decisions 2026-08-25 — supersedes
+  the "one shared admin password" and "no per-user audit trail" wording above
+  as the `auth-hardening` feature ships):** the single credential row becomes
+  **named user accounts**, all with role `admin` for now (no further roles;
+  any admin may create, deactivate and reset other accounts; the first-start
+  seed creates the first account from the environment and still refuses to
+  start without it); deactivation drops that user's tokens and takes effect
+  on the next request. **Login is throttled per attributed source address,
+  never globally** — an exhausted budget rejects *that address* before any
+  PBKDF2 derivation and never locks an account; the attributed address is
+  the socket peer unless the request arrives from the configured trusted
+  proxy, whose forwarded address is then honoured (and from nobody else).
+  **A second factor (RFC 6238 TOTP, JDK `Mac` only, recovery codes stored
+  hashed) is required for every login that arrives through the trusted
+  proxy and is never asked on the LAN** — a user without an enrolled factor
+  cannot log in remotely at all, and enrolls on the LAN; the LAN path is the
+  documented recovery route. **An append-only audit trail** records who,
+  when, from which address, which entity and which field — and **never a
+  value** of a guest-sensitive field (principle 3); retention is 365 days,
+  pruned by the daily scheduler.
 - **The manager UI enters the Quarkus artifact via a plain Maven copy step**
   of the built Angular `dist` into `META-INF/resources` (v1.5.0, owner
   decision). Quinoa is rejected: a Quarkiverse community extension is one more
@@ -190,18 +401,57 @@
   Quarkus release at scaffold time): `quarkus-rest`, `quarkus-rest-jackson`,
   `quarkus-hibernate-orm-panache`, `quarkus-jdbc-postgresql`,
   `quarkus-hibernate-validator`, `quarkus-smallrye-openapi`, `quarkus-flyway`,
-  `quarkus-security`; build/test-time: `openapi-generator-maven-plugin`,
+  `quarkus-security`, `quarkus-scheduler` (core `@Scheduled` only — Quartz
+  deliberately not approved, see v1.7.0); build/test-time:
+  `openapi-generator-maven-plugin`,
   `quarkus-junit` (named `quarkus-junit5` before Quarkus 3.31 — same artifact,
   see v1.5.1), `rest-assured`, Quarkus Dev Services (no separate
   Testcontainers dependency). **Deliberate non-additions**, with replacements
   named so they are not re-added by reflex: `quarkus-elytron-security-common`
-  (→ JDK PBKDF2), `quarkus-smallrye-jwt` (→ opaque in-memory token), any
-  mapping framework / Lombok / utility libraries (→ plain hand-written Java).
-- **The kiosk's last-known-good cache never holds guest-sensitive values** —
-  no door codes, key-box codes, alarm codes or WiFi passwords, ever, because
-  the kiosk stands in a guest-accessible room (principle 3 applied to
-  persistence, not just logs). The kiosk may render its last successful
-  response when the backend is unreachable, with a discreet staleness hint.
+  (→ JDK PBKDF2), `quarkus-smallrye-jwt` (→ opaque in-memory token), `quarkus-quartz`
+  (→ core `quarkus-scheduler`; this box needs neither persistence nor
+  cluster coordination for its jobs), any mapping framework / Lombok /
+  utility libraries (→ plain hand-written Java).
+- **The kiosk's last-known-good cache may hold any guest-facing content the
+  current guest is entitled to see** (amended 2026-08-27) — the WiFi password,
+  door and key-box codes, alarm codes and host contact details included. The
+  boundary is **what the manager deliberately chose to display**: a value the
+  property put on a guest-facing screen is, by that act, a value the guest may
+  read, photograph or write down. Caching it adds no exposure, and purging it
+  removes none. The former absolute prohibition bought nothing and contradicted
+  principle 3's own statement that the app deliberately holds exactly these
+  values. The kiosk may render its last successful response when the backend is
+  unreachable, with a discreet staleness hint. After a prolonged loss of
+  contact that hint escalates to a prominent banner naming the situation and
+  directing the guest to their host; content keeps rendering, because a guest
+  whose backend is unreachable is precisely the guest who still needs the door
+  code. The escalation is an **operational** requirement, not a security one —
+  on a box with no remote access, a guest complaint is the only alerting
+  channel that exists. The threshold itself lives with the feature that
+  implements it, not here.
+- **What the cache must never hold is anything that extends reach beyond the
+  device itself** — no device token, session token, key material or any
+  credential that could address the backend, another room, or another guest's
+  data. That is the line, and it is not negotiable: a stolen kiosk may expose
+  what its own room's guest already knew, and must never become a key to
+  anything else.
+- **Physical loss of a kiosk is an operator responsibility, and the product
+  discloses it.** A missing device is assumed to expose every value it last
+  held; the operator documentation states that door, key-box and alarm codes
+  are to be rotated when a device goes missing. We implement the controls we
+  own and disclose the ones we do not — we do not build speculative defences
+  against the physical world.
+- **A threshold that gates a state you cannot otherwise reach carries a shorter
+  value in `%dev`.** Where a parameter decides *when* something becomes visible
+  — a staleness escalation, a retention sweep, a token idle-out, a backoff
+  ceiling — production carries the real value and the development profile
+  carries one small enough to reach by hand. The production value remains the
+  single source of truth for behaviour; the development value exists so the
+  state can be exercised without waiting for it or editing a running system,
+  which is how a state ends up shipped untested. Both live side by side in
+  configuration the build selects — **never as one constant edited to test and
+  edited back**, because that edit is invisible in review and survives in
+  someone's working tree.
 - **Second frontend: the manager UI is a second Angular app**
   (`backend/manager-ui/`), shipped inside the Quarkus artifact,
   dependency-lean: no component library, plain CSS, native form controls. The
@@ -230,6 +480,11 @@
   fix), never by `overflow: hidden`, which hides the regression instead of
   preventing it. Checkable at review time: on every route,
   `scrollWidth <= clientWidth` and `scrollHeight <= clientHeight`.
+  **The scope is the document** (v1.8.0): no route may produce a page-wide
+  scrollbar. A bounded sub-component — an overlay panel, a popover, a list
+  inside a card — may scroll its own content, as long as it stays inside the
+  viewport and therefore never grows the document. `overflow: hidden` at
+  screen level remains forbidden.
 - **Approved dependencies:** `@angular/cdk` (overlay, dialog, menu, focus trap,
   a11y — used unstyled), `@ng-icons/core` + `@ng-icons/phosphor-icons`
   (Phosphor icon set), **`vitest` + `jsdom`** (unit tests — the Angular CLI

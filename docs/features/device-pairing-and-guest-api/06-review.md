@@ -210,3 +210,125 @@ REQ-432 consequences.
    `packages/api-client/` + docs together, on `feature/backend`.
 
 **Ready for commit: yes** (the user/lead commits per project convention).
+
+---
+
+## Addendum 2026-08-24 — pairing-create rate limiting removed (`backend-bce-refactor`)
+
+Appended, not rewritten: the rows above are the dated record of review day.
+
+Owner decision: **`POST /api/pairing/requests` is no longer throttled** — no
+rate limit, no admission gate. As reviewed it carried `PairingRateLimiter`
+(5 creates / 60 s, global, in-memory); that global counter was the bug, since
+anyone on the LAN — or one clock-skewed kiosk retrying by itself
+(`guest-frontend-integration` 06-review 🟡-3) — could keep a real kiosk from
+ever getting a code. A paced `PairingConcurrencyGate` replaced it the same day
+and was then removed with it, as part of removing throttling from the backend
+entirely until the production hardware is known.
+
+- REQ-409's guessing argument now stands on **entropy + TTL alone**, which it
+  can: 8 characters from a 32-symbol alphabet (32⁸ ≈ 1.1 × 10¹²), 10-minute
+  TTL, and a flooder reaches neither `confirm` (admin-only) nor `poll`
+  (256-bit secret).
+- **The one real consequence:** live pairing rows are no longer capped in
+  number. They are bounded in **age** only — by the 10-minute TTL and the
+  opportunistic `deleteExpired` that runs on every create.
+- `PairingFlowTest`'s rate-limit assertion is replaced by its opposite: a
+  concurrent create-flood is fully served (every request `201`, no
+  `Retry-After`) and the kiosk behind it is served too.
+- **Open, deliberately not decided here:** the `429` on this operation is
+  still in `api/openapi.yaml`, because `frontend/src/app/features/pairing/`
+  handles it (a whole `cooldown` UI state with `de`/`en` strings). Removing it
+  from the contract is held pending the owner's call — see the report from the
+  same session.
+
+**Closed 2026-08-24 (owner decision, same day).** The open item above is
+resolved: the owner chose to remove the `429` from the contract and delete the
+kiosk's `cooldown` path with it, rather than keep a client-side handler for an
+answer the backend can no longer give.
+
+- `api/openapi.yaml` — `createPairingRequest` lost its `429` response, the
+  `Retry-After` header block under it, and the words *"Rate-limited (pairing is
+  a rare, manager-attended act)"* from the operation description. The
+  opportunistic-cleanup sentence stays: that behaviour is still real. No `429`
+  and no `Retry-After` remain anywhere in the contract.
+- **Regenerated client: one doc-comment line.** `packages/api-client` was
+  snapshotted, the generator's `.sha256` marker deleted (otherwise the second
+  run skips generation and proves nothing) and the generation re-run twice.
+  Run 1 changed exactly one of 65 files —
+  `packages/api-client/api/pairing.service.ts`, the JSDoc summary that mirrors
+  the operation description. **No generated code changed**: `typescript-angular`
+  models only the success type, so the removed response and header were never
+  represented. Run 2 was byte-identical to run 1 across all 65 files.
+- The kiosk's `cooldown` state is gone with it — see
+  `docs/features/guest-frontend-integration/06-review.md` (same date) for the
+  file-by-file list.
+
+Backend behaviour is unchanged by this edit — it stopped being able to answer
+`429` when the rate limiter was withdrawn — so this only stops the contract
+promising something the implementation cannot do. `PairingFlowTest`'s
+"nothing throttles, so nothing hints at a retry delay" assertion (no
+`Retry-After` on a create-flood) is now the contract's statement too. Backend
+suite after the change: **185 tests, 0 failures**.
+
+---
+
+## Addendum 2026-08-24 (second, same day) — REQ-414's annotations moved to the Boundary
+
+Appended, not rewritten. Owner decision **D2** (constitution **v1.6.0**):
+security annotations sit on the **Boundary**, never on the Control.
+
+- **Row 162 / line 42 (the audit test that "must-see" `DeviceControl` and
+  `GuestControl`) is superseded.** The sweep is now
+  `BoundaryAnnotationAuditTest` over the `*Resource` classes, and it keeps the
+  same defensive trick — a hard-coded list of the ten Boundaries, so a rename
+  cannot silently empty it. Two further tests join it: no generated
+  `de.gxp.api.*Api` interface method carries a security annotation, and every
+  `bearerAuth` operation in `api/openapi.yaml` answers 401 anonymously
+  (contract-derived).
+- **Role separation is unchanged and still tested both ways** — `GuestResource`
+  is `@RolesAllowed("device")` class-wide, the manager Boundaries
+  `@RolesAllowed("admin")`, `PairingResource` `@PermitAll`,
+  `SystemResource.getSystemInfo` `@RolesAllowed({"admin","device"})`
+  (REQ-432). No path, role or status code changed on the wire; `RoomScopingTest`
+  and `DeviceAuthTest` pass untouched.
+- **`DeviceControl.verifyToken` lost its `@PermitAll`** — the sharpest of the
+  `@PermitAll`-on-internal warts, since `TokenIdentityProvider` calls it
+  *during* authentication, before any identity exists. Nothing about the
+  verification path changed.
+- Backstop: `quarkus.security.jaxrs.deny-unannotated-endpoints=true` (global,
+  build-time) now denies any endpoint that resolves to no annotation, which the
+  class-scoped `deny-unannotated-members` never could once a Control is
+  annotation-free.
+
+
+## Addendum 2026-08-25 — the sub-package split (`backend-bce-refactor`, block C)
+
+Appended, not rewritten. Owner decision **D1** (constitution **v1.6.0**) split
+every feature package into `de.gxp.<f>.boundary` / `.control` / `.entity`.
+For this feature that means:
+
+- `de.gxp.device` → `boundary.{PairingResource, DeviceAdminResource}` /
+  `control.{DeviceControl, DeviceRepository, PairingRequestRepository,
+  PairingCodes}` / `entity.{Device, PairingRequest, DeviceMapper}`. The
+  two-Boundary exception is unaffected — both sit in `.boundary` over the one
+  public `.control.DeviceControl`.
+- `de.gxp.guest` → `boundary.GuestResource` /
+  `control.{GuestControl, GuestEtagFilter}`. It owns no table, so it has no
+  `.entity` package; it is one of the two features named as that exception in
+  the architecture guards.
+- The repositories, `PairingCodes` and `GuestEtagFilter` are **still
+  package-private** — that is why they live in `.control`. `Device`,
+  `PairingRequest` and `DeviceMapper` are now `public`, including every field
+  of both entities, because Java has no sub-package visibility and
+  `DeviceControl` drives their whole lifecycle across the split.
+- **Verified at runtime, not by compilation:** `TokenIdentityProvider` (an SPI
+  provider Quarkus discovers by implemented interface) is package-private in
+  `de.gxp.auth.control` and still injects `DeviceControl` during
+  authentication — `DeviceAuthTest`, `AuthResourceTest`, `PairingFlowTest`,
+  `PairingCaTest` and `RoomScopingTest` all pass unchanged.
+
+Enforcement is now the three dependency-free guards in `de.gxp.architecture`
+(`FeatureInternalsImportTest`, `EntityExposureTest`,
+`ControlPackageVisibilityTest`), re-proven by injected violation at full scope
+on 2026-08-25.

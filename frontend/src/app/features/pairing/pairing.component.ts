@@ -37,10 +37,8 @@ export class PairingComponent {
 
   protected readonly statusText = computed(() => this.t(`pairing.${this.pairing.status()}`));
 
-  /** Dot colour: waiting/renewing pulse on the brand role; cooldown/offline are muted. */
-  protected readonly troubled = computed(
-    () => this.pairing.status() === 'cooldown' || this.pairing.status() === 'offline',
-  );
+  /** Dot colour: waiting/renewing pulse on the brand role; offline is muted. */
+  protected readonly troubled = computed(() => this.pairing.status() === 'offline');
 
   constructor() {
     this.pairing.start();

@@ -1,0 +1,328 @@
+package de.gxp.device.control;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import de.gxp.infrastructure.http.ApiErrors;
+import de.gxp.api.model.ConfirmPairingRequest;
+import de.gxp.api.model.DeviceDto;
+import de.gxp.api.model.DeviceUpdateRequest;
+import de.gxp.api.model.PairingCompleted;
+import de.gxp.api.model.PairingRequestCreated;
+import de.gxp.audit.control.AuditControl;
+import de.gxp.device.entity.Device;
+import de.gxp.device.entity.DeviceMapper;
+import de.gxp.device.entity.PairingRequest;
+import de.gxp.room.control.RoomControl;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
+
+/**
+ * Control — the package's ONE public type: pairing lifecycle, device
+ * CRUD/revoke and token verification for the auth package (REQ-403..407,
+ * REQ-409, REQ-413). One package on purpose: the claim is a cross-entity
+ * transaction (read {@link PairingRequest}, write {@link Device}, mark
+ * claimed) — two packages would force a Control cycle. Two Boundaries sit on
+ * top ({@code pairing} kiosk-facing, {@code manager-devices} admin-facing) —
+ * the approved two-auth-surface exception (resolved decision #5, 2026-08-19).
+ *
+ * <p>Security-relevant throughout (constitution principle 4): every pairing
+ * miss — unknown, expired, claimed, wrong secret — answers ONE identical
+ * 404 (no oracle); tokens and poll secrets are stored as SHA-256 hex only
+ * and never logged; device DTOs carry no token material.
+ */
+@ApplicationScoped
+public class DeviceControl {
+
+    /** What auth needs to build a device identity — never token material. */
+    public record DeviceIdentity(long deviceId, long roomId) {
+    }
+
+    static final Duration PAIRING_TTL = Duration.ofMinutes(10); // pinned (spec §6 "short-lived")
+    static final Duration LAST_SEEN_INTERVAL = Duration.ofSeconds(60); // pinned (REQ-413)
+
+    private final DeviceRepository deviceRepository;
+    private final PairingRequestRepository pairingRequestRepository;
+    private final RoomControl roomControl;
+    private final String caPemPath;
+    private final Clock clock;
+    private final AuditControl auditControl;
+
+    /** Throttles the per-device last-seen write (REQ-413) — in-memory, like the token store. */
+    private final ConcurrentHashMap<Long, Instant> lastSeenWriteByDeviceId = new ConcurrentHashMap<>();
+
+    @Inject
+    DeviceControl(DeviceRepository deviceRepository, PairingRequestRepository pairingRequestRepository,
+            RoomControl roomControl, AuditControl auditControl,
+            @ConfigProperty(name = "gxp.tls.ca-pem-path", defaultValue = "/tls/ca.pem") String caPemPath) {
+        this(deviceRepository, pairingRequestRepository, roomControl, auditControl, caPemPath, Clock.systemUTC());
+    }
+
+    DeviceControl(DeviceRepository deviceRepository, PairingRequestRepository pairingRequestRepository,
+            RoomControl roomControl, AuditControl auditControl, String caPemPath, Clock clock) {
+        this.deviceRepository = deviceRepository;
+        this.pairingRequestRepository = pairingRequestRepository;
+        this.roomControl = roomControl;
+        this.auditControl = auditControl;
+        this.caPemPath = caPemPath;
+        this.clock = clock;
+    }
+
+    // ------------------------------------------------------------ pairing (kiosk)
+
+    /**
+     * Creates a pairing request (REQ-403): deletes expired rows first
+     * (opportunistic cleanup), returns display code + RAW poll secret +
+     * expiry — the secret is hashed at rest, this response is the only place
+     * the raw value ever appears.
+     *
+     * <p><b>Deliberately not throttled</b> (REQ-409, owner decision
+     * 2026-08-24): no rate limit and no admission gate. The earlier global
+     * 5-per-60 s limiter let anyone on the LAN — or a single clock-skewed
+     * kiosk retrying by itself — keep a real kiosk from ever obtaining a code.
+     * Guessing a code stays infeasible on entropy and TTL alone (8 characters
+     * from a 32-symbol alphabet ≈ 1.1 × 10¹² combinations, valid 10 minutes),
+     * and a flooder reaches neither {@code confirm} (admin-only) nor
+     * {@code poll} (256-bit secret). Live rows are therefore unbounded in
+     * count, bounded only in age: the 10-minute TTL plus the opportunistic
+     * {@code deleteExpired} below.
+     */
+    @Transactional
+    public PairingRequestCreated createPairingRequest() {
+        Instant now = clock.instant();
+        pairingRequestRepository.deleteExpired(now);
+        String code = PairingCodes.newDisplayCode();
+        while (pairingRequestRepository.byCode(code) != null) { // unique among live requests
+            code = PairingCodes.newDisplayCode();
+        }
+        String pollSecret = PairingCodes.newSecret();
+        PairingRequest request = new PairingRequest();
+        request.code = code;
+        request.pollSecretHash = PairingCodes.sha256Hex(pollSecret);
+        request.createdAt = now;
+        request.expiresAt = now.plus(PAIRING_TTL);
+        pairingRequestRepository.persist(request);
+        return new PairingRequestCreated()
+                .code(code)
+                .pollSecret(pollSecret)
+                .expiresAt(request.expiresAt.atOffset(java.time.ZoneOffset.UTC));
+    }
+
+    /**
+     * The kiosk's poll (REQ-404/406): pending → thrown 202; confirmed → mint
+     * the 256-bit token, insert the {@link Device} row (hash only), claim the
+     * request ATOMICALLY (two racing polls yield exactly one 200) and return
+     * the raw token — exactly once. Every miss (unknown, expired, claimed,
+     * wrong secret) is the one identical 404.
+     */
+    @Transactional
+    public PairingCompleted poll(String code, String pollSecret) {
+        Instant now = clock.instant();
+        PairingRequest request = pairingRequestRepository.byCode(code);
+        if (request == null || !request.expiresAt.isAfter(now) || request.claimedAt != null
+                || !hashMatches(pollSecret, request.pollSecretHash)) {
+            throw pairingNotFound();
+        }
+        if (request.confirmedAt == null) {
+            throw new WebApplicationException(Response.status(202).build()); // pending — empty body
+        }
+        if (!pairingRequestRepository.claimOnce(request.id, now)) {
+            throw pairingNotFound(); // the other racing poll won
+        }
+        String deviceToken = PairingCodes.newSecret();
+        Device device = new Device();
+        device.roomId = request.roomId;
+        device.name = request.deviceName;
+        device.tokenHash = PairingCodes.sha256Hex(deviceToken);
+        device.createdAt = now;
+        deviceRepository.persist(device);
+        return new PairingCompleted()
+                .deviceToken(deviceToken)
+                .deviceName(device.name)
+                .roomCode(deviceRepository.roomCodeOf(device.roomId));
+    }
+
+    /**
+     * The instance CA certificate, PEM (REQ-429 — public material for kiosk
+     * provisioning). Without TLS material ({@code %dev}/{@code %test}) → a
+     * clearly coded 404.
+     */
+    public String caPem() {
+        Path path = Path.of(caPemPath);
+        if (!Files.isReadable(path)) {
+            throw ApiErrors.notFound("ca-not-available", "This instance has no TLS material");
+        }
+        try {
+            return Files.readString(path, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw ApiErrors.notFound("ca-not-available", "This instance has no TLS material");
+        }
+    }
+
+    /**
+     * Time-driven sweep of expired pairing requests (constitution v1.7.0,
+     * owner decision 2026-08-25) — invoked by
+     * {@code de.gxp.infrastructure.scheduler.DeviceScheduler}, which is the
+     * reason this method is {@code public}: scheduling is centrally managed
+     * in one package, and that package may name a feature's {@code *Control}
+     * and nothing else.
+     *
+     * <p>The opportunistic {@code deleteExpired} in
+     * {@link #createPairingRequest()} STAYS: it is what bounds the table
+     * during a flood of anonymous creates, which a daily sweep cannot do.
+     * This closes the opposite gap — an instance nobody touches, where no
+     * create ever arrives and expired rows are never removed.
+     *
+     * <p>Returns the row count so the scheduler can log a COUNT and nothing
+     * else (principle 3): a pairing row holds a display code and a secret
+     * hash, neither of which may reach a log.
+     */
+    @Transactional
+    public long sweepExpiredPairingRequests() {
+        return pairingRequestRepository.deleteExpired(clock.instant());
+    }
+
+    // ------------------------------------------------------------ pairing (manager)
+
+    /**
+     * Manager confirm (REQ-405): assigns the pending request to an existing
+     * room. Room existence answers 400 via {@link RoomControl#lockForStayWrite}
+     * — which also holds the room row until commit, so a concurrent room
+     * delete cannot slip between the check and the confirm. Default device
+     * name: {@code Kiosk <room code>}.
+     *
+     * <p><b>Known residual race</b> (found in review 2026-08-25, accepted as
+     * is): a confirm that passes its {@code expiresAt.isAfter(now)} check
+     * microseconds before the row crosses its TTL can have that row bulk-
+     * deleted underneath it — by the opportunistic
+     * {@link PairingRequestRepository#deleteExpired(java.time.Instant)} on a
+     * concurrent create, or by the daily
+     * {@link #sweepExpiredPairingRequests()} — before the dirty-check UPDATE
+     * commits. The manager then sees a {@code StaleStateException} → 500 where
+     * a second later the same request would have given the deterministic 404.
+     * The window is sub-second, the sweep runs once a day at 02:00, and the
+     * behavior is not new: the create-path delete has had exactly this shape
+     * since REQ-409. Closing it means locking the pairing row for update, and
+     * that cost was judged not worth a race that ends in "retry, you get the
+     * 404 you were going to get anyway".
+     */
+    @Transactional
+    public void confirmPairing(String code, ConfirmPairingRequest request) {
+        Instant now = clock.instant();
+        PairingRequest pairing = pairingRequestRepository.byCode(code);
+        if (pairing == null || !pairing.expiresAt.isAfter(now)) {
+            throw ApiErrors.notFound("pairing-not-found", "No such pairing request");
+        }
+        if (pairing.confirmedAt != null) {
+            throw ApiErrors.conflict("pairing-already-confirmed", "The pairing request is already confirmed");
+        }
+        roomControl.lockForStayWrite(request.getRoomId()); // 400 unknown-room + row held until commit
+        pairing.roomId = request.getRoomId();
+        pairing.deviceName = request.getDeviceName() == null || request.getDeviceName().isBlank()
+                ? "Kiosk " + deviceRepository.roomCodeOf(request.getRoomId())
+                : request.getDeviceName();
+        pairing.confirmedAt = now;
+        // the device row does not exist until the kiosk polls — the pairing request id is the reference
+        auditControl.record(AuditControl.ACTION_CONFIRM, AuditControl.ENTITY_DEVICE, String.valueOf(pairing.id), null);
+    }
+
+    // ------------------------------------------------------------ devices (manager)
+
+    @Transactional
+    public List<DeviceDto> listDevices() {
+        return deviceRepository.allOrdered().stream()
+                .map(device -> DeviceMapper.toDto(device, deviceRepository.roomCodeOf(device.roomId)))
+                .toList();
+    }
+
+    @Transactional
+    public DeviceDto renameDevice(Long deviceId, DeviceUpdateRequest request) {
+        if (request.getName() == null || request.getName().isBlank()) {
+            throw ApiErrors.badRequest("invalid-name", "The device name must not be blank");
+        }
+        Device device = require(deviceId);
+        device.name = request.getName();
+        auditControl.record(AuditControl.ACTION_RENAME, AuditControl.ENTITY_DEVICE, String.valueOf(deviceId), null);
+        return DeviceMapper.toDto(device, deviceRepository.roomCodeOf(device.roomId));
+    }
+
+    /** Soft revoke (REQ-407/412): idempotent; the token is dead on the very next request. */
+    @Transactional
+    public void revokeDevice(Long deviceId) {
+        Device device = require(deviceId);
+        if (device.revokedAt == null) {
+            device.revokedAt = clock.instant();
+        }
+        auditControl.record(AuditControl.ACTION_REVOKE, AuditControl.ENTITY_DEVICE, String.valueOf(deviceId), null);
+    }
+
+    // ------------------------------------------------------------ auth-internal
+
+    /**
+     * Token verification for {@code de.gxp.auth} (REQ-410/412/413) — invoked
+     * DURING authentication, before any identity exists. That is precisely why
+     * a Control carries no security annotation (constitution v1.6.0): an
+     * annotation here would have to be {@code @PermitAll} to let authentication
+     * itself through, which said nothing and hid the rule. Reads
+     * the row on every request (instant revocation beats caching a
+     * credential check); the {@code last_seen_at} WRITE is throttled to one
+     * per device per {@link #LAST_SEEN_INTERVAL}. Returns {@code null} for
+     * unknown or revoked — the caller answers the generic 401 + challenge.
+     */
+    @Transactional
+    public DeviceIdentity verifyToken(String tokenSha256Hex) {
+        Device device = deviceRepository.byTokenHash(tokenSha256Hex);
+        if (device == null || device.revokedAt != null) {
+            return null;
+        }
+        Instant now = clock.instant();
+        lastSeenWriteByDeviceId.compute(device.id, (id, lastWrite) -> {
+            if (lastWrite == null || !lastWrite.plus(LAST_SEEN_INTERVAL).isAfter(now)) {
+                device.lastSeenAt = now; // managed entity — flushed with the transaction
+                return now;
+            }
+            return lastWrite;
+        });
+        return new DeviceIdentity(device.id, device.roomId);
+    }
+
+    // ------------------------------------------------------------ internals
+
+    /** Test hook (same package): clears the in-memory last-seen throttle. */
+    void resetLastSeenThrottle() {
+        lastSeenWriteByDeviceId.clear();
+    }
+
+    private Device require(Long deviceId) {
+        Device device = deviceRepository.findById(deviceId);
+        if (device == null) {
+            throw ApiErrors.notFound("unknown-device", "No device " + deviceId);
+        }
+        return device;
+    }
+
+    /** Constant-time comparison of the presented secret against the stored hash. */
+    private static boolean hashMatches(String presentedSecret, String storedSha256Hex) {
+        byte[] presented = PairingCodes.sha256Hex(presentedSecret).getBytes(StandardCharsets.UTF_8);
+        byte[] stored = storedSha256Hex.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(presented, stored);
+    }
+
+    /** ONE indistinguishable miss (REQ-404): unknown = expired = claimed = wrong secret. */
+    private static WebApplicationException pairingNotFound() {
+        return ApiErrors.notFound("pairing-not-found", "No such pairing request");
+    }
+}

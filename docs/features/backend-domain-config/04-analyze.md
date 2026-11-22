@@ -36,13 +36,13 @@
 | REQ-323 | API contract (stays) | T-04, T-22 | ✅ |
 | REQ-324 | API contract (assets); delete guard | T-04, T-15, T-16 | ✅ |
 | REQ-325 | API contract (constraints); `de.gxp.api` mappers | T-02, T-04, T-13 | ✅ |
-| REQ-326 | Auth flow; Pinned (token, lockout) | T-01, T-10 | ✅ |
+| REQ-326 | Auth flow; Pinned (token; **no login throttling** — the lockout this row originally named was replaced by a concurrency gate and then removed outright on 2026-08-24 by owner decision, see T-10) | T-01, T-10 | ✅ |
 | REQ-327 | Auth flow; Pinned (idle 600 s, header) | T-01, T-08, T-12 | ✅ |
 | REQ-328 | Auth flow (logout) | T-01, T-10 | ✅ |
 | REQ-329 | Pinned (PBKDF2 600k/format) | T-07 | ✅ |
 | REQ-330 | Auth flow (`AdminPasswordSeeder`); V3 | T-06, T-11 | ✅ |
 | REQ-331 | Auth flow (password change → `clear()`) | T-01, T-12 | ✅ |
-| REQ-332 | Architecture (mechanism/provider); FailClosedTest revisit | T-09, T-10, T-12, T-23 | ✅ |
+| REQ-332 | Architecture (mechanism/provider); FailClosedTest revisit (**amended 2026-08-24, D2:** the annotation carrier moved Control → Boundary; the `*Control` audit became `BoundaryAnnotationAuditTest` + the generated-interface guard + the contract-driven anonymous-401 sweep, with `deny-unannotated-endpoints=true` as the runtime backstop) | T-09, T-10, T-12, T-23 | ✅ |
 | REQ-333 | Pinned + Auth flow (generic errors, no value logging) | T-10, T-11, T-23 | ✅ |
 | REQ-334 | Data model seeds; Auth seeder | T-05, T-11, T-17, T-18, T-24 | ✅ |
 | REQ-335 | (cross-cutting — per-behavior tests) | T-07…T-24, T-26 | ✅ |
@@ -83,7 +83,12 @@ task.
   sequencing (transport constraint lands with pairing).
 - **BCE strictness:** one-line Boundaries, `@Transactional` + security on
   Controls, package-private Entities/Repos/Mappers, Control-only cross-
-  feature injection; the menu+cards single-package call avoids circular
+  feature injection
+  (**amended 2026-08-25, D1 / constitution v1.6.0:** security moved to the
+  Boundary; each package is now `boundary`/`control`/`entity`, so Entities
+  and Mappers are `public` while the Repository stays package-private in
+  `.control`, and the three `de.gxp.architecture` guards replace the
+  compiler as the enforcement mechanism); the menu+cards single-package call avoids circular
   injection rather than bending the rules. Infrastructure adapters (auth
   SPI, exception mappers) documented as platform adapters with zero business
   logic — consistent with the foundation's pinned exception-mapping

@@ -98,6 +98,11 @@ COPY --chown=185 target/quarkus-app/quarkus/ /deployments/quarkus/
 # (already in this image) and then execs the stock run-java launcher.
 USER root
 RUN mkdir -p /tls && chown 185:root /tls && chmod 700 /tls
+# Update exchange directory (update-channel REQ-717): the named gxp-updates
+# volume mounts here; the app (uid 185) writes desired-update.json, the
+# host-side updater (root) writes state.json. Seeded with this ownership so
+# a fresh named volume is writable by the runtime user.
+RUN mkdir -p /updates && chown 185:root /updates && chmod 700 /updates
 COPY --chown=185 --chmod=755 src/main/docker/entrypoint-jvm.sh /deployments/entrypoint-jvm.sh
 
 EXPOSE 8443

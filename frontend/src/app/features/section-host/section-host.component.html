@@ -1,0 +1,14 @@
+@if (module(); as content) {
+  <div class="section-host">
+    <h1 class="section-host__title">{{ label() }}</h1>
+    <ng-container
+      *ngComponentOutlet="renderer(content); inputs: { module: content }"
+    ></ng-container>
+  </div>
+} @else {
+  <!-- No module authored for this section, a module type this build does not
+       know (REQ-973), or one dropped as structurally invalid (REQ-972) — and a
+       route the delivered menu does not claim at all. One consistent "nothing
+       here yet", never a blank screen. -->
+  <app-section-placeholder />
+}

@@ -157,18 +157,33 @@ mehr der Seitenhintergrund, sondern die Glasfüllung.
 
 `#CC49AF` als Endpunkt des Icon-Verlaufs ist keine Variable.
 
-### Status 📋 — noch nicht verwendet
+### Status 📋 — teilweise realisiert
 
-Aus v1 übernommen, bislang nirgends im Design eingesetzt. Wird spätestens
-gebraucht für Smart-Home-Zustände, WLAN-Status und Fehlermeldungen.
+Aus v1 übernommen. Zwei der fünf Werte sind inzwischen als Token realisiert;
+die übrigen drei sind weiterhin nirgends eingesetzt und werden spätestens für
+Smart-Home-Zustände und Fehlermeldungen gebraucht.
 
 ```text
-Success  #46D38A
-Warning  #F8B84E
-Danger   #F26666
-Info     #67B8FF
-Offline  #A79DBA
+Success  #46D38A   📋 noch nicht verwendet
+Warning  #F8B84E   ✅ realisiert 2026-08-27 als --color-status-warning
+Danger   #F26666   📋 noch nicht verwendet — die Rolle für destruktive Aktionen
+Info     #67B8FF   📋 noch nicht verwendet
+Offline  #A79DBA   ✅ realisiert 2026-08-20 als --color-status-offline
 ```
+
+**Warning ist theme-abhängig, Offline nicht.** Der v1-Wert `#F8B84E` **ist** das
+dunkle Thema (unverändert als `--status-warning-dark-raw`); für das helle Thema
+ist derselbe Farbton (37°) auf `#895806` abgedunkelt, weil der Originalwert auf
+den hellen Glasflächen nicht trägt. Beide Werte sind absichtlich
+**textfähig** gemessen (hell 4.64 / 5.17, dunkel 5.63 / 4.86 auf Glas) — ein
+dekoratives Glyph bräuchte das nicht, aber genau diese Abkürzung hat
+`--color-status-offline` seinen dauerhaften Vermerk *"nie als Textfarbe"*
+eingebracht. Es ist eine **Vordergrundrolle** (Text, Glyph, Rahmen), nie eine
+Flächenfarbe. Erste Verwendung: das `WifiSlash`-Glyph des eskalierten
+Staleness-Banners ([`screens-inhouse/connection.md`](screens-inhouse/connection.md)).
+**Warning ist nicht Danger** — für destruktive Aktionen steht `#F26666` daneben
+und darf nicht durch Warning ersetzt werden. Herleitung und gemessene Werte:
+[`tokens.md`](tokens.md) → *In-house tokens*.
 
 ### Dark Mode 📋 — vollständig entworfen, **nicht in Figma**
 
@@ -406,11 +421,23 @@ unter [`screens-inhouse/`](screens-inhouse/) — bewusst **nicht** unter
 `screens/`, das ausschließlich den Figma-Bestand dokumentiert. Jede Datei
 trägt ein Provenienz-Banner; ein Figma-Re-Import bringt nichts davon zurück.
 
+> **Abgeglichen 2026-08-28.** Diese Tabelle ist der **Index der In-Repo-Designs**
+> und lag zwei Einträge zurück: `menu-overflow.md` (2026-08-27) und `info.md`
+> (2026-08-28) waren nie aufgenommen worden, obwohl beide Dateien existieren.
+> Nachgetragen — eine reine Dokumentations-Abgleichung, keine Design-Änderung.
+> Zwei Zeilen tragen dabei eine Einschränkung, die 📋 allein nicht ausdrückt:
+> der **Menü-Überlauf ist Chrome, kein Screen** (keine Route, keine URL), und
+> **Info ist entworfen, aber noch nicht gebaut** — anders als die vier übrigen
+> Einträge, die alle laufen. Wer das 📋 dieser Tabelle als „selbst entworfen
+> **und gebaut**“ liest, läge bei Info falsch.
+
 | Screen | Kurzfassung | Spezifikation |
 |---|---|---|
 | **Pairing** 📋 | Markenneutral (vor der Session gibt es kein Branding): ein Glas-Panel, Kopplungs-Code als Held in `--text-display`, Status-Zeile mit Punkt, keinerlei Bedienelemente — der Ablauf ist kiosk-seitig unbeaufsichtigt | [`screens-inhouse/pairing.md`](screens-inhouse/pairing.md) |
 | **Standby** 📋 | Leeres Zimmer (`VACANT`): Mesh, zentrierter Block aus Logo + server-aufgelösten Standby-Texten, Statusleiste bleibt funktional, keine Navigation (Datensparsamkeit bis in die UI) | [`screens-inhouse/standby.md`](screens-inhouse/standby.md) |
 | **Connection lost** 📋 | Gepaart, Server unerreichbar, kein Cache: ein Glas-Panel, `WifiSlash` in `--color-status-offline` (erste Verwendung der Status-Palette, dekorativ), selbstheilend ohne Button; spezifiziert dort auch die **Stale-Pille** (Chrome) | [`screens-inhouse/connection.md`](screens-inhouse/connection.md) |
+| **Menü-Überlauf** 📋 — *Chrome, kein Screen* | Ab mehr als fünf freigeschalteten Sektionen wird der fünfte Sidebar-Slot zum Auslöser (`DotsThree`, Label `nav.more`) und der Rest des Katalogs liegt in einem Popover — alphabetisch sortiert, ohne Obergrenze, ohne Route und ohne URL. Entworfen 2026-08-27 (`sidebar-catalogue-overflow`, D6), **gebaut** | [`screens-inhouse/menu-overflow.md`](screens-inhouse/menu-overflow.md) |
+| **Info** 📋 — *entworfen, **noch nicht gebaut*** | Erster **Modul**-Screen überhaupt und damit die Vorlage für die rund zwanzig folgenden: Titel = das Katalog-Label der Sektion, ein Glas-Panel, zwei gestapelte Label/Wert-Zeilen (Check-out aus `{stay.checkOut\|…}`, fiktiver WLAN-Code). Keine neuen Tokens, keine neuen Icons, kein fokussierbares Element im Inhaltsbereich. Entworfen 2026-08-28; **implementiert wird er erst, wenn `module-content` (Part C) die Werte auf die Leitung legt** | [`screens-inhouse/info.md`](screens-inhouse/info.md) |
 
 ---
 
@@ -462,10 +489,20 @@ mindestens 44 × 44.
 
 ---
 
-## Motion 📋
+## Motion 📋 — erste Verwendung 2026-08-27
 
-Bislang nirgends umgesetzt — dieses Dokument ist die einzige Quelle. Relevant,
-sobald Untermenüs und Popups dazukommen.
+Dieses Dokument ist die einzige Quelle. Umgesetzt ist bisher: der ruhige Puls
+des Pairing-Status-Punkts und, seit 2026-08-27, der **Page-Transition-Token
+(350 ms, easeOutExpo) als Einblendung des eskalierten Staleness-Banners**, plus
+ein langsamer Puls auf dessen Glyph — beides hinter `prefers-reduced-motion`
+(`screens-inhouse/connection.md`). Der Rest der Tabelle wird relevant, sobald
+Untermenüs und Popups dazukommen.
+
+**Nie auf Fließtext.** Ein Lauftext (Marquee) wurde 2026-08-27 geprüft und
+verworfen: er widerspricht *"Animationen ruhig und hochwertig"*, bräuchte eine
+Pause-Möglichkeit nach WCAG 2.2.2, die ein Kiosk nicht anbietet, und
+verschwindet unter `prefers-reduced-motion` genau dort, wo eine Alternative
+gebraucht würde.
 
 | Anlass | Dauer |
 |---|---|

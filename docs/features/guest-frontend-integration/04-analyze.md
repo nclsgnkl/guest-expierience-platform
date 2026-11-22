@@ -15,7 +15,7 @@
 | REQ-504 | §7 (inertness proof obligations) | T-04, T-24, T-29 | ✅ covered |
 | REQ-505 | §7, §10 D3 (resolved) | T-02 ✔, T-07, T-08, T-24 | ✅ covered |
 | REQ-506 | §3 (state machine), screens-inhouse/pairing.md | T-15, T-16, T-22 | ✅ covered |
-| REQ-507 | §3 (pins: 3 s, backoff, 429, expiry renew) | T-16 | ✅ covered |
+| REQ-507 | §3 (pins: 3 s, backoff, ~~429~~ — **amended 2026-08-24:** the 429/cooldown leg is withdrawn with the backend throttle; every create failure is the offline+backoff path, expiry renew) | T-16 | ✅ covered |
 | REQ-508 | §2 (token store), §10 D4 (resolved: localStorage) | T-07, T-24 | ✅ covered |
 | REQ-509 | §4 (401 wipe), §5 | T-10, T-14, T-22 | ✅ covered |
 | REQ-510 | §1, §2, §6 (mapper/validation), §8, §10 D6 (resolved: delete) | T-09, T-12, T-13 | ✅ covered |

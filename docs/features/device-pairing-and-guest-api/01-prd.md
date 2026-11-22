@@ -150,7 +150,7 @@ consumption.
 | REQ-406 | The device token is minted **at claim time** (never stored raw): 256-bit `SecureRandom`, returned once in the poll response, persisted only as a SHA-256 hash on the created `Device` row (room, name, created-at). Same treatment as manager tokens (constitution: token is identity and authentication, stored hashed). | Must |
 | REQ-407 | Manager device API: list all devices (id, name, room, created, last-seen, revoked state), rename, and **revoke** (soft — `revoked_at` set, the token is dead on the very next request). No operation ever returns a token or a token hash. | Must |
 | REQ-408 | Deleting a room with **active (non-revoked) devices** is `409` naming them (manager work/state is never silently destroyed — the manager revokes or re-pairs first); rows of revoked devices are cleaned up with the room. | Must |
-| REQ-409 | Pairing hygiene: codes are single-use and unambiguous (no 0/O/1/I confusion), expire after the pinned TTL, and expired rows are cleaned up opportunistically (no scheduler dependency — none is on the allow-list). Combined code entropy + TTL + rate limit make guessing infeasible; the poll secret alone (256-bit) protects the token. | Must |
+| REQ-409 | Pairing hygiene: codes are single-use and unambiguous (no 0/O/1/I confusion), expire after the pinned TTL, and expired rows are cleaned up opportunistically (no scheduler dependency — none is on the allow-list). **Amended 2026-08-24 (owner decision): creation is deliberately not rate-limited** — no rate limit, no admission gate. Code entropy + TTL alone make guessing infeasible, and they suffice: the display code is 8 characters from a 32-symbol alphabet (32⁸ ≈ 1.1 × 10¹² combinations) valid for 10 minutes, and a flooder reaches neither `confirm` (admin-only) nor `poll` (256-bit secret). The poll secret alone (256-bit) protects the token. **Consequence, accepted:** live pairing rows are no longer capped in number — they are bounded only in age, by the 10-minute TTL and the opportunistic cleanup that runs on every create. | Must |
 
 ### Device authentication
 
@@ -160,7 +160,7 @@ consumption.
 | REQ-411 | The room is derived **exclusively** from the authenticated device identity. No guest operation accepts any room, stay, device or property identifier from the client — not in path, query, header or body (principle 4, verbatim). | Must |
 | REQ-412 | A revoked, unknown or malformed device token → `401` + `Bearer` challenge, effective on the next request after revocation (no grace window). Device tokens do not idle-expire and do not slide; the `GXP-Token-Expires` header remains a manager-token concern and is not sent for device identities. | Must |
 | REQ-413 | `last_seen_at` is maintained per device, **throttled** (at most one write per device per pinned interval) so ETag polling does not cost a DB write per request. | Must |
-| REQ-414 | Fail-closed posture extended: every public Control method still carries exactly one security annotation (audit test updated); guest Control methods are `@RolesAllowed("device")` — an admin token does not grant guest endpoints (it has no room) and a device token grants no manager endpoint. | Must |
+| REQ-414 | Fail-closed posture extended: every public Control method still carries exactly one security annotation (audit test updated); guest Control methods are `@RolesAllowed("device")` — an admin token does not grant guest endpoints (it has no room) and a device token grants no manager endpoint. **Amended 2026-08-24 (owner decision D2, constitution v1.6.0):** the annotation carrier is the **Boundary**, not the Control. `GuestResource` is `@RolesAllowed("device")` class-wide, `PairingResource` `@PermitAll` class-wide and `DeviceAdminResource` `@RolesAllowed("admin")` class-wide; `DeviceControl` and `GuestControl` carry none. The wire behaviour of this requirement is unchanged (same roles, same 401s) — what changed is where the annotation sits and which test enforces it: the `*Control` sweep this REQ pinned by name became `BoundaryAnnotationAuditTest`, which pins the ten Boundaries the same way. Note `DeviceControl.verifyToken` in particular: it ran under a `@PermitAll`-on-internal only because `TokenIdentityProvider` calls it DURING authentication, before any identity exists — the wart the move removes. | Must |
 | REQ-415 | No token, poll secret, hash, TLS private key or password material reaches any log or exception message, in any profile; pairing/auth errors are generic. The foundation's logging posture is not weakened. | Must |
 
 ### Guest API (spec §6, decisions 3/7/9)
@@ -221,11 +221,20 @@ consumption.
   device DTO field contains token material.
 - **REQ-408:** deleting a room with an active device → `409` naming it;
   after revoking, the delete succeeds.
-- **REQ-409:** a create-flood hits the rate limit (`429` + `Retry-After`);
-  an expired request is gone after the next create (opportunistic cleanup).
+- **REQ-409:** **amended 2026-08-24** — the former criterion *"a create-flood
+  hits the rate limit (`429` + `Retry-After`)"* was withdrawn with the rate
+  limit itself (owner decision); it is replaced by its opposite, which is now
+  the behaviour under test: a **concurrent create-flood is fully served**
+  (every request `201`, no `Retry-After` on any of them) and the kiosk
+  arriving behind it is served too. An expired request is gone after the next
+  create (opportunistic cleanup) — that cleanup is what bounds live rows now,
+  so its test carries more weight than before.
 - **REQ-410/412/414:** the same `Authorization: Bearer` header authenticates
   both roles; a revoked token → `401` + challenge on the immediate next
-  request; the annotation audit covers the new Controls; an admin token on
+  request; the annotation audit covers the new Controls (**amended
+  2026-08-24:** it covers the new **Boundaries** — `GuestResource`,
+  `PairingResource`, `DeviceAdminResource` — pinned by name in
+  `BoundaryAnnotationAuditTest`); an admin token on
   `/api/guest/session` → `403`; a device token on `/api/manager/rooms` → `403`.
 - **REQ-411:** the OpenAPI contract contains **no** room/stay/device
   parameter on any guest operation (asserted by contract inspection).
@@ -268,7 +277,8 @@ via pairing, hashed + revocable, room derived from the token; HTTPS with an
 instance-generated CA distributed at pairing); principle 4 in full (room
 scoping, offline, untrusted LAN, minimal dependencies); BCE strict per spec
 §4 + `backend/CLAUDE.md` as amended 2026-08-19 (one-line Boundaries,
-`@Transactional`/security annotations on Controls, `ApiErrors` for thrown
+`@Transactional` on Controls, security annotations on Controls (**amended
+2026-08-24, D2: on the Boundary**), `ApiErrors` for thrown
 non-2xx, one tag per Boundary — with the approved two-Boundary exception for
 `de.gxp.device`); contract-first workflow; Flyway-only schema; closed
 dependency allow-list (**this feature adds nothing** — the decided `keytool`

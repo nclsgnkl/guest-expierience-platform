@@ -7,9 +7,14 @@ import static org.hamcrest.Matchers.hasSize;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
+import de.gxp.infrastructure.testsupport.MenuFixtures;
 
 /**
  * T-20 (REQ-308, REQ-312, REQ-313, REQ-317, REQ-322): whole-set replace,
@@ -20,11 +25,23 @@ import io.quarkus.test.junit.QuarkusTest;
 @QuarkusTest
 class ActionCardTest {
 
+    @Inject
+    EntityManager entityManager;
+
+    /**
+     * This class replaces the property-scope menu config, which is a whole-set
+     * replace and therefore deletes V10's eight {@code enabled = false} opt-out
+     * rows. Restore them so the shared database is handed on in the state the
+     * migration left it — without this, the placeholder catalogue fixtures
+     * arrive ENABLED at whatever class runs next (02-design.md §3.3).
+     */
+    @AfterEach
+    void restoreCatalogueOptOut() {
+        MenuFixtures.restoreCatalogueOptOut(entityManager);
+    }
+
     private static String token() {
-        return given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        return ManagerFixtures.login();
     }
 
     private static Map<String, Object> card(int sortIndex, String icon, String target, String titleDe) {

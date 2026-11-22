@@ -12,11 +12,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import de.gxp.testsupport.DeviceFixtures;
+import de.gxp.infrastructure.testsupport.DeviceFixtures;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import de.gxp.infrastructure.testsupport.ManagerFixtures;
 
 /**
  * T-23 (REQ-424): the whole-record preference write — 204 lands on the
@@ -36,10 +37,7 @@ class GuestPreferenceTest {
 
     @BeforeEach
     void seed() {
-        adminToken = given().contentType("application/json")
-                .body(Map.of("password", "test-admin-password-1"))
-                .when().post("/api/manager/login")
-                .then().statusCode(200).extract().path("token");
+        adminToken = ManagerFixtures.login();
         roomId = ((Number) entityManager
                 .createNativeQuery("select id from room where code = '1'")
                 .getSingleResult()).longValue();
@@ -78,7 +76,7 @@ class GuestPreferenceTest {
         var write = putPreferences(Map.of("language", "en", "appearance", "dark"));
         org.junit.jupiter.api.Assertions.assertEquals(204, write.statusCode());
         given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("preference.language", equalTo("en"))
                 .body("preference.appearance", equalTo("dark"));
@@ -89,7 +87,7 @@ class GuestPreferenceTest {
         clear.put("appearance", null);
         org.junit.jupiter.api.Assertions.assertEquals(204, putPreferences(clear).statusCode());
         given().header("Authorization", "Bearer " + deviceToken)
-                .when().get("/api/guest/session")
+                .when().get("/api/guest/content")
                 .then().statusCode(200)
                 .body("preference.language", nullValue())
                 .body("preference.appearance", nullValue());

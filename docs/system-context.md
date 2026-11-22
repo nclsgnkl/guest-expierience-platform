@@ -34,7 +34,7 @@ What this buys us, and what it costs:
 |---|---|
 | ✅ **Tenant isolation is physical — *between buildings*** | One instance holds one building's data; cross-*building* leakage is impossible. **Narrowed 2026-08-19:** inside a building the backend serves many rooms, so **room-level scoping is mandatory** — the room is derived from the authenticated device token, never from a client-supplied parameter, and every query touching room-scoped data is security-relevant (constitution v1.4.0, principle 4) |
 | ✅ **No internet dependency** | The app keeps working when the property's connection is down — which is exactly when a guest needs the WiFi password |
-| ⚠️ **No central patching** | A vulnerability persists until someone updates that box. This is the dominant long-term risk and the reason to keep the dependency count low |
+| ⚠️ **No central patching** | A vulnerability persists until someone updates that box. This is the dominant long-term risk and the reason to keep the dependency count low. *Note 2026-08-25 (constitution v1.8.0):* remote operations is now a separately sold capability with an opt-in, box-initiated relay (`docs/backend/remote-operations.md`); it does not change this row for a box that never enrols, and the dependency-minimisation posture stays regardless. *Note 2026-08-26 (`update-channel`):* every box now pulls its own updates — hourly outbound check of a signed manifest, host-side updater applies at night with dump + rollback (`backend/README.md` → "Updates"). Patching is no longer manual, but it is still per-box and still depends on the operator publishing a signed release; the updater itself is not channel-updated |
 | ⚠️ **Shared network** | The server sits on the same LAN as guest devices |
 | ⚠️ **Physical access** | The touchscreen stands in a guest-accessible space |
 
@@ -71,11 +71,18 @@ Still open, both operational rather than application code:
   browser chrome, no navigating away, no developer tools. This is device
   provisioning rather than application code, but it is part of the security
   story and nobody else will do it.`]`
-- `[NEEDS DECISION: how do instances get updated,` and who is responsible for
-  it? See the patching risk above. **Sharpened 2026-08-19:** the backend adds
-  a schema and a database to every update — the mechanics are decided (image
-  tag change + restart, Flyway pulls the schema forward), the *who and when*
-  are not.`]`
+- ~~How do instances get updated, and who is responsible?~~ — **Resolved
+  2026-08-26 by `update-channel`.** *How:* the app checks a signed manifest
+  hourly (outbound only), the host-side updater applies it in the night
+  window (default 04:00 local, manager-changeable, disable/apply-now via
+  `/api/manager/updates`) with a `pg_dump` first, one restart, ready + Flyway
+  health check and an automatic rollback ladder. *Who:* the release signer
+  (the owner, private key off-repo — D17); the manager only chooses when.
+  ~~Still open, handed to T-20: key rotation and the updater's own update.~~
+  *T-20 (architect, 2026-08-26):* key rotation is built — every box trusts a
+  **two-key set** (key 1 active, key 2 dormant) and a signed newer manifest
+  can rotate it in-band; the updater's own update stays `install.sh` on site
+  (tracked follow-up: refresh it from the verified image).
 
 ## Stack
 
@@ -122,9 +129,9 @@ Nothing else in the app is a candidate for a server call, which is what keeps
 the migration small.
 
 **Both seams are CLOSED as of 2026-08-20** (`guest-frontend-integration`):
-the first is fed by `GuestDataService` (session fetch + ETag poll), the
+the first is fed by `GuestDataService` (one content fetch + ETag poll), the
 second by `HttpPreferenceGateway` (`PUT /api/guest/preferences`; the stored
-value arrives inside the session payload — no separate read). The principle-2
+value arrives inside the content payload — no separate read). The principle-2
 bet held: components changed only where the content's *shape* changed
 (variable menu/card counts, server-resolved strings, object-URL images).
 
@@ -138,14 +145,17 @@ section-aware one:
 
 | Component | Location | Responsibility |
 |-----------|----------|-----------------|
-| `PropertyContentService` | `frontend/src/app/core/content/` | Supplies per-property/guest content via DI (constitution principle 2), including sidebar `menuItems`/`settings` (the Einstellungen nav entry — **not** the settings *config*, which is the separate `settingsConfig` below) and each card's `targetSectionId` → route resolution (`getSectionRoute()`); backed by static TS today, swappable for the future Quarkus backend. **Two signals:** `property()` resolves every localized field into the active language (falling back to the property's `defaultLanguage`), and `settingsConfig()` exposes the language-independent settings slice — the offered options and the property's defaults — which is what `PreferencesService.applyPropertyDefaults()` consumes. Validates the raw config at construction |
+| `PropertyContentService` | `frontend/src/app/core/content/` | Supplies per-property/guest content via DI (constitution principle 2), including sidebar `menuItems`/`settings` (the Einstellungen nav entry — **not** the settings *config*, which is the separate `settingsConfig` below); fed by `GuestDataService` from the wire since REQ-510, not by a static import. **Three signals:** `property()` resolves every localized field into the active language (falling back to the property's `defaultLanguage`), and `settingsConfig()` exposes the language-independent settings slice — the offered options and the property's defaults — which is what `PreferencesService.applyPropertyDefaults()` consumes; a third, `locale()`, resolves the active language's `Intl` locale from the property's own option list (falling back to the bare language code) and is what the sidebar's popover collates with. Validates the raw config at construction. *(`StalenessPillComponent` and `StatusBarComponent` still perform that same lookup inline; moving them onto `locale()` is a recorded follow-up.)* |
 | `ShellComponent` | `frontend/src/app/layout/shell/` | App-wide shell rendered on every route: mesh-gradient background + `SidebarComponent` + `<router-outlet>` for the routed main content |
-| `SidebarComponent` | `frontend/src/app/layout/sidebar/` | Config-driven nav — 5 `menuItems` (Home, Info, Umgebung, Smart Home, Services) + 1 structurally-fixed `settings` entry (`MenuIcons`), active state from current route |
+| `SidebarComponent` | `frontend/src/app/layout/sidebar/` | Config-driven nav with **5 fixed slots on every viewport**, plus 1 structurally-fixed `settings` entry (`MenuIcons`); active state from the current route, and it is the only component that decides it. At or below 5 delivered `menuItems` it renders exactly the nav that shipped — no trigger in the DOM at all. Above 5: ranks 1–3 fixed, slot 4 **rotating**, slot 5 an **overflow trigger** opening a `@angular/cdk/menu` popover (the `StatusBarMenuComponent` pattern, right of the trigger and vertically centred on it) holding every remaining section, alphabetically by the label in the active language. Choosing one — or reaching one by an action card, a deep link or browser back — promotes it into slot 4, so the active section is always visible in the sidebar. The promotion is **per-session view state**: never `localStorage`, never the wire. Panel spec: [`docs/design/screens-inhouse/menu-overflow.md`](design/screens-inhouse/menu-overflow.md) |
+| `layout/sidebar/menu-split.ts` | `frontend/src/app/layout/sidebar/` | **A file, not a service.** Exported pure functions — the `resolveProperty` precedent — holding `splitMenu`, `routeMatches`/`itemForRoute`, `sortByLabel` and a memoised `collatorFor`. **The single place `SIDEBAR_SLOTS = 5` lives.** No injectable and no state beyond one module-level `Map<string, Intl.Collator>` |
 | `HomeContentComponent` | `frontend/src/app/features/home/` | Home's main-content region only (heading block, hero artwork, 4 action cards, reserved empty widget-column space) — composed inside `ShellComponent`'s router-outlet, not the sidebar/background |
 | `HeroArtworkComponent` | `frontend/src/app/features/home/hero-artwork/` | Renders the no-artwork fallback (no image; background now lives in `ShellComponent`) |
 | `HeadingBlockComponent` | `frontend/src/app/features/home/heading-block/` | Subtitle, headline, paragraph — from `PropertyContentService`; property-level content, not per-guest |
-| `ActionCardComponent` | `frontend/src/app/features/home/action-card/` | `GlassPanel` action card; resolves its destination from `targetSectionId` via `PropertyContentService.getSectionRoute()`, keyboard- and touch-activatable |
-| `SectionPlaceholderComponent` | `frontend/src/app/features/section-placeholder/` | Shared main-content stub, rendered inside `ShellComponent`, for the **4** sections with no design yet (Info, Umgebung, Smart Home, Services). Einstellungen left this set on 2026-08-18 — it has a real screen now |
+| `ActionCardComponent` | `frontend/src/app/features/home/action-card/` | `GlassPanel` action card; navigates the server-resolved `route` the wire delivers (REQ-511) — there is no client-side id→route lookup — keyboard- and touch-activatable |
+| `SectionPlaceholderComponent` | `frontend/src/app/features/section-placeholder/` | Shared main-content stub for a section with **no module authored**. **Demoted by `module-content` (2026-08-28): it is no longer the component behind the section routes** — `SectionHostComponent` is, and this is one of its two arms. Its own source is unchanged and it still resolves the section from the URL itself. `app.routes.ts` carries one `:sectionKey` child (declared **after** `einstellungen`, which keeps its real screen) plus a `**` fallback **as the shell's last child**, so every route the catalogue can name resolves by construction — including on a cold, offline boot, because the table is a static constant. The component reads the path reactively from `ActivatedRoute.url` (not `snapshot`, so a parameter change re-resolves under a reused instance) and matches the delivered menu **by `route`, not by key**, through `menu-split.ts`'s shared `itemForRoute()`. An unclaimed route renders a defined `section.unavailable` state — no redirect |
+| `SectionHostComponent` | `frontend/src/app/features/section-host/` | **The component behind every catalogue section route** since `module-content` (REQ-974): `:sectionKey` and the shell's `**` both point here, and there is deliberately **no `{ path: 'info' }`** — the route table does not re-enumerate the catalogue. Resolves the section from the URL through the same shared `itemForRoute()` (no second lookup, no second normalisation), then two arms: a non-null `module` renders the section's `<h1>` plus the registered renderer through `*ngComponentOutlet`; `null` — or no item at all — renders `<app-section-placeholder />`. The **`<h1>` lives here, not in the module**, because it is the section's catalogue label and a module never restates it. It also owns the renderer map `{ info: InfoModuleComponent } satisfies Record<ModuleKind, Type<unknown>>` — a compiler-checked projection of the registry, kept out of `core/guest/` because a registry importing a feature component would be the app's first `core → features` import |
+| `InfoModuleComponent` | `frontend/src/app/features/info-module/` | The `info` module type's renderer, and **the first module screen** (`docs/design/screens-inhouse/info.md`): one glass panel `calc(3 × --size-panel + 2 × --space-4)` wide holding a `<dl>` of stacked label/value rows. One signal input (`ResolvedInfoModule`), no injected service, never a generated wire model. Zero new tokens, icons or translation keys — nothing on this screen is app chrome. **No empty state, deliberately** (D19): `info`'s first row is a stay fact always present under `OCCUPIED`. The first screen whose content area holds **no focusable element at all** |
 
 Added by `docs/features/appearance-and-language/` (2026-08-18). Same rule as
 above: these are real files under `frontend/src/`, not intent.
@@ -170,10 +180,10 @@ first real code**, same rule as above (real files, not intent):
 | Component | Location | Responsibility |
 |-----------|----------|-----------------|
 | `api/openapi.yaml` | repo root `api/` | **The API contract — source of truth.** OpenAPI 3.1; tag `system` with `getSystemHealth`/`getSystemReadiness`/`getSystemInfo` plus the shared `ApiError` shape. The Maven build generates both sides from it; editing it is how any API change starts |
-| Quarkus backend | `backend/app/` | Java 21, Quarkus 3.33 LTS (3.33.3.1), Maven wrapper, dependencies exactly the constitution v1.5.0 allow-list. Flyway `V1__foundation_baseline.sql` (single-row `instance_info` + seed) migrates at startup; Dev Services provisions `postgres:17.11` for dev/test; `%prod` reads the datasource from env vars. Fail-closed security (`quarkus.security.deny-unannotated-members=true`) and no-SQL/no-access logging committed for all profiles |
-| `de.gxp.system` | `backend/app/src/main/java/de/gxp/system/` | **The BCE reference package** every later feature copies (spec §4 strict): `SystemResource` (Boundary, one delegating line per method, implements generated `SystemApi`), `SystemControl` (public Control, `@Transactional` + `@PermitAll` on methods, speaks generated DTOs, throws the 503), package-private `InstanceInfo`/`InstanceInfoRepository`/`InstanceInfoMapper` (hand-written) |
+| Quarkus backend | `backend/app/` | Java 21, Quarkus 3.33 LTS (3.33.3.1), Maven wrapper, dependencies exactly the constitution v1.5.0 allow-list. Flyway `V1__foundation_baseline.sql` (single-row `instance_info` + seed) migrates at startup; Dev Services provisions `postgres:17.11` for dev/test; `%prod` reads the datasource from env vars. Fail-closed security (`quarkus.security.jaxrs.deny-unannotated-endpoints=true` — global, build-time, on the Boundary since v1.6.0; `deny-unannotated-members=true` stays on as a second line but is inert for the shipped app now that no Control carries an annotation) and no-SQL/no-access logging committed for all profiles |
+| `de.gxp.system` | `backend/app/src/main/java/de/gxp/system/` | **The BCE reference package** every later feature copies (spec §4 strict), and the first one migrated to the v1.6.0 sub-package layout: `boundary/SystemResource` (one delegating line per method, implements generated `SystemApi`, carries the security annotation), `control/SystemControl` (public Control, `@Transactional`; carries **no** security annotation since v1.6.0, speaks generated DTOs, throws the 503) and package-private `control/InstanceInfoRepository`, `entity/InstanceInfo` + `entity/InstanceInfoMapper` (hand-written; **public types, but their fields stayed package-private** — nothing outside `.entity` reads them). Every feature package now carries `boundary`/`control`/`entity`; the feature boundary is enforced by the five `de.gxp.architecture` guards, not by the compiler |
 | `packages/api-client/` | repo root `packages/` | **Generated** TypeScript-Angular client — committed, never hand-edited, deterministic (no diff on unchanged contract); a diff there means the contract changed. Uses only `@angular/common/http` + `rxjs`; no npm manifest changed anywhere. Not yet consumed — that is `guest-frontend-integration`'s |
-| Compose unit | `backend/compose.yaml` | Deployment unit: `app` (JVM image) + `db` (`postgres:17.11`), named volumes `gxp-pgdata` + `gxp-tls` (backup = one `pg_dump` **plus** the TLS volume), required interpolation for `GXP_DB_PASSWORD`/`GXP_ADMIN_PASSWORD`/`GXP_TLS_HOST` (fails fast when unset). **Production-shaped since `device-pairing-and-guest-api`: HTTPS only, host 443 → container 8443, no plain listener, no redirect** |
+| Compose unit | `backend/compose.yaml` | Deployment unit: `app` (JVM image) + `db` (`postgres:17.11`), named volumes `gxp-pgdata` + `gxp-tls` (backup = one `pg_dump` **plus** the TLS volume), required interpolation for `GXP_DB_PASSWORD`/`GXP_TLS_HOST` (fails fast when unset); `GXP_ADMIN_USERNAME`/`GXP_ADMIN_PASSWORD` optional in compose (first start only, the seeder refuses a fresh boot without the password); `GXP_TRUSTED_PROXY_ENABLED`/`GXP_TRUSTED_PROXY` default off / `127.0.0.1/32`. **Production-shaped since `device-pairing-and-guest-api`: HTTPS only, host 443 → container 8443, no plain listener, no redirect** |
 
 Added by `docs/features/backend-domain-config/` (2026-08-19) — the domain
 model, every spec §5 invariant server-side, and the secured manager CRUD API
@@ -181,16 +191,19 @@ model, every spec §5 invariant server-side, and the secured manager CRUD API
 
 | Component | Location | Responsibility |
 |-----------|----------|-----------------|
-| Manager contract | `api/openapi.yaml` (tags `manager-*`) | Auth (`managerLogin`/`managerLogout`/`changeManagerPassword`), property, rooms, menu catalogue (read-only) + menu-config + action-cards (both scopes), stays, assets — every operation except login under the `bearerAuth` scheme. One generated interface per `manager-*` tag keeps one Boundary per BCE package |
-| `de.gxp.auth` | `backend/app/src/main/java/de/gxp/auth/` | Manager auth, isolated so the later per-user swap touches no other Boundary/Control: `AuthResource`/`AuthControl`, package-private `TokenStore` (in-memory, SHA-256 hashes, 600 s sliding idle), `Pbkdf2PasswordHasher` (JDK, 600k iterations, self-describing format), `LoginRateLimiter` (5 fails → 30 s, 429), `AdminPasswordSeeder` (first-start seed from `GXP_ADMIN_PASSWORD`, refuse-to-start), and the SPI adapters `BearerAuthMechanism`/`TokenIdentityProvider`/`TokenExpiryResponseFilter` (`GXP-Token-Expires` on every authenticated response) |
+| Manager contract | `api/openapi.yaml` (tags `manager-*`) | Auth (`managerLogin` with `username`/`password`/optional `totpCode`/`recoveryCode`, `429` + `Retry-After`, `managerLogout`, `changeManagerPassword`), **`manager-users`** (list/create/deactivate/reactivate/password reset/second-factor reset; own second-factor enrol/confirm/status/disable + recovery-code regeneration), **`manager-audit`** (`listAuditEntries`, paged), property, rooms, menu catalogue (read-only) + menu-config + action-cards (both scopes), stays, assets, devices — every operation except login under the `bearerAuth` scheme (54 secured operations pinned by `ContractSecuredOperationsDeniedTest`). One generated interface per `manager-*` tag keeps one Boundary per BCE package |
+| `de.gxp.auth` | `backend/app/src/main/java/de/gxp/auth/` | Manager **sessions** only (auth-hardening A2, 2026-08-26): `AuthResource`/`AuthControl` (`login`/`logout`/own password change, no `@Transactional` on login — the one DB write of a login commits inside `UserControl.verifyLogin`), package-private `TokenStore` (in-memory, SHA-256 hashes, 600 s sliding idle, `removeAllOf(username)` on the `UserControl.CredentialsInvalidated` CDI event), **`LoginThrottle` per attributed address** (reopened REQ-326 on 2026-08-25: 5 failures / 15 min → block 60 s doubling per exhaustion, cap 900 s, success clears, ≤ 10 000 tracked addresses evicted after 1 h; `429 too-many-attempts` + `Retry-After` BEFORE any PBKDF2 or DB read; never global, never per account — the withdrawn 2026-08-24 mechanisms answered the correct password with 429), the **TOTP-via-proxy rule** (a via-trusted-proxy login without `totpCode`/`recoveryCode` → `401 second-factor-required` before password verification and uncounted; with one, password + factor verified together, every miss the generic `invalid-credentials`; on the LAN the code fields are ignored), and the SPI adapters `BearerAuthMechanism`/`TokenIdentityProvider`/`TokenExpiryResponseFilter` (`GXP-Token-Expires` on every authenticated response). Logs nothing on the login path (REQ-605, asserted) |
+| `de.gxp.user` | `.../de/gxp/user/` | Manager **accounts** (A2/A3): `manager_user` (V5 — the pre-existing `admin_credential` row is carried over as active user `admin`; `FirstUserSeeder` creates the first account from `GXP_ADMIN_USERNAME` (default `admin`) / `GXP_ADMIN_PASSWORD` only when no row exists, refuse-to-start otherwise), `Pbkdf2PasswordHasher` (moved here; JDK, 600k iterations, self-describing format, dummy-hash verification for unknown/deactivated names so all three misses cost one derivation), `UserResource`/`UserControl` (`manager-users`: create/deactivate/reactivate/reset password/reset factor by an admin — never on yourself, `409`; own enrol/confirm/status/disable/regenerate), TOTP RFC 6238 SHA-1/6 digits/30 s ±1 step with a per-user last-step replay guard and 10 SHA-256-at-rest recovery codes (V6), both consumed by **conditional UPDATEs** (one affected row → a code presented concurrently twice is accepted once). `Verdict(ok, username, matchedUsername)` — the matched name feeds the audit only, never the client. Every account change fires `CredentialsInvalidated(username)` (D14) |
+| `de.gxp.audit` | `.../de/gxp/audit/` | Append-only **audit trail** (A4, V7 `audit_entry`: occurred-at, actor nullable, attributed address, via-proxy, action, entity, entity id nullable, field nullable — **no value column exists, by schema**): `AuditControl.record(...)` called EXPLICITLY at all 25 manager mutation sites (`AuditCoverageTest` derives the set from every `@Transactional public` Control method against a pinned exemption list — no interceptor, every call site greppable), one row per changed field on update (`changedFields` = generated-DTO getter diff, names only) or one field-less row on create/delete/replace, in the caller's transaction (a rolled-back mutation leaves none); login outcomes in `REQUIRES_NEW` (success = username as actor + entity id; failure = matched canonical username or null, never the submitted text; the `429` and the code-less via-proxy `second-factor-required` 401 are never recorded — unthrottled paths must not write, 06_review 2026-08-26). `AuditResource` `GET /api/manager/audit?page&size` (admin, newest first, default 50, max 200, no update/delete). Retention 365 days via `AuditScheduler` |
+| `ClientAttribution` | `.../de/gxp/infrastructure/http/ClientAttribution.java` | Request-scoped, the **one** place the transport fact is read (constitution v1.8.0 allows exactly two consumers: the throttle bucket and the second-factor requirement): `Attribution(address, viaTrustedProxy)` from Quarkus `quarkus.http.proxy.*` — with `GXP_TRUSTED_PROXY_ENABLED=false` (default) every `Forwarded`/`X-Forwarded-*` header is ignored and the socket peer is the address; with it on, only the standard `Forwarded` header (`allow-x-forwarded` and `use-proxy-protocol` pinned off) and only from `GXP_TRUSTED_PROXY` (default `127.0.0.1/32`; a LAN range here would turn the throttle into a weapon on that range) is honoured, and `X-Forwarded-Trusted-Proxy: true` as stamped by Quarkus is the via-proxy signal. The relay must REPLACE the header with one `for=` element |
 | `de.gxp.text` | `.../de/gxp/text/` | `TemplateControl` — stateless raw-template validation (unknown/out-of-context placeholder → named 400) and server-side resolution (`\|time`/`\|date` in the property timezone + language locale). Consumed by property/menu now, by the guest API next feature |
 | `de.gxp.property` | `.../de/gxp/property/` | The single property row (`CHECK (id = 1)`, no create/delete API) incl. offered languages/appearances, brand primitives, asset refs (kind-checked) and raw greeting/standby templates |
 | `de.gxp.room` | `.../de/gxp/room/` | Rooms CRUD; unique non-empty code, overrides validated against the property's offered sets; delete = 409 naming stays, cascades the room's own config rows; hosts the per-room row lock stays serialize on |
-| `de.gxp.menu` | `.../de/gxp/menu/` | ONE consistency unit on purpose: catalogue reads (5 seeded kiosk sections; `einstellungen` deliberately not in it), per-field menu-config inheritance (room → property → catalogue default) — **except `enabled`, which resolves under the CEILING rule** (user decision 2026-08-19: `enabled(room, k) = enabled(property, k) AND room-override(default true)`; a property disable wins over any room enable — the guest API MUST resolve the same way), whole-set action cards (0–4), and invariants 1–3 incl. the affected-scope 409 listing every stranded card plus the ceiling guards (`item-disabled-at-property`, `menu-item-enabled-by-rooms`) |
+| `de.gxp.menu` | `.../de/gxp/menu/` | ONE consistency unit on purpose: catalogue reads (5 seeded kiosk sections; `einstellungen` deliberately not in it), per-field menu-config inheritance (room → property → catalogue default) — **except `enabled`, which resolves under the CEILING rule** (user decision 2026-08-19: `enabled(room, k) = enabled(property, k) AND room-override(default true)`; a property disable wins over any room enable — the guest API MUST resolve the same way), whole-set action cards (0–4), and invariants 1–3 incl. the affected-scope 409 listing every stranded card plus the ceiling guards (`item-disabled-at-property`, `menu-item-enabled-by-rooms`). Since `module-content` (Part C) it also owns **module content**: `V12`'s `info_module_row` / `info_module_row_translation` (property-scoped, no room scope, **no seed rows** — a release must not put content on a running property's screens) and `MenuControl.guestModuleContent()`, which returns **raw templates**; `GuestControl` resolves them. A new `de.gxp.module` package was rejected: with no HTTP surface it would have forced an edit to an architecture guard's exemption list |
 | `de.gxp.stay` | `.../de/gxp/stay/` | Stays CRUD; `BOOKED`/`CANCELLED` stored, "active" derived from the clock; invariant 5 (no overlap per room) under the room-row lock — concurrent writes serialize |
 | `de.gxp.asset` | `.../de/gxp/asset/` | PNG/JPEG only (content-verified by decoding), 10 MiB cap → 413, > 2560 px downscaled, sha-256 = strong ETag (304), payload-free metadata projection, delete guard naming referrers |
-| `de.gxp.api` | `.../de/gxp/api/` | Infrastructure: `ApiErrorMappers` (bean-validation + malformed JSON → the shared `ApiError` shape) and `ApiErrors` (the thrown non-2xx builders every Control uses) |
-| Flyway V2/V3 | `.../db/migration/` | `V2__domain_config.sql` (all domain tables + checks + `UNIQUE NULLS NOT DISTINCT` scopes + neutral seeds), `V3__admin_credential.sql` (single-row, seeded by code, not SQL). `V1`/`instance_info` untouched |
+| `de.gxp.infrastructure.http` (formerly listed as `de.gxp.api`) | `.../de/gxp/infrastructure/http/` | Infrastructure: `ApiErrorMappers` (bean-validation + malformed JSON → the shared `ApiError` shape) and `ApiErrors` (the thrown non-2xx builders every Control uses) |
+| Flyway V2/V3 | `.../db/migration/` | `V2__domain_config.sql` (all domain tables + checks + `UNIQUE NULLS NOT DISTINCT` scopes + neutral seeds), `V3__admin_credential.sql` (single-row, seeded by code, not SQL). `V1`/`instance_info` untouched. **auth-hardening (2026-08-26):** `V5__manager_user.sql` (carries the credential row over as user `admin`, drops `admin_credential`), `V6__second_factor.sql` (TOTP columns + `manager_recovery_code`), `V7__audit_entry.sql` |
 
 Added by `docs/features/device-pairing-and-guest-api/` (2026-08-19) — device
 identity, the kiosk-facing guest read model, and HTTPS with the instance CA
@@ -199,8 +212,8 @@ identity, the kiosk-facing guest read model, and HTTPS with the instance CA
 | Component | Location | Responsibility |
 |-----------|----------|-----------------|
 | Pairing/guest contract | `api/openapi.yaml` (tags `pairing`, `manager-devices`, `guest`) | 11 new operations: pairing create/poll/CA (unauthenticated by design), confirm/list/rename/revoke (admin), session/screens-home/asset/preferences (device). **No guest operation carries any room/stay/device/property parameter** — checkable on the contract itself (REQ-411). `pairing` + `manager-devices` are the one approved two-Boundaries-over-one-Control package (`backend/CLAUDE.md` amendment) |
-| `de.gxp.device` | `.../de/gxp/device/` | One consistency unit: `Device`/`PairingRequest` entities, the single public `DeviceControl` (pairing lifecycle incl. the claim-once transaction, device CRUD/revoke, `verifyToken` for auth), TWO Boundaries (`PairingResource` kiosk-facing, `DeviceAdminResource` admin-facing). Two-credential pairing (display code = human channel, 256-bit poll secret = machine channel); every miss is ONE indistinguishable 404; tokens/secrets stored SHA-256-hex only; create rate-limited 5/60 s |
-| `de.gxp.guest` | `.../de/gxp/guest/` | `GuestControl` — THE spec-§4 coordinating read model (`@RolesAllowed("device")` on every method, room exclusively from the identity) composing `@PermitAll` guest-reads of the owning Controls: menu via `MenuControl`'s **ceiling** implementation (never re-implemented), occupancy via `StayControl`, templates via `TemplateControl` (resolved per offered language, property timezone — no braces leave the server), `einstellungen` served as fixed chrome outside `menuItems`. Vacancy is data-sparing (no stay-derived value; `409 room-vacant` on stay-dependent ops). Asset reachability = {logo, property artwork, own-room artwork}, anything else the same 404. `GuestEtagFilter`: strong sha-256 ETag + `304` on every guest JSON response |
+| `de.gxp.device` | `.../de/gxp/device/` | One consistency unit: `Device`/`PairingRequest` entities, the single public `DeviceControl` (pairing lifecycle incl. the claim-once transaction, device CRUD/revoke, `verifyToken` for auth), TWO Boundaries (`PairingResource` kiosk-facing, `DeviceAdminResource` admin-facing). Two-credential pairing (display code = human channel, 256-bit poll secret = machine channel); every miss is ONE indistinguishable 404; tokens/secrets stored SHA-256-hex only; create unthrottled since 2026-08-24 (live rows bounded by the 10-minute TTL and the opportunistic cleanup on create, not by a budget) |
+| `de.gxp.guest` | `.../de/gxp/guest/` | `GuestControl` — THE spec-§4 coordinating read model (room exclusively from the identity; the `@RolesAllowed("device")` sits on `GuestResource` since v1.6.0, and the guest-reads it composes no longer need the `@PermitAll`-on-internal wart that used to be required) composing the guest-reads of the owning Controls: menu via `MenuControl`'s **ceiling** implementation (never re-implemented), occupancy via `StayControl`, templates via `TemplateControl` (resolved per offered language, property timezone — no braces leave the server), `einstellungen` served as fixed chrome outside `menuItems`. Since `guest-payload-consolidation` (Part B) there is **one guest content resource** — `GET /api/guest/content` (`GuestContent` with a nested, occupied-only `home`); `GET /api/guest/session` and `GET /api/guest/screens/home` are gone, and with them the `409 room-vacant` race and the `404 screen-not-found` branch. Vacancy is data-sparing by construction: the one authoritative 200 simply carries no stay-derived half (the preference write still answers the named `409 room-vacant`). `home` is a **mandatory menu item** (`MenuControl.MANDATORY_KEYS`) — always enabled, `sortIndex` forced to 0, a config write refusing it with `400 menu-item-mandatory`, legacy rows neutralised by `V11`. Asset reachability = {logo, property artwork, own-room artwork}, anything else the same 404. **`GuestEtagFilter` is deleted:** `GuestControl.content(ifNoneMatch)` throws the `304`/`200` itself (the `getGuestAsset` pattern), and the ETag is a **version stamp** — `GuestContentVersion` = `sha256(bootId | max(audit_entry.id) | roomId | stay fingerprint | 300 s bucket)` — so a `304` costs no resolve-and-serialise. Since `module-content` (Part C) `GuestControl` also **attaches modules** to `menu.items[]`, resolving `MenuControl`'s raw templates through the same `resolveLocalized` the home screen uses (REQ-964) — one `oneOf` union `GuestModule` on the wire, one member `GuestInfoModule`, discriminant `"info"`. **A vacant room gets its modules too** (property-scoped, A2), which is why `resolveLocalized`'s *"no braces ever leave the server"* javadoc is scoped to `home` and must not be generalised: a vacant payload carries the raw `{stay.checkOut|time}`, and nobody sees it because a vacant kiosk is on `/standby`. The wire ships **`"module": null`**, not an absent key — Jackson's default inclusion — which is what the kiosk boundary guards against |
 | `de.gxp.auth` (extended) | `.../de/gxp/auth/` | Still ONE bearer path: `TokenIdentityProvider` resolves manager store first, then the device table by hash (role `device`, deviceId/roomId identity attributes, throttled ≥60 s `last_seen_at` touch). Revocation is effective on the very next request (row read per request — deliberate). Device identities carry no expiry attribute, so `GXP-Token-Expires` stays manager-only. `/api/system/info` now `@RolesAllowed({"admin","device"})` (decided 2026-08-19) |
 | TLS init | `backend/app/src/main/docker/entrypoint-jvm.sh` | First start: `keytool` (in the JVM image — zero new dependencies) generates the instance CA (EC P-256, 20 y) + CA-signed server cert (EC P-256, SAN = `GXP_TLS_HOST`, 10 y) onto the `gxp-tls` volume; restarts reuse; host change re-issues the server cert under the UNCHANGED CA. `%prod` = HTTPS only (`quarkus.http.insecure-requests=disabled`, TLS-registry keystore config); `%dev`/`%test` stay plain HTTP. `GET /api/pairing/ca` serves the CA PEM for kiosk provisioning (a documented human install step) |
 | Flyway V4 | `.../db/migration/V4__device_pairing.sql` | `device` (token hash UNIQUE, `revoked_at`, room FK RESTRICT) + `pairing_request` (code UNIQUE, secret hash, `confirmed_at`/`claimed_at`). No seeds — a fresh instance has zero devices |
@@ -216,18 +229,21 @@ implementation, exactly as their designs promised.
 |-----------|----------|-----------------|
 | `DeviceTokenStore` | `frontend/src/app/core/api/` | The kiosk's own credential: the opaque device bearer in `localStorage` (`gxp.device-token`, D4) as a signal. Set exactly once per pairing claim, wiped on any guest-call 401 (REQ-509). Read by exactly one consumer — the `Configuration.bearerAuth` credential fn in `provide-guest-api.ts` (resolved per request). The dev fallback (`environment.development.ts`, D3) is consulted only when storage is empty and is grep-provably absent from a production bundle |
 | `provideGuestApi()` | `frontend/src/app/core/api/` | Wires `provideHttpClient()` + the generated client's `Configuration` (`basePath: ''` — same-origin in prod, the `ng serve` proxy in dev; **CORS never exists on the backend**). First consumption of `packages/api-client/` — by path, via the `@gxp/api-client` tsconfig alias + the `packages/node_modules` symlink; the `ngVersion` ceiling question is closed (compiles green under Angular 22 strict) |
-| `GuestDataService` | `frontend/src/app/core/guest/` | Owns ALL content wire I/O: bootstrap fetch (4 s bound), 30 s ETag revalidation loop (`If-None-Match` via the generated service's public `defaultHeaders`; 304 = no-op), the ONLINE/STALE/DISCONNECTED state machine, occupancy signal, the last-known-good `localStorage` cache (`gxp.cache.session`/`gxp.cache.home` — written after successful mapping only, cleared on 401, home cleared on VACANT), DISCONNECTED retry with 5→30 s backoff. Zoneless-safe: signals + `DestroyRef`-torn timers |
-| `guest-content.mapper.ts` | `frontend/src/app/core/guest/` | The one wire boundary: generated models → the internal `PropertyConfig` shape, with validation (brand hex rejected → token defaults stay; unknown icon → neutral fallback glyph; localized maps must carry the default language; 0–5 items / 0–4 cards). A rejected payload counts as a failed fetch — never a crash, never rendered, never cached |
+| `GuestDataService` | `frontend/src/app/core/guest/` | Owns ALL content wire I/O: bootstrap fetch (4 s bound), 30 s ETag revalidation loop (`If-None-Match` is a **declared contract parameter** — `getGuestContent(ifNoneMatch)`; the `defaultHeaders` hack is gone; 304 = no-op), the ONLINE/STALE/DISCONNECTED state machine, occupancy signal, the last-known-good `localStorage` cache, DISCONNECTED retry with 5→30 s backoff. Since `guest-payload-consolidation` there is **one of everything**: one request, one ETag, one held copy and one cache key (`gxp.cache.content` — written after successful mapping only, cleared on 401; the two legacy keys are evicted once at construction). Zoneless-safe: signals + `DestroyRef`-torn timers |
+| `guest-content.mapper.ts` | `frontend/src/app/core/guest/` | The one wire boundary: generated models → the internal `PropertyConfig` shape, with validation (brand hex rejected → token defaults stay; unknown icon → neutral fallback glyph; localized maps must carry the default language; 0–50 items / 0–4 cards). A rejected payload counts as a failed fetch — never a crash, never rendered, never cached. Since `module-content`: **it no longer re-sorts `menu.items`** — the contract says the server ordered them, so the delivered order is the order (REQ-962) — and its per-type footprint is **one line**, `module: mapWireModule(MODULE_REGISTRY, item.module, defaultLanguage)`. That call is the only place a module can be dropped, and a drop is **per module**: the item, every other item and the envelope survive |
+| `module-registry.ts` | `frontend/src/app/core/guest/` | The module registry (REQ-970/971/980) — the single source of the module type set, and the only file besides the mapper that sees `@gxp/api-client`'s module models. Holds `ModuleWireMap` (one line per type), `MODULE_REGISTRY` typed `{ [K in ModuleKind]: ModuleEntry<K> }`, `mapWireModule(registry, wire, defaultLanguage)` — the registry is a **parameter**, which is what lets a fabricated type live only in a spec — `resolveModule`'s per-kind switch, and `info`'s hand-written validator. **`Object.hasOwn(registry, …)` is the validation set: no second list.** `AssertNever<Exclude<GuestModule, RegisteredWire>>` fails the build if the contract gains a member nothing maps. **The two contract bounds (`rows` ≤ 10, module text ≤ 240 chars) are enforced here because here is the only place they are enforced at all** — the response DTO carries no `@Valid` so `@Size(max=10)` never runs, and `V12`'s columns are unbounded `text`. Nothing on any path logs |
 | `GuestAssetService` | `frontend/src/app/core/guest/` | Authorized blob fetch per asset id (`Authorization` header — never a bare `<img src>`) → memoized object-URL signals, revoke-on-replace/destroy, 404 → `null` (components render their existing fallbacks) |
 | `GuestBootstrapService` | `frontend/src/app/core/guest/` | The app initializer's body (and the pairing claim's re-entry): token check → content bootstrap → defaults ⊕ stored-preference hydration before first paint — the REQ-126 no-flash structure, wire edition. Re-syncs defaults/preference on every poll-adopted session under the existing never-overwrite-a-fresh-choice rule |
 | State guards + `GuestStateRoutingService` | `frontend/src/app/core/guest/` | `/pairing`, `/standby`, `/connection` live OUTSIDE the shell; guards arbitrate initial/deep-link URLs, the routing effect moves the kiosk at runtime (poll-driven occupancy flips, 401 wipe, healing) — both read the same signals, precedence: unpaired → pairing, nothing-to-render → connection, vacant → standby. Returning to the app restores the previous route |
-| `PairingComponent` + `PairingService` | `frontend/src/app/features/pairing/` | The unattended kiosk half of pairing (spec: `docs/design/screens-inhouse/pairing.md`): create → show grouped code → 3 s poll (secret in a component-scoped service field, never stored/rendered/logged) → claim-once → store token → boot in place, no reload. 404 renews unattended, 429 honors `Retry-After`, network loss resumes the same code until expiry, then renews. Brandless by design |
+| `PairingComponent` + `PairingService` | `frontend/src/app/features/pairing/` | The unattended kiosk half of pairing (spec: `docs/design/screens-inhouse/pairing.md`): create → show grouped code → 3 s poll (secret in a component-scoped service field, never stored/rendered/logged) → claim-once → store token → boot in place, no reload. 404 renews unattended; network loss — and since 2026-08-24 any other failed create, the pairing `429` and its `cooldown` state having been removed with the rate limiter — resumes the same code until expiry on a 5 s → 30 s backoff, then renews. Brandless by design |
 | `StandbyComponent` | `frontend/src/app/features/standby/` | The vacant room (spec: `standby.md`): server-resolved standby texts, optional logo, the functional status bar — and no navigation surface at all (client-side data-sparing). Poll-driven in and out |
 | `ConnectionComponent` | `frontend/src/app/features/connection/` | The last resort (spec: `connection.md`): paired, unreachable, nothing cached. Honest copy, `WifiSlash` glyph in the in-house `--color-status-offline` role, no button, no status bar; heals unaided |
-| `StalenessPillComponent` | `frontend/src/app/layout/staleness-pill/` | The constitution's "discreet staleness hint": a glass pill under the status-bar cluster, `Stand HH:MM`/`As of HH:MM` from the cache's `storedAt`, visible in STALE only, `role="status"` set once per episode |
+| `StalenessPillComponent` | `frontend/src/app/layout/staleness-pill/` | The constitution's "discreet staleness hint": a glass pill under the status-bar cluster, `Stand HH:MM`/`As of HH:MM` from the cache's `storedAt`, `role="status"` set once per episode. Visible when `StalenessService.level() === 'PILL'` — i.e. in STALE, until the escalation replaces it |
+| `StalenessService` | `frontend/src/app/core/guest/` | The tri-state `level: 'NONE' \| 'PILL' \| 'BANNER'` (REQ-952), derived from `connection()`, `staleSince()` and the minute-aligned `ClockService`. `STALE_ESCALATION_MS` reads `environment.staleEscalationMs` — **1 h in production, 1 min under the `development` configuration** (owner, 2026-08-28), so the state is reachable by hand instead of by waiting an hour or editing a running system; the production value is the behaviour, the dev value only makes it testable, and it is grep-provably absent from a production bundle. A **presentation property of STALE, not a fourth `ConnectionState`** — no new timer, no change to `GuestDataService`. Tri-state, so "banner up ⇒ pill down" holds by construction |
+| `StalenessBannerComponent` | `frontend/src/app/layout/staleness-banner/` | The constitution v1.9.0 escalation: after 60 min without successful backend contact the pill is *replaced*, in its own anchor, by a glass **bar** (`width: max-content` so the body fits on **one line**, `max-width` at the content area's edge; `WifiSlash` at `--size-icon-md` in `--color-status-warning`; title with the reused `stale.asOf` line right-aligned beside it, body underneath; `role="status"`/`aria-live="polite"` set once; a 350 ms entrance and a glyph-only pulse, both behind `prefers-reduced-motion`). An absolute overlay, so it cannot grow the document. Two body variants chosen from **occupancy**: the occupied one directs the guest to their host, the vacant one addresses staff. Rendered in both hosts (shell + standby); spec: `docs/design/screens-inhouse/connection.md` |
 | `HttpPreferenceGateway` | `frontend/src/app/core/preferences/` | The real preference transport (D8): `save()` = whole-record `PUT /api/guest/preferences` (400/`409 room-vacant` silent-normal, 401 → kiosk-wide wipe, 5xx → the service's bounded retry); `load()` = handed over from the session payload, **no second GET**; `clear()` = client no-op (stay-anchored server-side). `SessionPreferenceGateway` and `example-property.data.ts` are **deleted** (D6) — no fake-content fallback exists anywhere |
 | `DevDataSeeder` | `backend/app/src/main/java/de/gxp/devseed/` | `%dev`-only convenience (D2): example content, an active stay, one device (`sha256("gxp-dev-device-token")`, hash-only). `@IfBuildProfile("dev")` = **build-time** prod inertness — the *bean* is not in the `%prod`/`%test` container (re-verified at review: no `DevDataSeeder_Bean`/observer is generated; the compiled class ships in the jar but nothing instantiates it); idempotent per the dev device row. The token literal is documented as public/dev-only in `backend/README.md` |
-| Guest-app serving | `backend/app/pom.xml` (profile `bundle-guest-app`) + `de.gxp.web.SpaRoutingHandler` | **The serving/path layout (D7, decided 2026-08-20):** `/` + hashed assets = the guest kiosk app (plain Maven copy of the prebuilt Angular bundle into `META-INF/resources`, auto-activated on the dist's existence — backend-only builds stay Node-free); `/api/**` and `/q/**` untouched; **`/manage/**` reserved for `manager-frontend`** (own `index.html` under `META-INF/resources/manage/`, base-href `/manage/` — the guest SPA fallback already excludes it, zero rework needed). The fallback reroutes dot-less, html-accepting GETs to `/index.html`, is inert without a bundle, and static-resource cache headers are disabled so `/` always serves the deployed app |
+| Guest-app serving | `backend/app/pom.xml` (profile `bundle-guest-app`) + `de.gxp.infrastructure.web.SpaRoutingHandler` | **The serving/path layout (D7, decided 2026-08-20):** `/` + hashed assets = the guest kiosk app (plain Maven copy of the prebuilt Angular bundle into `META-INF/resources`, auto-activated on the dist's existence — backend-only builds stay Node-free); `/api/**` and `/q/**` untouched; **`/manage/**` reserved for `manager-frontend`** (own `index.html` under `META-INF/resources/manage/`, base-href `/manage/` — the guest SPA fallback already excludes it, zero rework needed). The fallback reroutes dot-less, html-accepting GETs to `/index.html`, is inert without a bundle, and static-resource cache headers are disabled so `/` always serves the deployed app |
 
 Still designed but not implemented: nothing — the Home screen's designed
 components are now all covered by the row above. The **widget column**
@@ -235,8 +251,130 @@ remains undesigned (no content built), but its layout space is reserved
 (`flex: 1`, empty) rather than collapsed — see "Open Structural Questions"
 below.
 
+Added by `docs/features/update-channel/` (2026-08-26) — the box updates
+itself from a signed manifest (constitution v1.8.0; `backend/README.md` →
+"Updates"):
+
+| Component | Location | Responsibility |
+|---|---|---|
+| Update contract | `api/openapi.yaml` (tag `manager-updates`) | `GET /api/manager/updates` (settings, last check outcome, available version, the updater's last state), `PUT …/settings` (`autoUpdateEnabled`, `applyAt HH:mm`), `POST …/apply` (202, or 409 with nothing available), `POST …/check` — all `admin`, all audited (`update`/`update-settings`, `update-apply`, `update-check`). Guest and pairing paths untouched |
+| `de.gxp.update` | `.../de/gxp/update/` | `UpdateControl` (the hourly check sequence: `https://` only, 64 KiB cap, verify **before** parse, `SemanticVersion` D6 compare, ≤ running version = no update; the reconcile algorithm that writes/moves/removes `desired-update.json`; manual apply/check), package-private `ManifestClient` (JDK `HttpClient`, `User-Agent: gxp-update/1`, no identity, class-name-only logging), `ManifestVerifier` (JDK `Signature("Ed25519")` against the **trust set** `update/signing-public-keys.pem` in the image — two keys, any verifies; a verified newer manifest's `trustedKeys` line rotates the set, persisted in V9 `trusted_keys`/`trusted_keys_version`), `ManifestParser`, `ExchangeFiles` (hand-built fixed-layout writer/reader, temp + rename, 64 KiB read cap), `UpdateStateStore` (`@Transactional`, instants truncated to seconds), entity `UpdateChannel` (V8, single row: settings, last check, the raw verified manifest bytes, the manual request) |
+| `backend/updater/` | host, not a container | `gxp-updater.sh` (root, `flock`, snapshots the hostile request file once, OpenSSL re-verifies — **the trust root** —, `pg_dump`, pull by registry digest, `.env` `GXP_IMAGE=` swap, one restart, ready + Flyway health, rollback ladder image → image + restore → `rollback-failed`), `gxp-updater.service`/`.timer` (every 5 min; `ProtectSystem=full`, `ProtectHome`, `PrivateTmp`, `PrivateDevices`, `ProtectKernelTunables/Modules`, `ProtectControlGroups`, `NoNewPrivileges`, `RestrictSUIDSGID`, `LockPersonality`, `RestrictRealtime`, `SystemCallArchitectures=native`, `TimeoutStartSec=3h`, above the sum of the script's own per-step `timeout` bounds — all executed once on the dev box), `install.sh` (installs the **key set** `/etc/gxp/update-signing-public-keys.pem`, refuses a changed set without `--replace-key` and a single-key resource; `--current-version` seeds the shadow so the downgrade guard is armed from day one; `--uninstall`), `updater.conf.example`. Its **own memory** is `/var/lib/gxp-updater/state.json` (root 0600 — replay guard + downgrade refusal + the rotated trust set); `state.json` in the volume is a mirror for the app, written by `rename(2)` from the volume's root-owned parent — root never opens a path inside the app-owned directory for writing. Rung 2 of the rollback wipes `public` before the restore. Tests: `test/parse.sh` (shared fixtures with `ExchangeFilesTest`), `test/smoke-apply.sh` (incl. seed, downgrade refusal, rotation), `test/rehearse-rollback.sh A|B`, `test/rehearse-registry.sh` (scenario C: the production digest-pull branch against a local `registry:2`) against a throwaway compose project |
+| `tools/update/` | repo root | `gen-signing-key.sh [dir] [suffix]` (Ed25519 pairs outside any git tree, `$HOME/.gxp/keys`; key 1 and key 2), `sign-manifest.sh` (fixed-layout manifest + detached raw signature, self-verified; `--sha256` = the registry manifest digest from `docker buildx imagetools inspect … '{{println .Manifest.Digest}}'`; `--trusted-keys <pem>` writes a rotation) |
+| Volume `gxp-updates` | `backend/compose.yaml` → `/updates` in `app` (`185:root`, 0700) | The app ↔ updater exchange: `desired-update.json` (app → updater, hostile to the updater) and `state.json` (updater → app, mirror). No secrets, not part of the backup |
+| `UpdateScheduler` | `.../de/gxp/infrastructure/scheduler/` | The two `@Scheduled` triggers (hourly check at minute 17, reconcile every 15 min) — see "Scheduled housekeeping" |
+
+**Decided 2026-08-26, not yet built — `docs/features/instance-identity-and-certs/`**
+(remote-operations Part B; gate PASS, implementation pending). Listed here so
+the next feature (Part D, the relay) plans against it; the rows become "real
+code" rows when `dev` lands them:
+
+| Component | Location | Responsibility |
+|---|---|---|
+| `de.gxp.instance` | `.../de/gxp/instance/` | Instance identity (Ed25519 pair generated at first start onto `gxp-tls`: `instance-key.pem` 0600 / `.pub`), manager-triggered enrollment against our enrollment service (`/api/manager/instance`: status, enroll with a token, unenroll, renew-now; V10 `instance_enrollment`, no token/key column), the signed-request envelope `GXP-SIGNED-REQUEST/1`, and the served-certificate reconciler (merges the ACME material into `server.p12` alias `public`, SNI, reload without restart, self-signed fallback on expiry) |
+| `backend/acme/` | host, beside `backend/updater/` | `lego` (distribution package) under a hardened hourly `systemd` timer; DNS-01 through an `exec` hook that asks our challenge endpoint (authenticated by the instance key) to publish `_acme-challenge.<fqdn>`; delivers `public.crt`/`public.key` into `gxp-tls` by staged rename; two more exchange files (`instance.json`, `acme-state.json`) in `gxp-updates` |
+| `api/enrollment-service.yaml` | repo `api/` | The contract of the enrollment/challenge service **we** operate (built outside this repo); `EnrollmentServiceDouble` (test scope) is its executable spec and the host rehearsal's stand-in, with Pebble + `challtestsrv` as the ACME CA |
+
+Binding facts recorded there: **the kiosk path is unchanged** — no public
+certificate can secure a connection to a private LAN address without a
+resolver we do not control or an uplink the guest screens must not depend
+on, so §5's "kiosks trust natively" claim is withdrawn and `GET
+/api/pairing/ca` keeps its meaning in both modes; the public certificate
+exists for the instance name only (Part D's need). Sixth scheduled job:
+`InstanceScheduler#reconcileServedCertificate` every 15 min at minute 5.
+
+Added by [`docs/features/sidebar-catalogue-overflow/`](features/sidebar-catalogue-overflow/02-design.md)
+(2026-08-27). **No new component** — the rare feature that adds capability by
+changing four existing rows, which is itself why it was split out of
+`modular-menu-catalogue`. Those four rows (`SidebarComponent`,
+`layout/sidebar/menu-split.ts`, `SectionPlaceholderComponent`,
+`PropertyContentService`) are folded into the real-code tables above; what
+follows is only what has no row of its own.
+
+Binding facts: `GuestMenu.items` carries a declared `maxItems: 50` (payload
+sanity, enforced at the kiosk boundary by `guest-content.mapper.ts` — **not** a
+design limit; the popover has no capacity ceiling and the sidebar splits at 5
+regardless); a Flyway `V10` adds eight **disposable placeholder** catalogue rows
+whose only job is to exercise overflow, promotion and umlaut collation, and
+which arrive **property-disabled** so a migration delivered by the v1.8.1 update
+channel changes nothing a guest sees on a running property (`%dev` overrides
+them to enabled, so overflow is the default developer and review experience);
+and `menu_item_definition` stays release data, not writable through any API
+(`docs/backend/specification.md` §3 decision 5, confirmed by the owner
+2026-08-27). Only three properties of the placeholder set may be relied on
+anywhere — count ≥ 12, one umlaut-initial label, alphabetical order ≠
+`default_sort_index` order — and removing it is that migration reversed plus one
+edit to `core/icons/registered-icons.ts` and one edit to
+`frontend/tools/measure.mjs`'s `ROUTES` list, which walks every route the `%dev`
+catalogue can name. Those are the four sanctioned sites; the migration's own
+header predates the fourth and names three.
+
+Known limitation recorded with it: `PUT /api/manager/menu-config` is a
+**whole-set replace**, so a partial submit deletes those opt-out rows and
+absence resolves back to enabled — a future manager UI must round-trip the whole
+set. Pinned by `CatalogueExpansionTest.partialConfigReplaceReEnablesTheFixtures`
+and, for the shared test database, by
+`MenuFixtures.restoreCatalogueOptOut()` in an `@AfterEach` of every class that
+replaces the property scope.
+
+The popover's keyboard model is `role="menu"`'s **linear** contract, kept
+deliberately: `CdkMenu.orientation` is `'vertical'`, so ←/→ are inert, and
+REQ-919's row-major grid fill is what makes ↑/↓ walk the tiles in reading order.
+Faking spatial traversal under `role="menu"` would make the announced semantics
+and the behaviour disagree.
+
 ## Cross-Cutting Concerns
 
+- **Scheduled housekeeping:** the only work this box does unattended. Core
+  `quarkus-scheduler` (`@Scheduled`, in-JVM, no job store, no cluster
+  coordination — Quartz deliberately not approved, constitution v1.7.0).
+  **Scheduling is centrally managed in `de.gxp.infrastructure.scheduler`**
+  (owner decision 2026-08-25), one class per domain holding only the
+  annotation and a single delegating call into the feature's public
+  `*Control`; the logic stays in the feature. **Five jobs today**, all
+  `concurrentExecution = SKIP`. Three **daily at 02:00** (`cron = "0 0 2 * * ?"`):
+  `DeviceScheduler` sweeps expired `pairing_request` rows, `AuthScheduler`
+  purges expired admin bearer-token hashes from the in-memory store, and
+  `AuditScheduler` (auth-hardening, 2026-08-26) deletes `audit_entry` rows
+  older than 365 days (`AuditControl.pruneOlderThan`). Two from
+  `update-channel` (2026-08-26) in `UpdateScheduler`: `checkForUpdate`
+  **hourly at minute 17** (`"0 17 * * * ?"`, plus 0–600 s jitter inside the
+  Control — an off-the-hour minute and jitter so a fleet never hits the
+  manifest server in step) and `reconcileDesiredUpdate` **every 15 min**
+  (`"0 */15 * * * ?"`, keeps the request file in the exchange volume
+  consistent with the settings and the next apply window). Cron, not
+  `every = …`, because a relative interval restarts with the process and an
+  on-premise box reboots with the building; the accepted residual is that a
+  machine never powered on at 02:00 never sweeps, which is harmless since the
+  rows are already functionally inert. The pairing table keeps its
+  *opportunistic* delete on create as well — that is what bounds it during a
+  flood of anonymous `POST /api/pairing/requests`; the sweep only clears the
+  residue a flood leaves behind. **The authoritative answer to "what runs on a
+  timer, and how often" is `ScheduledJobInventoryTest`**, which pins each job
+  and its cron as a literal list and fails the build when one is added,
+  removed or re-timed — this bullet is prose, that test is the source of
+  truth. Jobs never fire during the suite
+  (`%test.quarkus.scheduler.start-mode=halted`); tests call the Control
+  directly. Principle 3 applies with teeth: Quarkus logs an uncaught job
+  failure with a full stack trace and a `PSQLException` quotes statement text,
+  so every job catches `RuntimeException` and logs the exception's class name
+  only, and success logs counts only, and only when the count > 0.
+- **Update channel** (`update-channel`, 2026-08-26): the one outbound call
+  this box makes on its own — `GET <GXP_UPDATE_BASE_URL>/manifest/<channel>.json`
+  + `.sig`, hourly, `https://` only, carrying no identity and no telemetry
+  (`User-Agent: gxp-update/1`, `Accept`); unset base URL = channel off. The
+  manifest is verified twice (JDK in the app to decide "available", OpenSSL
+  in the root updater to decide "apply") against the same two-key trust set; the
+  updater treats everything the app wrote as hostile (snapshot, size cap,
+  regex per field, verified-manifest-only, no `eval`) and keeps its own
+  root-owned memory. Updates apply at night (04:00 local by default, 2 h
+  window, manager-changeable), one restart, dump first, automatic rollback;
+  a failed version is held until a manager acts. Key custody: two Ed25519
+  keys on the owner's machine (key 1 active, key 2 dormant), public halves
+  in the image; a signed newer manifest rotates the set on every box
+  (architect review T-20, 2026-08-26). Custody practice (passphrase, offline
+  backup, second medium) is an open operator task deferred by the owner to
+  the first customer; the updater's own update is a tracked follow-up.
 - **Design tokens:** CSS custom properties in two layers (primitive → semantic).
   Components reference semantic roles only. Full rationale and shape in
   `docs/design/tokens.md` → "Implementation". No Tailwind. As of
@@ -355,12 +493,16 @@ below.
   - `gxp.device-token` — the device's own credential (by the 4xx PRD's
     classification not guest data; kiosk lockdown remains the operational
     control),
-  - `gxp.cache.session` / `gxp.cache.home` — the last-known-good guest
-    payloads (+ ETag + `storedAt`), the constitution's kiosk-cache clause
-    realised: rendered with the staleness pill when the backend is
-    unreachable, cleared on 401, home cleared on VACANT. **This boundary must
-    be re-checked whenever a new field is cached** — the first sensitive
-    screen needs the spec §11 item 9 field-level rules first.
+  - `gxp.cache.content` — the last-known-good guest payload (+ ETag +
+    `storedAt`), the constitution's kiosk-cache clause realised: rendered with
+    the staleness pill — and, after an hour, the escalated banner — when the
+    backend is unreachable, cleared on 401. One record since
+    `guest-payload-consolidation`; the two legacy keys (`gxp.cache.session`,
+    `gxp.cache.home`) are evicted once when `GuestDataService` is constructed.
+    **This boundary must be re-checked whenever a new field is cached** — the
+    top-level key allow-list is asserted in `guest-data.service.spec.ts`, and
+    the first sensitive screen needs the spec §11 item 9 field-level rules
+    first.
   - The guest's language/appearance preference is **server-owned** (the
     stay row) and no longer stored client-side at all.
 
@@ -405,14 +547,27 @@ below.
     **nothing is logged** — the app has no logging convention yet and a failed
     preference write is not the place to invent one (constitution principle 3
     also applies: none of this may reach a log).
-- **Auth:** **implemented for the manager (2026-08-19, `backend-domain-config`)**
-  — shared admin password to `/api/manager/login` only (PBKDF2-hashed in
-  Postgres, seeded from `GXP_ADMIN_PASSWORD` on first start, rotated via
-  `PUT /api/manager/password`, every change drops all tokens), opaque 256-bit
-  bearer token with a 10-minute sliding idle expiry in an in-memory store
+- **Auth:** **implemented for the manager (2026-08-19, `backend-domain-config`;
+  hardened 2026-08-26, `auth-hardening`)** — **named manager accounts**
+  (`manager_user`, every one an admin; first account seeded from
+  `GXP_ADMIN_USERNAME`/`GXP_ADMIN_PASSWORD` on first start only, a pre-V5
+  instance's shared password carries over as user `admin`) log in with
+  username + password at `/api/manager/login` only (PBKDF2-hashed in
+  Postgres, own password rotated via `PUT /api/manager/password`, every
+  account change drops that account's tokens), opaque 256-bit bearer token
+  with a 10-minute sliding idle expiry in an in-memory store
   (`GXP-Token-Expires` on every authenticated response), fail-closed
-  `@RolesAllowed("admin")` on every manager Control method, 401 + `Bearer`
-  challenge for anyone else on the LAN.
+  `@RolesAllowed("admin")` on every manager Boundary (class-level where the
+  whole surface is admin) since v1.6.0, 401 + `Bearer` challenge for anyone
+  else on the LAN. **Login is throttled per attributed client address**
+  (5 failures / 15 min → 60 s block doubling to 900 s, `429` before any
+  PBKDF2, never global or per account — REQ-326 reopened). **A second factor
+  (TOTP + recovery codes) is required only for requests attributed to the
+  trusted proxy** (remote operations); on the LAN it is never asked for.
+  Every login outcome after the throttle and every manager mutation is
+  written to the **append-only audit trail** (no values, 365-day retention,
+  admin-readable at `GET /api/manager/audit`). Nothing is logged on the
+  login path.
   **Device tokens are live (2026-08-19, `device-pairing-and-guest-api`):**
   the SAME bearer path resolves a presented token first against the manager
   store, then against the device table by hash — role `device`, long-lived,
@@ -428,6 +583,11 @@ below.
   any 401 wipes token **and** content cache before the kiosk drops to the
   pairing screen. The poll secret exists only in a component-scoped service
   field while the pairing screen is on.
+- **Auth hardening — built (2026-08-26, `auth-hardening`, T-01…T-17):** the
+  component rows above (`de.gxp.auth`, `de.gxp.user`, `de.gxp.audit`,
+  `ClientAttribution`, the three schedulers) describe the code on disk;
+  decisions D1–D25 and the recorded deviations live in
+  `docs/features/auth-hardening/02-design.md` and `handoff.md`.
 - **Persistence (backend, 2026-08-19):** the domain schema is real — property
   (single row), rooms, menu catalogue/config, action cards, stays, assets
   (BYTEA) and the admin credential, all via Flyway V1–V3 with the seeds that
@@ -464,16 +624,21 @@ below.
   - **The kiosk cache still holds nothing sensitive:** nothing served by the
     v1 guest API is guest-sensitive (no codes, no passwords). The first
     sensitive screen (WiFi, door codes) must first bring the spec §11 item 9
-    field-level sensitivity list and per-field kiosk-cache rules.
-  - **Vacancy contract:** session answers 200 with standby texts when vacant
-    (`occupancy: VACANT`, no name, no preference); `screens/home` and the
-    preference write answer the named `409 room-vacant` — the kiosk's
-    fire-and-forget write treats that as normal.
+    field-level sensitivity list and per-field kiosk-cache rules. *(Constitution
+    v1.9.0 draws the line at credentials reaching past the device, not at
+    field names: guest-facing content the manager deliberately displays is
+    permitted in the cache, a device or session token never is.)*
+  - **Vacancy contract:** the content resource answers 200 with standby texts
+    when vacant (`occupancy: VACANT`, no name, no preference, **no `home`**);
+    only the preference write still answers the named `409 room-vacant` — the
+    kiosk's fire-and-forget write treats that as normal. *(Updated by
+    `guest-payload-consolidation`: `screens/home` no longer exists, so the
+    two-call race it used to create is gone.)*
 - **Hand-off notes from `guest-frontend-integration` (2026-08-20, for
   `manager-frontend` and operations):**
   - **`/manage/**` is reserved** for the manager app: its own `index.html`
     under `META-INF/resources/manage/`, Angular `base-href /manage/`. The
-    guest SPA fallback (`de.gxp.web.SpaRoutingHandler`) already excludes the
+    guest SPA fallback (`de.gxp.infrastructure.web.SpaRoutingHandler`) already excludes the
     prefix — the manager app slots in with zero rework of the serving layout.
   - **Manager-side pairing/device UI is still curl-only:** pairing confirm,
     device list/rename/revoke exist as API operations; `manager-frontend`

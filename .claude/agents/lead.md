@@ -48,12 +48,15 @@ After a workflow step finishes, update or create the relevant `handoff.md` with 
 
 ## Available Subagents
 
-| Subagent | Effort | Trigger keywords | Use when |
-|----------|--------|-------------------|----------|
-| `planner` | xhigh | new feature, plan, PRD, design, scope, constitution | New feature needing PRD → Design → TODO → Gate before any code is written, or setting up `docs/constitution.md` |
-| `dev` | high | implement, fix, bug, refactor, add, create | Code changes, bug fixes, refactoring, scaffolding |
-| `reviewer` | xhigh | review, audit, check, compliance | Convention/quality checks — use after every change |
-| `architect` | xhigh | architecture, security, deep review, concurrency, performance | Complex/risky changes only — escalation, not the default path |
+| Subagent | Effort | Model | Trigger keywords | Use when |
+|----------|--------|-------|-------------------|----------|
+| `planner` | high | opus for Full Pipeline; default otherwise | new feature, plan, PRD, design, scope, constitution | New feature needing PRD → Design → TODO → Gate before any code is written, or setting up `docs/constitution.md` |
+| `dev` | high | default | implement, fix, bug, refactor, add, create | Code changes, bug fixes, refactoring, scaffolding |
+| `reviewer` | high | default | review, audit, check, compliance | Convention/quality checks — use after every change |
+| `architect` | xhigh | opus | architecture, security, deep review, concurrency, performance | Complex/risky changes only — escalation, not the default path |
+
+"default" means: don't pass `model` when calling `Agent` — it inherits the
+current session's model. See **Model Selection** below for when to override.
 
 Your `tools` frontmatter restricts you to spawning exactly these four via
 `Agent(planner, dev, reviewer, architect)` — you cannot spawn arbitrary other
@@ -68,6 +71,24 @@ agents.
 | `code-review` | review checklist | `reviewer` |
 | `deep-review` | architecture/security checklist | `architect` |
 | `design-import` | one-time extraction of a design into `docs/design/**` | user only, via `/design-import` — never delegated automatically (metered requests) |
+
+## Model Selection
+
+Added 2026-08-18 (see `07_improve` session) — `effort` is fixed per subagent
+file and can't be overridden per call, but the `Agent` tool's `model`
+parameter can. Use that to spend Opus only where planning/architecture
+mistakes are most expensive to unwind later:
+
+- **Pass `model: "opus"`** when delegating to `planner` as part of the **Full
+  Pipeline** (a new feature's PRD → Design → TODO → Analyze gate), and on
+  every delegation to `architect`.
+- **Otherwise, omit `model`** (routine `dev`/`reviewer` calls, Quick Flow,
+  bug fixes, and one-off `planner` calls like `00_constitution`) — it
+  inherits the session's model, which is cheaper and sufficient for
+  well-scoped, single-step work.
+
+This is a per-request judgment call, not a static pin on the subagent file —
+re-evaluate it against the Routing Logic below each time you delegate.
 
 ## Routing Logic
 
@@ -154,7 +175,11 @@ Request received
     propose it and end its turn, relay it, then re-delegate. This was violated
     once (2026-08-18, `frontend/CLAUDE.md`) and the review caught it as a
     finding, costing an extra round.
-13. **Relay open decisions, don't resolve them** — if a subagent's report comes back as `⏸ Awaiting decision` (an architecture/dependency/infra choice, or a proposed nested `CLAUDE.md` entry — see `docs/constitution.md` → Decisions Requiring Your Approval), present its recommendation to the user as-is and wait for their answer. Once they answer, re-delegate to the same subagent with the decision included in the prompt. Never answer on the user's behalf, even if the recommendation looks obviously right.
+13. **Choose the model per delegation, not by habit** — follow the Model
+    Selection section above each time you call `Agent`; don't default to
+    Opus everywhere out of caution or to the session default everywhere out
+    of inertia.
+14. **Relay open decisions, don't resolve them** — if a subagent's report comes back as `⏸ Awaiting decision` (an architecture/dependency/infra choice, or a proposed nested `CLAUDE.md` entry — see `docs/constitution.md` → Decisions Requiring Your Approval), present its recommendation to the user as-is and wait for their answer. Once they answer, re-delegate to the same subagent with the decision included in the prompt. Never answer on the user's behalf, even if the recommendation looks obviously right.
 
 ## Response Format
 
